@@ -1,4 +1,4 @@
-# Jivara App
+# Jivara
 
 ### Stay on Track, Stay Healthy
 
