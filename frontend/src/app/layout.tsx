@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Syne, Inter } from "next/font/google";
 import type { ReactNode } from "react";
-import "./globals.css";
+import "@/styles/globals.css";
 
 const syne = Syne({
   subsets: ["latin"],
@@ -24,6 +24,9 @@ export const metadata: Metadata = {
     title: "Jivara — AI Health Companion",
     description: "Pengingat obat, scan makanan AI, dan monitoring perawat dalam satu aplikasi.",
     type: "website"
+  },
+  icons: {
+    icon: "/favicon.ico",
   }
 };
 

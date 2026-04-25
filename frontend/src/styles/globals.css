@@ -7,7 +7,6 @@
   --animate-fade-lift: fadeLift 0.85s cubic-bezier(0.16, 1, 0.3, 1) both;
   --animate-marquee: marquee 30s linear infinite;
   --animate-mascot-float: mascotFloat 4s ease-in-out 1.4s infinite;
-  --animate-slow-spin: slowSpin 18s linear infinite;
 
   /* Custom Colors mapped from CSS variables */
   --color-primary: var(--primary);
@@ -17,6 +16,9 @@
   --color-dark: var(--dark);
   --color-surface: var(--surface);
   --color-line: var(--line);
+  --color-safe: var(--safe);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
 }
 
 /* CSS Variables  */
@@ -28,6 +30,10 @@
   --dark: #0f172a;
   --surface: #f8fafc;
   --line: rgba(15, 23, 42, 0.1);
+  --safe: #16a34a;
+  --warning: #f59e0b;
+  --danger: #dc2626;
+  --primary-dark: #064e3b;
 }
 
 /* Base Resets  */
@@ -46,13 +52,6 @@ body {
   color: var(--text);
   font-family: var(--font-body);
   transition: background 0.35s ease, color 0.35s ease;
-}
-
-body.dark {
-  --bg: #0a0a0a;
-  --text: #f3f3f3;
-  --muted: #9aa1ad;
-  --line: rgba(255, 255, 255, 0.14);
 }
 
 a {
@@ -91,26 +90,10 @@ ul {
 
 ::selection {
   background: var(--primary);
-  color: #0a0a0a;
+  color: var(--bg);
 }
 
-/* Grid Mark Pseudo-elements (cross lines inside circle)  */
-.grid-mark::before,
-.grid-mark::after {
-  content: "";
-  position: absolute;
-  background: var(--line);
-}
 
-.grid-mark::before {
-  inset: 50% 0 auto;
-  height: 1px;
-}
-
-.grid-mark::after {
-  inset: 0 auto 0 50%;
-  width: 1px;
-}
 
 /* Scroll Reveal  */
 .js-ready [data-animate] {
@@ -154,11 +137,7 @@ ul {
   }
 }
 
-@keyframes slowSpin {
-  to {
-    transform: rotate(360deg);
-  }
-}
+
 
 @keyframes pillIn {
   from {
