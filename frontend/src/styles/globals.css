@@ -19,6 +19,7 @@
   --color-safe: var(--safe);
   --color-warning: var(--warning);
   --color-danger: var(--danger);
+  --color-primary-dark: var(--primary-dark);
 }
 
 /* CSS Variables  */

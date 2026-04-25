@@ -10,7 +10,7 @@ export default function Hero() {
           width={420}
           height={420}
           priority
-          className="w-full h-auto drop-shadow-[0_20px_40px_rgba(0,0,0,0.15)] animate-mascot-float"
+          className="w-full h-auto drop-shadow-[0_20px_40px_var(--line)] animate-mascot-float"
         />
       </div>
 

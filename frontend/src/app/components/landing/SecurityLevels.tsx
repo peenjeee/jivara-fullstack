@@ -34,7 +34,7 @@ export default function SecurityLevels() {
             <h3 className={`mb-7 ${level.color} font-display text-base font-extrabold tracking-[0.16em] uppercase`}>
               {level.title}
             </h3>
-            <p className="text-[#a2a9b5] text-sm leading-relaxed">{level.description}</p>
+            <p className="text-muted text-sm leading-relaxed">{level.description}</p>
           </article>
         ))}
       </div>

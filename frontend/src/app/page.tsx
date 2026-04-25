@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import Navbar from "@/app/components/landing/Navbar";
 import Hero from "@/app/components/landing/Hero";
-import Marquee from "@/app/components/landing/Marquee";
+// import Marquee from "@/app/components/landing/Marquee";
 import Features from "@/app/components/landing/Features";
 import Workflow from "@/app/components/landing/Workflow";
 import SecurityLevels from "@/app/components/landing/SecurityLevels";
@@ -19,10 +19,10 @@ export default function HomePage() {
   return (
     <>
       <Navbar />
-      
+
       <main id="top">
         <Hero />
-        <Marquee />
+        {/* <Marquee /> */}
         <Features />
         <Workflow />
         <SecurityLevels />
