@@ -4,12 +4,12 @@
 
 ---
 
-[![Next.js](https://img.shields.io/badge/Next.js-13+-000000?style=flat-square&logo=next.js&logoColor=white)](https://nextjs.org/)
-[![React](https://img.shields.io/badge/React-18+-61DAFB?style=flat-square&logo=react&logoColor=white)](https://reactjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-16+-000000?style=flat-square&logo=next.js&logoColor=white)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-19+-61DAFB?style=flat-square&logo=react&logoColor=white)](https://reactjs.org/)
 [![TailwindCSS](https://img.shields.io/badge/TailwindCSS-4+-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
-[![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
-[![YOLOv11](https://img.shields.io/badge/YOLOv11-Computer_Vision-FF6F00?style=flat-square&logo=python&logoColor=white)](https://github.com/ultralytics/yolov5)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-316192?style=flat-square&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Python](https://img.shields.io/badge/Python-3.14+-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![YOLOv11](https://img.shields.io/badge/YOLOv11-Computer_Vision-FF6F00?style=flat-square&logo=python&logoColor=white)](https://docs.ultralytics.com/models/yolo11/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18+-316192?style=flat-square&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 
 ---
 
@@ -33,7 +33,7 @@ Jivara adalah platform kesehatan berbasis AI yang dirancang untuk membantu pasie
 ---
 
 ## License
-Proprietary Software - All Rights Reserved
+Jivara - Copyright © 2026. All Rights Reserved.
 
 ---
 

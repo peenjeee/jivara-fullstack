@@ -15,8 +15,8 @@ export default function Footer() {
           <div className="flex flex-col lg:flex-row justify-between items-center pt-10 border-t border-white/10 text-white/70 text-[11px] font-bold tracking-[0.16em] uppercase gap-6 lg:gap-0 text-center lg:text-left">
             <span>&copy; {new Date().getFullYear()} Jivara</span>
             <div className="flex flex-wrap justify-center gap-4 lg:gap-[34px]">
-              <Link href="/dokumentasi" className="transition-colors duration-200 hover:text-primary-dark">Dokumentasi</Link>
-              <Link href="/privasi" className="transition-colors duration-200 hover:text-primary-dark">Kebijakan Privasi</Link>
+              <Link href="/dokumentasi" className="transition-colors duration-200 hover:text-white">Dokumentasi</Link>
+              <Link href="/privasi" className="transition-colors duration-200 hover:text-white">Kebijakan Privasi</Link>
             </div>
           </div>
         </div>

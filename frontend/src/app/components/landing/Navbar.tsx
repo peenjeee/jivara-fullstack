@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { LogIn } from "lucide-react";
 import { useScrollThreshold, useLockBodyScroll } from "@/utils/hooks";
+import Button from "@/app/components/ui/Button";
 
 export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -50,12 +52,13 @@ export default function Navbar() {
           </div>
 
           <div className="flex items-center gap-6">
-            <Link
-              href="/login"
-              className="hidden lg:inline-flex items-center justify-center py-3 px-7 bg-primary text-white !text-white text-[13px] font-bold tracking-[0.05em] uppercase rounded-full transition-all duration-[400ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] shadow-primary/20 border border-white/10 relative overflow-hidden gap-2.5 hover:-translate-y-[3px] hover:shadow-primary/40 hover:brightness-105 active:-translate-y-px active:scale-[0.97] active:shadow-primary/30 group"
-            >
-              Masuk
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] group-hover:translate-x-[3px] text-white"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1="15" y1="12" x2="3" y2="12" /></svg>
+            <Link href="/login" className="hidden lg:block">
+              <Button
+                size="sm"
+                icon={<LogIn size={16} strokeWidth={2.5} />}
+              >
+                Masuk
+              </Button>
             </Link>
 
             <button
@@ -101,13 +104,14 @@ export default function Navbar() {
           </div>
 
           <div className="mt-auto">
-            <Link
-              href="/login"
-              className="w-full inline-flex items-center justify-center py-5 px-7 bg-primary text-white !text-white text-base font-bold tracking-[0.05em] uppercase rounded-full transition-all duration-[400ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] shadow-[0_4px_15px_rgba(16,185,129,0.2)] border border-white/10 gap-2.5 hover:-translate-y-[3px] hover:shadow-[0_12px_30px_rgba(16,185,129,0.4)] hover:brightness-105 active:-translate-y-px active:scale-[0.97] active:shadow-[0_5px_15px_rgba(16,185,129,0.3)] group"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              Masuk
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] group-hover:translate-x-[3px] text-white"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1="15" y1="12" x2="3" y2="12" /></svg>
+            <Link href="/login" onClick={() => setIsMenuOpen(false)}>
+              <Button
+                className="w-full"
+                size="lg"
+                icon={<LogIn size={18} />}
+              >
+                Masuk
+              </Button>
             </Link>
           </div>
         </div>

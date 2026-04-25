@@ -6,11 +6,11 @@ export default function Hero() {
       <div className="relative lg:absolute lg:top-[15vh] lg:right-[2vw] w-[min(280px,70vw)] lg:w-[min(460px,40vw)] h-auto lg:h-[min(580px,60vh)] flex items-center justify-center z-10 mx-auto lg:mx-0" aria-label="Jiva mascot window">
         <Image
           src="/images/maskot/maskot.png"
-          alt="Jiva — maskot Jivara"
+          alt="Jiva - maskot Jivara"
           width={420}
           height={420}
           priority
-          className="w-full h-auto drop-shadow-[0_20px_40px_var(--line)] animate-mascot-float"
+          className="w-full h-auto animate-mascot-float"
         />
       </div>
 

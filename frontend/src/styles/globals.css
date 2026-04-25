@@ -25,6 +25,7 @@
 /* CSS Variables  */
 :root {
   --primary: #10b981;
+  --primary-rgb: 16, 185, 129;
   --bg: #ffffff;
   --text: #0f172a;
   --muted: #64748b;
@@ -66,11 +67,6 @@ img {
 }
 
 button {
-  border: 0;
-  padding: 0;
-  color: inherit;
-  font: inherit;
-  background: transparent;
   cursor: pointer;
 }
 
@@ -93,8 +89,6 @@ ul {
   background: var(--primary);
   color: var(--bg);
 }
-
-
 
 /* Scroll Reveal  */
 .js-ready [data-animate] {
@@ -138,8 +132,6 @@ ul {
   }
 }
 
-
-
 @keyframes pillIn {
   from {
     opacity: 0;
@@ -150,6 +142,32 @@ ul {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
+}
+
+/* SweetAlert2 Styling */
+.swal2-popup {
+  border-radius: 24px !important;
+  font-family: var(--font-body) !important;
+}
+
+.swal2-confirm {
+  background-color: var(--primary) !important;
+  border-radius: 9999px !important;
+  padding: 12px 30px !important;
+  font-weight: 600 !important;
+}
+
+.swal2-deny {
+  border-radius: 9999px !important;
+}
+
+.swal2-cancel {
+  border-radius: 9999px !important;
+}
+
+/* Custom SweetAlert2 Container Overrides */
+.swal2-container {
+  z-index: 99999 !important;
 }
 
 /* Reduced Motion  */

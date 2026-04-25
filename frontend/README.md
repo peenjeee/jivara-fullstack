@@ -1,6 +1,12 @@
 # Jivara Frontend
 
-Frontend Jivara dibangun dengan **Next.js 16**, **React 19**, **TypeScript**, dan **Tailwind CSS 4**.
+Frontend Jivara.
+
+## Konfigurasi (.env)
+
+```bash
+cp .env.local.example .env.local
+```
 
 ## Menjalankan lokal
 
