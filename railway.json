@@ -2,7 +2,8 @@
   "$schema": "https://railway.app/sm_config_schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "rootDirectory": "backend"
+    "rootDirectory": "backend",
+    "buildCommand": "npm run build"
   },
   "deploy": {
     "startCommand": "npm run start",
