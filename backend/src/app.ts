@@ -3,12 +3,33 @@ dotenv.config();
 
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger';
 import authRoutes from './routes/auth.routes';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Security: HTTP headers
+app.use(helmet({
+  contentSecurityPolicy: false, // Dinonaktifkan agar Swagger UI bisa berjalan
+  crossOriginEmbedderPolicy: false,
+}));
+
+// Security: Rate limiting untuk mencegah brute-force & abuse
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 menit
+  max: 100, // Maksimal 100 request per IP per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    status: 'error',
+    message: 'Terlalu banyak permintaan, silakan coba lagi nanti.',
+  },
+});
+app.use('/api/', limiter);
 
 // CORS configuration - allow frontend origin
 app.use(cors({
@@ -18,7 +39,8 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(express.json());
+// Body parser dengan limit untuk mencegah payload attack
+app.use(express.json({ limit: '1mb' }));
 
 // Routes
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
@@ -37,20 +59,18 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
     ::-webkit-scrollbar-thumb:hover { background: #10b981; }
   `,
   customJs: '/swagger-custom.js',
-  customSiteTitle: "Jivara API Documentation"
+  customSiteTitle: "Dokumentasi API Jivara"
 }));
 
 app.use('/api/auth', authRoutes);
 
-// Custom JS for Swagger Smooth Scroll (Lenis)
+// Custom JS untuk Smooth Scroll Swagger (Lenis)
 app.get('/swagger-custom.js', (req: Request, res: Response) => {
   res.type('application/javascript');
   res.send(`
-    console.log("Jivara Swagger: Loading Smooth Scroll...");
     const script = document.createElement('script');
     script.src = 'https://unpkg.com/lenis@1.1.18/dist/lenis.min.js';
     script.onload = () => {
-      console.log("Jivara Swagger: Lenis Library Loaded.");
       const lenis = new Lenis({
         duration: 1.2,
         easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
@@ -64,50 +84,54 @@ app.get('/swagger-custom.js', (req: Request, res: Response) => {
       }
       requestAnimationFrame(raf);
       
-      // Auto-resize lenis on dynamic swagger content changes
+      // Ubah ukuran otomatis lenis pada perubahan konten swagger yang dinamis
       const observer = new MutationObserver(() => {
         lenis.resize();
       });
       observer.observe(document.body, { childList: true, subtree: true });
 
       window.lenis = lenis;
-      console.log("Jivara Swagger: Smooth Scroll Active!");
     };
     document.head.appendChild(script);
   `);
 });
 
-// Health Check
+// Pengecekan API
 app.get('/health', (req: Request, res: Response) => {
-  res.json({ status: 'Running', message: 'Jivara Backend is running' });
+  res.json({ status: 'Berjalan', message: 'Backend Jivara berjalan dengan baik' });
 });
 
-// Root Route
+// Rute Utama
 app.get('/', (req: Request, res: Response) => {
   res.json({
     name: 'Jivara API',
     version: '1.0.0',
     framework: 'Express.js',
-    status: 'Running',
+    status: 'Berjalan',
     docs: '/api-docs'
   });
 });
 
 // 404 Handler
 app.use((req: Request, res: Response) => {
-  res.status(404).json({ status: 'error', message: 'Endpoint not found' });
+  res.status(404).json({ status: 'error', message: 'Endpoint tidak ditemukan' });
 });
 
 // Global Error Handler
 app.use((err: { status?: number; message?: string }, req: Request, res: Response, _next: NextFunction) => {
-  console.error('[Error]:', err);
-  res.status(err.status || 500).json({
+  const statusCode = err.status || 500;
+  const isServerError = statusCode >= 500;
+
+  if (isServerError) {
+    // console.error('[Error Internal]:', err);
+  }
+
+  res.status(statusCode).json({
     status: 'error',
-    message: err.message || 'Internal server error',
-    error: process.env.NODE_ENV === 'development' ? err : {}
+    message: isServerError ? 'Terjadi kesalahan pada server' : (err.message || 'Terjadi kesalahan'),
   });
 });
 
 app.listen(PORT, () => {
-  console.log(`[server]: Server is running at http://localhost:${PORT}`);
+  // console.log(`[server]: Server berjalan di http://localhost:${PORT}`);
 });

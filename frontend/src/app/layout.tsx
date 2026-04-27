@@ -26,9 +26,9 @@ export const metadata: Metadata = {
   title: "Jivara",
   description:
     "Platform kesehatan berbasis AI untuk pengingat obat, deteksi interaksi makanan-obat, dan pemantauan pasien jarak jauh.",
-  keywords: ["jivara", "medication reminder", "food safety", "AI healthcare", "patient monitoring"],
+  keywords: ["jivara", "pengingat obat", "keamanan makanan", "kesehatan AI", "monitoring pasien", "interaksi obat makanan"],
   openGraph: {
-    title: "Stay on Track, Stay Healthy",
+    title: "Tetap Terjaga, Tetap Sehat — Jivara",
     description: "Pengingat obat, scan makanan AI, dan monitoring perawat dalam satu aplikasi.",
     type: "website"
   },

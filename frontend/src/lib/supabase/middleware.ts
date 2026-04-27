@@ -32,7 +32,7 @@ export const updateSession = async (request: NextRequest) => {
     },
   );
 
-  // Calling getUser() ensures the session is refreshed and variables are used.
+  // Memanggil getUser() memastikan sesi diperbarui dan variabel digunakan.
   await supabase.auth.getUser();
 
   return supabaseResponse;

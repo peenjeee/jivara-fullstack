@@ -4,7 +4,7 @@ import * as authService from "../services/auth.service";
 
 /**
  * POST /api/auth/register
- * Register a new nurse account (public registration).
+ * Mendaftarkan akun perawat baru (registrasi publik).
  */
 export const register = async (req: AuthRequest, res: Response) => {
   try {
@@ -25,7 +25,7 @@ export const register = async (req: AuthRequest, res: Response) => {
     const status = err.status || 500;
     const isInternalError = status === 500;
     
-    console.error("Register Error:", error);
+    // console.error("Register Error:", error);
     
     res.status(status).json({
       status: "error",
@@ -37,7 +37,7 @@ export const register = async (req: AuthRequest, res: Response) => {
 
 /**
  * POST /api/auth/login
- * Login with email/phone + password. Returns access + refresh tokens.
+ * Masuk dengan email/telepon + kata sandi. Mengembalikan access + refresh token.
  */
 export const login = async (req: AuthRequest, res: Response) => {
   try {
@@ -49,7 +49,7 @@ export const login = async (req: AuthRequest, res: Response) => {
     const status = err.status || 500;
     const isInternalError = status === 500;
     
-    console.error("Login Error:", error);
+    // console.error("Login Error:", error);
     
     res.status(status).json({
       status: "error",
@@ -61,7 +61,7 @@ export const login = async (req: AuthRequest, res: Response) => {
 
 /**
  * POST /api/auth/refresh
- * Refresh access token using a valid refresh token.
+ * Perbarui access token menggunakan refresh token yang valid.
  */
 export const refresh = async (req: AuthRequest, res: Response) => {
   try {
@@ -73,7 +73,7 @@ export const refresh = async (req: AuthRequest, res: Response) => {
     const status = err.status || 500;
     const isInternalError = status === 500;
     
-    console.error("Refresh Error:", error);
+    // console.error("Refresh Error:", error);
     
     res.status(status).json({
       status: "error",
@@ -85,7 +85,7 @@ export const refresh = async (req: AuthRequest, res: Response) => {
 
 /**
  * POST /api/auth/logout
- * Invalidate refresh token.
+ * Invalidasi refresh token.
  */
 export const logout = async (req: AuthRequest, res: Response) => {
   try {
@@ -98,7 +98,7 @@ export const logout = async (req: AuthRequest, res: Response) => {
   } catch (error: unknown) {
     const err = error as { status?: number; message?: string };
     const status = err.status || 500;
-    console.error("Logout Error:", error);
+    // console.error("Logout Error:", error);
     res.status(status).json({
       status: "error",
       message: err.message || "Terjadi kesalahan pada server",
@@ -108,7 +108,7 @@ export const logout = async (req: AuthRequest, res: Response) => {
 
 /**
  * GET /api/auth/me
- * Get current user profile. Requires authentication.
+ * Ambil profil pengguna saat ini. Memerlukan autentikasi.
  */
 export const getMe = async (req: AuthRequest, res: Response) => {
   try {
@@ -120,7 +120,7 @@ export const getMe = async (req: AuthRequest, res: Response) => {
     const status = err.status || 500;
     const isInternalError = status === 500;
     
-    console.error("GetMe Error:", error);
+    // console.error("GetMe Error:", error);
     
     res.status(status).json({
       status: "error",

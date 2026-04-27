@@ -9,7 +9,7 @@ const api = axios.create({
   },
 });
 
-// Request interceptor: add auth token
+// Interceptor permintaan: tambahkan token autentikasi
 api.interceptors.request.use(
   (config) => {
     const token = useAuthStore.getState().token;
@@ -21,7 +21,7 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor: handle 401 & refresh token
+// Interceptor respons: tangani 401 & refresh token
 interface FailedRequest {
   resolve: (token: string | null) => void;
   reject: (error: unknown) => void;

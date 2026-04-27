@@ -1,8 +1,9 @@
 "use client";
 
 /**
- * Initializes intersection observer animations for elements with [data-animate] attribute.
- * This is used for reveal-on-scroll effects on the landing page.
+ * Menginisialisasi animasi scroll 
+ * intersection observer untuk elemen dengan atribut [data-animate].
+ * Digunakan untuk efek reveal-on-scroll di halaman landing.
  */
 export const initScrollAnimations = () => {
   if (typeof window === "undefined") return;

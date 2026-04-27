@@ -9,6 +9,6 @@ if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is not defined in the environment variables");
 }
 
-// Disable prefetch as it is not supported for "Transaction" pool mode
+// Nonaktifkan prefetch karena tidak didukung untuk mode pool "Transaction"
 const client = postgres(process.env.DATABASE_URL, { prepare: false });
 export const db = drizzle(client, { schema });

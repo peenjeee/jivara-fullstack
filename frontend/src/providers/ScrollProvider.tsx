@@ -19,14 +19,16 @@ export default function ScrollProvider({ children }: ScrollProviderProps) {
       touchMultiplier: 2,
     });
 
+    let rafId: number;
+
     function raf(time: number) {
       lenis.raf(time);
-      requestAnimationFrame(raf);
+      rafId = requestAnimationFrame(raf);
     }
 
-    requestAnimationFrame(raf);
+    rafId = requestAnimationFrame(raf);
 
-    // Handle anchor links smooth scroll
+    // Menangani smooth scroll untuk tautan anchor
     const handleAnchorClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       const link = target.closest("a");
@@ -62,6 +64,7 @@ export default function ScrollProvider({ children }: ScrollProviderProps) {
     document.addEventListener("click", handleAnchorClick);
 
     return () => {
+      cancelAnimationFrame(rafId);
       lenis.destroy();
       document.removeEventListener("click", handleAnchorClick);
     };

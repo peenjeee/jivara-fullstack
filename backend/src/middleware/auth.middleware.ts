@@ -9,7 +9,7 @@ if (!JWT_SECRET) {
   throw new Error("FATAL ERROR: JWT_SECRET is not defined in environment variables.");
 }
 
-// Extend Express Request to include user info
+// Perluas Express Request untuk menyertakan info pengguna
 export interface AuthRequest extends Request {
   user?: {
     id: string;
@@ -19,7 +19,7 @@ export interface AuthRequest extends Request {
 }
 
 /**
- * Middleware: Verify JWT access token from Authorization header
+ * Middleware: Verifikasi JWT access token dari header Authorization
  */
 export const authenticateToken = (
   req: AuthRequest,
@@ -32,7 +32,7 @@ export const authenticateToken = (
   if (!token) {
     return res.status(401).json({
       status: "error",
-      message: "Access token required",
+      message: "Token akses diperlukan",
       error_code: "MISSING_TOKEN",
     });
   }
@@ -50,28 +50,28 @@ export const authenticateToken = (
     if (err.name === "TokenExpiredError") {
       return res.status(401).json({
         status: "error",
-        message: "Access token expired",
+        message: "Token akses telah kedaluwarsa",
         error_code: "TOKEN_EXPIRED",
       });
     }
     return res.status(401).json({
       status: "error",
-      message: "Invalid access token",
+      message: "Token akses tidak valid",
       error_code: "INVALID_TOKEN",
     });
   }
 };
 
 /**
- * Middleware: Role-Based Access Control (RBAC)
- * Usage: authorizeRoles("nurse", "admin")
+ * Middleware: Kontrol Akses (RBAC)
+ * Penggunaan: authorizeRoles("nurse")
  */
 export const authorizeRoles = (...roles: string[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
     if (!req.user) {
       return res.status(401).json({
         status: "error",
-        message: "Authentication required",
+        message: "Autentikasi diperlukan",
         error_code: "MISSING_TOKEN",
       });
     }
@@ -79,7 +79,7 @@ export const authorizeRoles = (...roles: string[]) => {
     if (!roles.includes(req.user.role)) {
       return res.status(403).json({
         status: "error",
-        message: "You do not have permission to access this resource",
+        message: "Anda tidak memiliki izin untuk mengakses sumber daya ini",
         error_code: "FORBIDDEN",
       });
     }

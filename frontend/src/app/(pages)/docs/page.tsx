@@ -13,7 +13,7 @@ export default function DocsPage() {
       <Section className="min-h-[70vh] pt-32 lg:pt-48 pb-20">
         <div className="max-w-[800px]">
           <h1 className="font-display text-xl lg:text-2xl font-extrabold uppercase mb-12 tracking-tight text-dark">
-            Dokumentasi Jivara
+            Dokumentasi
           </h1>
           <div className="mt-8">
             <Link 

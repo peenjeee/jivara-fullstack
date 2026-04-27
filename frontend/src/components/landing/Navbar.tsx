@@ -7,17 +7,17 @@ import { motion, AnimatePresence } from "motion/react";
 import { useScrollThreshold, useLockBodyScroll } from "@/hooks";
 import Button from "@/components/ui/Button";
 
+const NAV_LINKS = [
+  { name: "Fitur", href: "/#fitur" },
+  { name: "Alur", href: "/#alur" },
+  { name: "Keamanan", href: "/#keamanan" },
+] as const;
+
 export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const isScrolled = useScrollThreshold(20);
 
   useLockBodyScroll(isMenuOpen);
-
-  const navLinks = [
-    { name: "Fitur", href: "/#fitur" },
-    { name: "Alur", href: "/#alur" },
-    { name: "Keamanan", href: "/#keamanan" },
-  ];
 
   return (
     <>
@@ -26,7 +26,7 @@ export default function Navbar() {
             ? "h-[72px] bg-white/85 backdrop-blur-[20px] shadow-[0_4px_30px_var(--line)]"
             : "h-[72px] lg:h-[90px] bg-bg"
           }`}
-        aria-label="Primary navigation"
+        aria-label="Navigasi utama"
       >
         <div className="max-w-[1440px] mx-auto h-full flex justify-between items-center relative w-full">
             <Link
@@ -39,7 +39,7 @@ export default function Navbar() {
 
           {/* Desktop Nav Links */}
           <div className="hidden lg:flex gap-12 absolute left-1/2 -translate-x-1/2">
-            {navLinks.map((link) => (
+            {NAV_LINKS.map((link) => (
               <motion.div
                 key={link.name}
                 whileHover={{ y: -2 }}
@@ -64,9 +64,9 @@ export default function Navbar() {
             </Link>
 
             <button
-              className={`flex lg:hidden flex-col gap-[5px] w-11 h-11 justify-center items-center z-[40000] rounded-xl cursor-pointer transition-all duration-300 shrink-0}`}
+              className={`flex lg:hidden flex-col gap-[5px] w-11 h-11 justify-center items-center z-[40000] rounded-xl cursor-pointer transition-all duration-300 shrink-0`}
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              aria-label={isMenuOpen ? "Close menu" : "Open menu"}
+              aria-label={isMenuOpen ? "Tutup menu" : "Buka menu"}
             >
               <span
                 className={`w-5 h-0.5 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] pointer-events-none ${isMenuOpen ? "bg-white translate-y-[7px] rotate-45" : "bg-text-main"}`}
@@ -115,7 +115,7 @@ export default function Navbar() {
               </div>
 
               <div className="flex flex-col gap-8">
-                {navLinks.map((link, i) => (
+                {NAV_LINKS.map((link, i) => (
                   <motion.div
                     key={link.name}
                     initial={{ opacity: 0, x: 30 }}

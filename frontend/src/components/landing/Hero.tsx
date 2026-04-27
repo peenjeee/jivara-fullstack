@@ -24,12 +24,11 @@ export default function Hero() {
 
   const { scrollY } = useScroll();
 
-  // Section scale & opacity for the "mengecil" effect
-  // We map the first 100vh of scroll to the animation
+  // section untuk efek mengecil
   const sectionScale = useTransform(scrollY, [0, innerHeight], [1, 0.75]);
   const sectionOpacity = useTransform(scrollY, [0, innerHeight * 0.8], [1, 0]);
 
-  // Parallax effects for individual elements
+  // Efek paralaks untuk maskot
   const mascotScale = useTransform(scrollY, [0, innerHeight * 0.8], [1, 0.6]);
   const mascotOpacity = useTransform(scrollY, [0, innerHeight * 0.7], [1, 0]);
   const mascotRotate = useTransform(scrollY, [0, innerHeight], [0, -15]);
@@ -44,7 +43,7 @@ export default function Hero() {
     >
       <motion.div
         className="relative lg:absolute lg:top-[15vh] lg:right-[2vw] w-[min(280px,70vw)] lg:w-[min(460px,40vw)] h-auto lg:h-[min(580px,60vh)] flex items-center justify-center z-50 mx-auto lg:mx-0 pointer-events-none lg:pointer-events-auto"
-        aria-label="Jiva mascot window"
+        aria-label="Maskot Jiva"
         style={{
           scale: mascotScale,
           opacity: mascotOpacity,

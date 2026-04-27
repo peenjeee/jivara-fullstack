@@ -1,4 +1,4 @@
-// ─── Request DTOs ────────────────────────────
+// ─── DTO Permintaan ────────────────────────────
 
 export interface RegisterDTO {
   fullName: string;
@@ -16,7 +16,7 @@ export interface LoginDTO {
   password: string;
 }
 
-// ─── Response DTOs ───────────────────────────
+// ─── DTO Respons ───────────────────────────
 
 export interface TokenPayload {
   id: string;
@@ -43,8 +43,6 @@ export interface UserProfile {
   isActive?: boolean;
   createdAt?: Date | null;
 }
-
-// ─── Constants ───────────────────────────────
 
 export const AUTH_CONSTANTS = {
   ACCESS_TOKEN_EXPIRY: "1h" as const,

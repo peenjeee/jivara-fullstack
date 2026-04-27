@@ -13,7 +13,7 @@ import {
 
 const JWT_SECRET = process.env.JWT_SECRET as string;
 
-// ─── Token Utilities ─────────────────────────
+// ─── Utilitas Token ─────────────────────────
 
 export const generateAccessToken = (payload: TokenPayload): string => {
   return jwt.sign(payload, JWT_SECRET, {
@@ -30,13 +30,11 @@ export const generateRefreshToken = async (userId: string): Promise<string> => {
   return token;
 };
 
-// ─── Service Methods ─────────────────────────
-
 /**
- * Register a new nurse account (public registration).
+ * Mendaftarkan akun perawat baru (registrasi publik).
  */
 export const registerUser = async (dto: RegisterDTO) => {
-  // Check existing user
+  // Cek pengguna yang sudah ada
   const conditions = [eq(users.email, dto.email)];
   if (dto.phone) {
     conditions.push(eq(users.phone, dto.phone));
@@ -78,7 +76,7 @@ export const registerUser = async (dto: RegisterDTO) => {
 };
 
 /**
- * Authenticate user with email/phone + password.
+ * Autentikasi pengguna dengan email/telepon + kata sandi.
  */
 export const loginUser = async (dto: LoginDTO) => {
   const loginId = dto.identifier || dto.email;
@@ -130,7 +128,7 @@ export const loginUser = async (dto: LoginDTO) => {
 };
 
 /**
- * Refresh access token using a valid refresh token string.
+ * Perbarui access token menggunakan string refresh token yang valid.
  */
 export const refreshAccessToken = async (token: string) => {
   const storedToken = await db
@@ -168,14 +166,14 @@ export const refreshAccessToken = async (token: string) => {
 };
 
 /**
- * Invalidate a refresh token (logout).
+ * Invalidasi refresh token (logout).
  */
 export const invalidateRefreshToken = async (token: string) => {
   await db.delete(refreshTokens).where(eq(refreshTokens.token, token));
 };
 
 /**
- * Get current user profile by ID.
+ * Ambil profil pengguna saat ini berdasarkan ID.
  */
 export const getUserProfile = async (userId: string) => {
   const user = await db

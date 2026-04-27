@@ -23,8 +23,8 @@ export default function DashboardPage() {
         if (token && refreshToken) {
           setAuth(data.data, token, refreshToken);
         }
-      } catch (error) {
-        console.error("Gagal memuat profil pengguna:", error);
+      } catch {
+        // Gagal memuat profil, gunakan data dari store
       } finally {
         setLoading(false);
       }
@@ -34,7 +34,7 @@ export default function DashboardPage() {
     if (token) {
       fetchUser();
     } else {
-      // Defer to avoid synchronous setState in effect warning
+      // Tunda untuk menghindari peringatan setState sinkron dalam effect
       Promise.resolve().then(() => setLoading(false));
     }
   }, [setAuth, token, refreshToken]);
@@ -46,8 +46,8 @@ export default function DashboardPage() {
       try {
         // Panggil endpoint logout agar sesi di backend ikut dihapus
         await api.post('/auth/logout', { refresh_token: refreshToken });
-      } catch (error) {
-        console.error("Logout backend gagal, melanjutkan logout lokal...", error);
+      } catch {
+        // Logout backend gagal, lanjutkan logout lokal
       }
 
       // Proses logout secara lokal

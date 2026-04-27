@@ -10,7 +10,7 @@ export interface User {
 }
 
 /**
- * Auth state shape for Zustand store.
+ * Bentuk state autentikasi untuk Zustand store.
  */
 export interface AuthState {
   user: User | null;

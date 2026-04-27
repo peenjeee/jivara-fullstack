@@ -3,15 +3,15 @@
 import { useState, useEffect } from "react";
 
 /**
- * Hook to track window scroll position and determine if it has passed a threshold.
- * Used for navbar background transitions.
+ * Hook untuk melacak posisi scroll.
+ * Digunakan untuk transisi.
  */
 export const useScrollThreshold = (threshold: number = 20) => {
   const [isScrolled, setIsScrolled] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > threshold);
-    window.addEventListener("scroll", handleScroll);
+    window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, [threshold]);
 
@@ -19,7 +19,7 @@ export const useScrollThreshold = (threshold: number = 20) => {
 };
 
 /**
- * Hook to lock body scroll when a modal or drawer is open.
+ * Hook untuk mengunci body scroll saat modal atau drawer terbuka.
  */
 export const useLockBodyScroll = (lock: boolean) => {
   useEffect(() => {

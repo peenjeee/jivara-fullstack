@@ -2,10 +2,10 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { updateSession } from './lib/supabase/middleware';
 
-// Routes that require authentication
+// Route yang memerlukan autentikasi
 const protectedRoutes = ['/dashboard'];
 
-// Routes that should NOT be accessible if already logged in
+// Route yang TIDAK boleh diakses jika sudah login
 const authRoutes = ['/login', '/register'];
 
 export async function middleware(request: NextRequest) {
@@ -34,11 +34,11 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
+     * Cocokkan semua path permintaan kecuali yang dimulai dengan:
+     * - api (route API)
+     * - _next/static (file statis)
+     * - _next/image (file optimisasi gambar)
+     * - favicon.ico (file favicon)
      */
     '/((?!api|_next/static|_next/image|favicon.ico).*)',
   ],

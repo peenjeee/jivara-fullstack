@@ -24,14 +24,24 @@ const options: swaggerJsdoc.Options = {
     info: {
       title: 'Jivara API',
       version: '1.0.0',
-      description: 'RESTful API Jivara',
+      description: 'API RESTful Jivara - Platform Kesehatan Berbasis AI',
       contact: {
         name: 'Jivara',
       },
     },
     servers: getServers(),
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: 'Masukkan token JWT Anda',
+        },
+      },
+    },
   },
-  apis: ['./src/app.ts', './src/routes/*.ts'], // Path to the API docs
+  apis: ['./src/app.ts', './src/routes/*.ts'], // Path ke dokumentasi API
 };
 
 export const swaggerSpec = swaggerJsdoc(options);

@@ -14,7 +14,7 @@ const validate = (rules: ValidationRule[]) => {
     for (const rule of rules) {
       const value = req.body[rule.field];
 
-      // Required check
+      // Cek wajib diisi
       if (rule.required && (!value || (typeof value === "string" && !value.trim()))) {
         return res.status(400).json({
           status: "error",
@@ -23,10 +23,10 @@ const validate = (rules: ValidationRule[]) => {
         });
       }
 
-      // Skip optional empty fields
+      // Lewati field opsional yang kosong
       if (!value) continue;
 
-      // Min length check
+      // Cek panjang minimum
       if (rule.minLength && typeof value === "string" && value.length < rule.minLength) {
         return res.status(400).json({
           status: "error",
@@ -35,7 +35,7 @@ const validate = (rules: ValidationRule[]) => {
         });
       }
 
-      // Pattern check
+      // Cek pola
       if (rule.pattern && typeof value === "string" && !rule.pattern.test(value)) {
         return res.status(400).json({
           status: "error",
@@ -48,7 +48,7 @@ const validate = (rules: ValidationRule[]) => {
   };
 };
 
-// ─── Pre-built Validators ────────────────────
+// ─── Validator yang Sudah Dibuat ────────────────────
 
 export const validateRegister = validate([
   { field: "fullName", label: "Nama lengkap", required: true },

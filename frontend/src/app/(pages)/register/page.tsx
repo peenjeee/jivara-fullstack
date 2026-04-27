@@ -53,15 +53,14 @@ export default function RegisterPage() {
         email,
         phone,
         password,
-        role: 'nurse', // Default role for registration
+        role: 'nurse', // Peran default untuk registrasi
       });
 
       showToast('Akun Anda telah terdaftar. Silakan masuk.', 'success');
       router.push('/login');
-    } catch (error: unknown) {
-      const err = error as { response?: { data?: { message?: string } } };
+    } catch {
       closeAlert();
-      showError(err.response?.data?.message || 'Terjadi kesalahan saat mendaftar.');
+      showError('Terjadi kesalahan saat mendaftar. Silakan coba lagi.');
     } finally {
       setLoading(false);
     }
@@ -97,7 +96,7 @@ export default function RegisterPage() {
             <AuthInput
               id="email"
               label="Email"
-              type="text"
+              type="email"
               placeholder="nama@email.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}

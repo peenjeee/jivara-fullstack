@@ -34,7 +34,7 @@ export default function LoginPage() {
     showLoading('Mohon Tunggu', 'Sedang masuk ke akun Anda...');
 
     try {
-      // Backend handles identifier as either email or phone
+      // Backend menangani identifier sebagai email atau telepon
       const response = await api.post('/auth/login', {
         identifier,
         password,
@@ -46,18 +46,21 @@ export default function LoginPage() {
         throw new Error('Data autentikasi tidak valid dari server.');
       }
 
-      // Store in Zustand
+      // Simpan di Zustand
       setAuth(user, access_token, refresh_token);
 
-      // Store in Cookie for Middleware (expires in 7 days to match refresh token)
-      Cookies.set('jivara-token', access_token, { expires: 7 });
+      // Simpan di Cookie untuk Middleware (kedaluwarsa 7 hari sesuai refresh token)
+      Cookies.set('jivara-token', access_token, {
+        expires: 7,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+      });
 
       showToast('Anda berhasil masuk.', 'success');
       router.push('/dashboard');
-    } catch (error: unknown) {
-      const err = error as { response?: { data?: { message?: string } } };
+    } catch {
       closeAlert();
-      showError(err.response?.data?.message || 'Login gagal. Periksa kembali email dan kata sandi Anda.');
+      showError('Login gagal. Periksa kembali email dan kata sandi Anda.');
     } finally {
       setLoading(false);
     }
