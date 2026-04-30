@@ -44,6 +44,16 @@ export const validateMedicationScheduleCreate = (req: Request, res: Response, ne
   next();
 };
 
+export const validateMedicationScheduleId = (req: Request, res: Response, next: NextFunction) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+
+  if (!id || !isValidUuid(id)) {
+    return res.status(400).json({ status: "error", message: "ID jadwal obat wajib berupa UUID valid", error_code: "VALIDATION_ERROR" });
+  }
+
+  next();
+};
+
 export const validateMedicationScheduleUpdate = (req: Request, res: Response, next: NextFunction) => {
   const { prescriptionId, frequency, scheduledTimes } = req.body;
 
