@@ -12,6 +12,7 @@ import patientRoutes from './routes/patient.routes';
 import medicationScheduleRoutes from './routes/medication-schedule.routes';
 import medicationLogRoutes from './routes/medication-log.routes';
 import adherenceRoutes from './routes/adherence.routes';
+import foodAiRoutes from './routes/food-ai.routes';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -74,6 +75,7 @@ app.use('/api/patients', patientRoutes);
 app.use('/api/medication-schedules', medicationScheduleRoutes);
 app.use('/api/medication-logs', medicationLogRoutes);
 app.use('/api/adherence', adherenceRoutes);
+app.use('/api', foodAiRoutes);
 
 // Custom JS untuk Smooth Scroll Swagger (Lenis)
 app.get('/swagger-custom.js', (req: Request, res: Response) => {
