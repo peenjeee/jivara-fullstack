@@ -19,6 +19,9 @@ logs/
 *.log
 !.env.example
 
+# Local progress notes
+progress/
+
 # IDEs and editors
 .vscode/
 .idea/
