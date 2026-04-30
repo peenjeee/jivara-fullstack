@@ -8,6 +8,11 @@ import rateLimit from 'express-rate-limit';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger';
 import authRoutes from './routes/auth.routes';
+import patientRoutes from './routes/patient.routes';
+import medicationScheduleRoutes from './routes/medication-schedule.routes';
+import medicationLogRoutes from './routes/medication-log.routes';
+import adherenceRoutes from './routes/adherence.routes';
+import foodAiRoutes from './routes/food-ai.routes';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -37,7 +42,7 @@ const limiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: {
-    status: 'error',
+    status: 'gagal',
     message: 'Terlalu banyak permintaan, silakan coba lagi nanti.',
   },
 });
@@ -70,6 +75,11 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
 }));
 
 app.use('/api/auth', authRoutes);
+app.use('/api/patients', patientRoutes);
+app.use('/api/medication-schedules', medicationScheduleRoutes);
+app.use('/api/medication-logs', medicationLogRoutes);
+app.use('/api/adherence', adherenceRoutes);
+app.use('/api', foodAiRoutes);
 
 // Custom JS untuk Smooth Scroll Swagger (Lenis)
 app.get('/swagger-custom.js', (req: Request, res: Response) => {
@@ -121,7 +131,7 @@ app.get('/', (req: Request, res: Response) => {
 
 // 404 Handler
 app.use((req: Request, res: Response) => {
-  res.status(404).json({ status: 'error', message: 'Endpoint tidak ditemukan' });
+  res.status(404).json({ status: 'gagal', message: 'Endpoint tidak ditemukan' });
 });
 
 // Global Error Handler
@@ -134,7 +144,7 @@ app.use((err: { status?: number; message?: string }, req: Request, res: Response
   }
 
   res.status(statusCode).json({
-    status: 'error',
+    status: 'gagal',
     message: isServerError ? 'Terjadi kesalahan pada server' : (err.message || 'Terjadi kesalahan'),
   });
 });
