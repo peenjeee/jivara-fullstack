@@ -3,6 +3,7 @@ import * as medicationScheduleController from "../controllers/medication-schedul
 import { authenticateToken, authorizeRoles } from "../middleware/auth.middleware";
 import {
   validateMedicationScheduleCreate,
+  validateMedicationScheduleId,
   validateMedicationScheduleUpdate,
 } from "../validators/medication-schedule.validator";
 
@@ -48,11 +49,17 @@ router.get("/", authorizeRoles("patient", "nurse", "admin"), medicationScheduleC
  *     tags: [Medication Schedules]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
  *     responses:
  *       200:
  *         description: Detail jadwal obat berhasil diambil
  */
-router.get("/:id", authorizeRoles("patient", "nurse", "admin"), medicationScheduleController.getMedicationSchedule);
+router.get("/:id", authorizeRoles("patient", "nurse", "admin"), validateMedicationScheduleId, medicationScheduleController.getMedicationSchedule);
 
 /**
  * @swagger
@@ -76,11 +83,17 @@ router.post("/", authorizeRoles("nurse", "admin"), validateMedicationScheduleCre
  *     tags: [Medication Schedules]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
  *     responses:
  *       200:
  *         description: Jadwal obat berhasil diperbarui
  */
-router.put("/:id", authorizeRoles("nurse", "admin"), validateMedicationScheduleUpdate, medicationScheduleController.updateMedicationSchedule);
+router.put("/:id", authorizeRoles("nurse", "admin"), validateMedicationScheduleId, validateMedicationScheduleUpdate, medicationScheduleController.updateMedicationSchedule);
 
 /**
  * @swagger
@@ -90,10 +103,16 @@ router.put("/:id", authorizeRoles("nurse", "admin"), validateMedicationScheduleU
  *     tags: [Medication Schedules]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
  *     responses:
  *       200:
  *         description: Jadwal obat berhasil dinonaktifkan
  */
-router.delete("/:id", authorizeRoles("nurse", "admin"), medicationScheduleController.deactivateMedicationSchedule);
+router.delete("/:id", authorizeRoles("nurse", "admin"), validateMedicationScheduleId, medicationScheduleController.deactivateMedicationSchedule);
 
 export default router;
