@@ -12,6 +12,18 @@ import authRoutes from './routes/auth.routes';
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:3000,http://127.0.0.1:3000')
+  .split(',')
+  .map((origin) => origin.trim());
+
+// CORS must run before rate limiting so preflight requests get CORS headers.
+app.use(cors({
+  origin: allowedOrigins,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
+
 // Security: HTTP headers
 app.use(helmet({
   contentSecurityPolicy: false, // Dinonaktifkan agar Swagger UI bisa berjalan
@@ -30,14 +42,6 @@ const limiter = rateLimit({
   },
 });
 app.use('/api/', limiter);
-
-// CORS configuration - allow frontend origin
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-}));
 
 // Body parser dengan limit untuk mencegah payload attack
 app.use(express.json({ limit: '1mb' }));

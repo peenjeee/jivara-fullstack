@@ -68,7 +68,7 @@ export default function Hero() {
             width={420}
             height={420}
             priority
-            className="w-full h-auto animate-mascot-float drop-shadow-2xl"
+            className="w-full h-auto drop-shadow-2xl"
           />
         </motion.div>
       </motion.div>
@@ -79,7 +79,7 @@ export default function Hero() {
           y: contentY,
         }}
       >
-        <h1 id="hero-title" className="font-display text-[clamp(30px,10vw,48px)] lg:text-[clamp(42px,8vw,92px)] font-extrabold leading-[1.1] lg:leading-[1.05] tracking-[-0.02em] uppercase">
+        <h1 id="hero-title" className="font-display text-[clamp(28px,8vw,44px)] lg:text-[clamp(40px,6.4vw,76px)] font-extrabold leading-[1.1] lg:leading-[1.05] tracking-[-0.02em] uppercase">
           <motion.span
             className="block text-primary"
             initial={{ opacity: 0, y: 30 }}
@@ -111,13 +111,14 @@ export default function Hero() {
           </motion.span>
         </h1>
         <motion.p
-          className="w-full max-w-[450px] lg:max-w-[600px] mt-4 lg:mt-7 text-muted text-base lg:text-[19px] font-normal leading-relaxed lg:leading-[1.6]"
+          className="w-full max-w-[450px] lg:max-w-[560px] mt-4 lg:mt-7 text-muted text-base lg:text-[18px] font-normal leading-relaxed lg:leading-[1.6]"
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: 0.5 }}
         >
           <strong className="text-primary font-extrabold">Jivara</strong> membantu pasien patuh minum obat dan mendeteksi interaksi berbahaya dengan makanan menggunakan teknologi <i className="text-dark font-extrabold not-italic">Computer Vision</i>
         </motion.p>
+
       </motion.div>
     </motion.section>
   );

@@ -9,8 +9,10 @@ import Button from "@/components/ui/Button";
 
 const NAV_LINKS = [
   { name: "Fitur", href: "/#fitur" },
+  { name: "Tentang", href: "/#tentang" },
   { name: "Alur", href: "/#alur" },
   { name: "Keamanan", href: "/#keamanan" },
+  { name: "Kontak", href: "/#kontak" },
 ] as const;
 
 export default function Navbar() {
@@ -22,8 +24,8 @@ export default function Navbar() {
   return (
     <>
       <nav
-        className={`fixed inset-x-0 top-0 z-[10000] border-b border-line transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] px-4 lg:px-[84px] ${isScrolled
-            ? "h-[72px] bg-white/85 backdrop-blur-[20px] shadow-[0_4px_30px_var(--line)]"
+          className={`fixed inset-x-0 top-0 z-[10000] transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] px-4 lg:px-[84px] ${isScrolled
+            ? "h-[72px] bg-white/85 backdrop-blur-[20px] shadow-[0_8px_26px_rgba(15,23,42,0.06)]"
             : "h-[72px] lg:h-[90px] bg-bg"
           }`}
         aria-label="Navigasi utama"
@@ -37,26 +39,25 @@ export default function Navbar() {
               Jivara
             </Link>
 
-          {/* Desktop Nav Links */}
-          <div className="hidden lg:flex gap-12 absolute left-1/2 -translate-x-1/2">
-            {NAV_LINKS.map((link) => (
-              <motion.div
-                key={link.name}
-                whileHover={{ y: -2 }}
-                transition={{ type: "spring", stiffness: 400, damping: 20 }}
-              >
-                <Link
-                  href={link.href}
-                  className="group text-xs font-bold tracking-[0.16em] uppercase text-text-main relative transition-colors duration-200 hover:text-primary"
-                >
-                  {link.name}
-                  <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary transition-all duration-300 group-hover:w-full"></span>
-                </Link>
-              </motion.div>
-            ))}
-          </div>
-
           <div className="flex items-center gap-6">
+            <div className="hidden lg:flex items-center gap-8 xl:gap-10">
+              {NAV_LINKS.map((link) => (
+                <motion.div
+                  key={link.name}
+                  whileHover={{ y: -2 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 20 }}
+                >
+                  <Link
+                    href={link.href}
+                    className="group text-xs font-bold tracking-[0.16em] uppercase text-text-main relative transition-colors duration-200 hover:text-primary"
+                  >
+                    {link.name}
+                    <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary transition-all duration-300 group-hover:w-full"></span>
+                  </Link>
+                </motion.div>
+              ))}
+            </div>
+
             <Link href="/login" className="hidden lg:block">
               <Button size="sm" icon={<LogIn size={16} strokeWidth={2.5} />}>
                 Masuk

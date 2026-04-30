@@ -79,7 +79,7 @@ router.post("/register", validateRegister, authController.register);
  *             properties:
  *               identifier:
  *                 type: string
- *                 description: Email atau nomor telepon
+ *                 description: Email
  *               password:
  *                 type: string
  *     responses:
