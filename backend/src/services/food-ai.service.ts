@@ -37,7 +37,7 @@ const MOCK_DETECTED_ITEMS = [
 
 const NUTRITION_MAP: Record<string, { display: string; portion: string; calories: number; protein: number; fat: number; carbs: number; source: string }> = {
   nasi_putih: { display: "Nasi Putih", portion: "1 porsi (150g)", calories: 195, protein: 3.5, fat: 0.3, carbs: 43.2, source: "TKPI" },
-  rendang: { display: "Rendang Daging", portion: "1 porsi (100g)", calories: 193, protein: 22.6, fat: 10.2, carbs: 2.1, source: "Indonesian Food Dataset" },
+  rendang: { display: "Rendang Daging", portion: "1 porsi (100g)", calories: 193, protein: 22.6, fat: 10.2, carbs: 2.1, source: "Dataset Makanan Indonesia" },
   kangkung: { display: "Kangkung", portion: "1 porsi (100g)", calories: 19, protein: 2.6, fat: 0.2, carbs: 3.1, source: "TKPI" },
 };
 
@@ -119,7 +119,7 @@ export const detectFood = async (dto: FoodDetectDTO) => {
     })),
     low_confidence_items: [
       {
-        label: "unknown_vegetable",
+        label: "sayuran_tidak_dikenali",
         top_predictions: [
           { label: "bayam", confidence: 0.35 },
           { label: "kangkung", confidence: 0.30 },
@@ -150,7 +150,7 @@ export const checkInteraction = async (dto: InteractionCheckDTO) => {
       food_item: "kangkung",
       food_display: "Kangkung",
       medication: hasWarfarin ? "Warfarin 5mg" : "Obat pengencer darah",
-      severity: "yellow",
+      severity: "kuning",
       severity_label: "Perhatian",
       interaction_description: "Kangkung mengandung Vitamin K yang dapat memengaruhi terapi pengencer darah tertentu.",
       recommendation: "Batasi porsi kangkung dan jaga konsistensi asupan sayuran hijau. Konsultasikan dengan tenaga medis bila ragu.",
@@ -171,7 +171,7 @@ export const checkInteraction = async (dto: InteractionCheckDTO) => {
 
     await db
       .update(foodScans)
-      .set({ overallRiskScore: 0.45, overallRiskLevel: "medium" })
+      .set({ overallRiskScore: 0.45, overallRiskLevel: "sedang" })
       .where(eq(foodScans.id, dto.scanId));
   }
 
@@ -179,9 +179,9 @@ export const checkInteraction = async (dto: InteractionCheckDTO) => {
     interactions,
     safe_items: dto.detectedItems
       .filter((item) => item !== "kangkung")
-      .map((item) => ({ food_item: item, food_display: NUTRITION_MAP[item]?.display || item, status: "green" })),
+      .map((item) => ({ food_item: item, food_display: NUTRITION_MAP[item]?.display || item, status: "aman" })),
     overall_risk_score: interactions.length > 0 ? 0.45 : 0.1,
-    overall_risk_level: interactions.length > 0 ? "medium" : "low",
+    overall_risk_level: interactions.length > 0 ? "sedang" : "rendah",
     overall_recommendation: interactions.length > 0
       ? "Sebagian besar makanan aman. Perhatikan porsi kangkung saat mengonsumsi obat pengencer darah."
       : "Tidak ditemukan interaksi signifikan pada makanan yang terdeteksi.",
@@ -199,7 +199,7 @@ export const estimateNutrition = async (dto: NutritionDTO) => {
       protein: 0,
       fat: 0,
       carbs: 0,
-      source: "Mock KB",
+      source: "Basis Pengetahuan Mock",
     };
 
     return {

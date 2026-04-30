@@ -34,7 +34,7 @@ export const authenticateToken = (
 
   if (!token) {
     return res.status(401).json({
-      status: "error",
+      status: "gagal",
       message: "Token akses diperlukan",
       error_code: "MISSING_TOKEN",
     });
@@ -52,13 +52,13 @@ export const authenticateToken = (
     const err = error as { name?: string };
     if (err.name === "TokenExpiredError") {
       return res.status(401).json({
-        status: "error",
+        status: "gagal",
         message: "Token akses telah kedaluwarsa",
         error_code: "TOKEN_EXPIRED",
       });
     }
     return res.status(401).json({
-      status: "error",
+      status: "gagal",
       message: "Token akses tidak valid",
       error_code: "INVALID_TOKEN",
     });
@@ -73,7 +73,7 @@ export const authorizeRoles = (...roles: string[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
     if (!req.user) {
       return res.status(401).json({
-        status: "error",
+        status: "gagal",
         message: "Autentikasi diperlukan",
         error_code: "MISSING_TOKEN",
       });
@@ -81,7 +81,7 @@ export const authorizeRoles = (...roles: string[]) => {
 
     if (!roles.includes(req.user.role)) {
       return res.status(403).json({
-        status: "error",
+        status: "gagal",
         message: "Anda tidak memiliki izin untuk mengakses sumber daya ini",
         error_code: "FORBIDDEN",
       });

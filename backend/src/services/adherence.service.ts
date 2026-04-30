@@ -149,7 +149,7 @@ export const getAdherenceStats = async (query: AdherenceQuery) => {
         totalMissed: 0,
         totalSnoozed: 0,
         dailyBreakdown: buildDailyBreakdown(days, []),
-        trend: "stable",
+        trend: "stabil",
         reminderResponseRate: 0,
       };
     }
@@ -195,7 +195,7 @@ export const getAdherenceStats = async (query: AdherenceQuery) => {
   const secondScheduled = secondHalf.reduce((sum, day) => sum + day.scheduled, 0);
   const firstRate = firstScheduled > 0 ? firstConfirmed / firstScheduled : 0;
   const secondRate = secondScheduled > 0 ? secondConfirmed / secondScheduled : 0;
-  const trend = secondRate > firstRate ? "improving" : secondRate < firstRate ? "declining" : "stable";
+  const trend = secondRate > firstRate ? "membaik" : secondRate < firstRate ? "menurun" : "stabil";
 
   return {
     patientId: patientId || null,

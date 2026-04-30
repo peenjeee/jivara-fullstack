@@ -7,7 +7,7 @@ const sendError = (res: Response, error: unknown) => {
   const status = err.status || 500;
 
   return res.status(status).json({
-    status: "error",
+    status: "gagal",
     message: status >= 500 ? "Terjadi kesalahan pada server" : (err.message || "Terjadi kesalahan"),
     ...(err.code && { error_code: err.code }),
   });
@@ -20,7 +20,7 @@ export const createMedicationLog = async (req: AuthRequest, res: Response) => {
       ? "Obat dikonfirmasi. Terima kasih! [DONE]"
       : "Riwayat obat berhasil dicatat";
 
-    res.status(201).json({ status: "success", data: log, message });
+    res.status(201).json({ status: "berhasil", data: log, message });
   } catch (error) {
     sendError(res, error);
   }
@@ -29,7 +29,7 @@ export const createMedicationLog = async (req: AuthRequest, res: Response) => {
 export const listMedicationLogs = async (req: AuthRequest, res: Response) => {
   try {
     const result = await medicationLogService.listMedicationLogs(req.query);
-    res.status(200).json({ status: "success", data: result.data, meta: result.meta });
+    res.status(200).json({ status: "berhasil", data: result.data, meta: result.meta });
   } catch (error) {
     sendError(res, error);
   }

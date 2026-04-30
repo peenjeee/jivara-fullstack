@@ -11,7 +11,7 @@ export const validateFoodUpload = (req: Request, res: Response, next: NextFuncti
   const resolvedPatientId = patientId || patientIdSnake;
 
   if (isMissing(resolvedPatientId) || !isValidUuid(resolvedPatientId)) {
-    return res.status(400).json({ status: "error", message: "patientId wajib berupa UUID valid", error_code: "VALIDATION_ERROR" });
+    return res.status(400).json({ status: "gagal", message: "patientId wajib berupa UUID valid", error_code: "VALIDATION_ERROR" });
   }
 
   req.body.patientId = resolvedPatientId;
@@ -24,11 +24,11 @@ export const validateFoodDetect = (req: Request, res: Response, next: NextFuncti
   const resolvedImageId = imageId || imageIdSnake;
 
   if (isMissing(resolvedPatientId) || !isValidUuid(resolvedPatientId)) {
-    return res.status(400).json({ status: "error", message: "patientId wajib berupa UUID valid", error_code: "VALIDATION_ERROR" });
+    return res.status(400).json({ status: "gagal", message: "patientId wajib berupa UUID valid", error_code: "VALIDATION_ERROR" });
   }
 
   if (resolvedImageId && !isValidUuid(resolvedImageId)) {
-    return res.status(400).json({ status: "error", message: "imageId tidak valid", error_code: "VALIDATION_ERROR" });
+    return res.status(400).json({ status: "gagal", message: "imageId tidak valid", error_code: "VALIDATION_ERROR" });
   }
 
   req.body.patientId = resolvedPatientId;
@@ -43,15 +43,15 @@ export const validateInteractionCheck = (req: Request, res: Response, next: Next
   const resolvedDetectedItems = detectedItems || detectedItemsSnake;
 
   if (isMissing(resolvedPatientId) || !isValidUuid(resolvedPatientId)) {
-    return res.status(400).json({ status: "error", message: "patientId wajib berupa UUID valid", error_code: "VALIDATION_ERROR" });
+    return res.status(400).json({ status: "gagal", message: "patientId wajib berupa UUID valid", error_code: "VALIDATION_ERROR" });
   }
 
   if (isMissing(resolvedScanId) || !isValidUuid(resolvedScanId)) {
-    return res.status(400).json({ status: "error", message: "scanId wajib berupa UUID valid", error_code: "VALIDATION_ERROR" });
+    return res.status(400).json({ status: "gagal", message: "scanId wajib berupa UUID valid", error_code: "VALIDATION_ERROR" });
   }
 
   if (!Array.isArray(resolvedDetectedItems) || resolvedDetectedItems.length === 0) {
-    return res.status(400).json({ status: "error", message: "detectedItems wajib berupa array", error_code: "VALIDATION_ERROR" });
+    return res.status(400).json({ status: "gagal", message: "detectedItems wajib berupa array", error_code: "VALIDATION_ERROR" });
   }
 
   req.body.patientId = resolvedPatientId;
@@ -65,7 +65,7 @@ export const validateNutrition = (req: Request, res: Response, next: NextFunctio
   const resolvedDetectedItems = detectedItems || detectedItemsSnake;
 
   if (!Array.isArray(resolvedDetectedItems) || resolvedDetectedItems.length === 0) {
-    return res.status(400).json({ status: "error", message: "detectedItems wajib berupa array", error_code: "VALIDATION_ERROR" });
+    return res.status(400).json({ status: "gagal", message: "detectedItems wajib berupa array", error_code: "VALIDATION_ERROR" });
   }
 
   req.body.detectedItems = resolvedDetectedItems;

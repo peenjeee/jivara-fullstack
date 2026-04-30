@@ -7,7 +7,7 @@ const sendError = (res: Response, error: unknown) => {
   const status = err.status || 500;
 
   return res.status(status).json({
-    status: "error",
+    status: "gagal",
     message: status >= 500 ? "Terjadi kesalahan pada server" : (err.message || "Terjadi kesalahan"),
     ...(err.code && { error_code: err.code }),
   });
@@ -18,7 +18,7 @@ const getParam = (value: string | string[] | undefined) => Array.isArray(value) 
 export const listMedicationSchedules = async (req: AuthRequest, res: Response) => {
   try {
     const schedules = await medicationScheduleService.listMedicationSchedules(req.query);
-    res.status(200).json({ status: "success", data: schedules });
+    res.status(200).json({ status: "berhasil", data: schedules });
   } catch (error) {
     sendError(res, error);
   }
@@ -27,7 +27,7 @@ export const listMedicationSchedules = async (req: AuthRequest, res: Response) =
 export const getMedicationSchedule = async (req: AuthRequest, res: Response) => {
   try {
     const schedule = await medicationScheduleService.getMedicationScheduleById(getParam(req.params.id));
-    res.status(200).json({ status: "success", data: schedule });
+    res.status(200).json({ status: "berhasil", data: schedule });
   } catch (error) {
     sendError(res, error);
   }
@@ -37,7 +37,7 @@ export const createMedicationSchedule = async (req: AuthRequest, res: Response) 
   try {
     const schedule = await medicationScheduleService.createMedicationSchedule(req.body, req.user?.id);
     res.status(201).json({
-      status: "success",
+      status: "berhasil",
       data: schedule,
       message: "Jadwal obat berhasil dibuat",
     });
@@ -50,7 +50,7 @@ export const updateMedicationSchedule = async (req: AuthRequest, res: Response) 
   try {
     const schedule = await medicationScheduleService.updateMedicationSchedule(getParam(req.params.id), req.body);
     res.status(200).json({
-      status: "success",
+      status: "berhasil",
       data: schedule,
       message: "Jadwal obat berhasil diperbarui",
     });
@@ -62,7 +62,7 @@ export const updateMedicationSchedule = async (req: AuthRequest, res: Response) 
 export const deactivateMedicationSchedule = async (req: AuthRequest, res: Response) => {
   try {
     await medicationScheduleService.deactivateMedicationSchedule(getParam(req.params.id));
-    res.status(200).json({ status: "success", message: "Jadwal obat berhasil dinonaktifkan" });
+    res.status(200).json({ status: "berhasil", message: "Jadwal obat berhasil dinonaktifkan" });
   } catch (error) {
     sendError(res, error);
   }

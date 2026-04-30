@@ -17,7 +17,7 @@ const validate = (rules: ValidationRule[]) => {
       // Cek wajib diisi
       if (rule.required && (!value || (typeof value === "string" && !value.trim()))) {
         return res.status(400).json({
-          status: "error",
+          status: "gagal",
           message: `${rule.label} wajib diisi`,
           error_code: "VALIDATION_ERROR",
         });
@@ -29,7 +29,7 @@ const validate = (rules: ValidationRule[]) => {
       // Cek panjang minimum
       if (rule.minLength && typeof value === "string" && value.length < rule.minLength) {
         return res.status(400).json({
-          status: "error",
+          status: "gagal",
           message: `${rule.label} minimal harus ${rule.minLength} karakter`,
           error_code: "VALIDATION_ERROR",
         });
@@ -38,7 +38,7 @@ const validate = (rules: ValidationRule[]) => {
       // Cek pola
       if (rule.pattern && typeof value === "string" && !rule.pattern.test(value)) {
         return res.status(400).json({
-          status: "error",
+          status: "gagal",
           message: rule.patternMessage || `Format ${rule.label} tidak valid`,
           error_code: "VALIDATION_ERROR",
         });

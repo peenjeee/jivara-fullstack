@@ -12,23 +12,23 @@ export const validateMedicationLogCreate = (req: Request, res: Response, next: N
   const { scheduleId, status, scheduledTime, confirmedAt, snoozeCount } = req.body;
 
   if (isMissing(scheduleId) || !isValidUuid(scheduleId)) {
-    return res.status(400).json({ status: "error", message: "scheduleId wajib berupa UUID valid", error_code: "VALIDATION_ERROR" });
+    return res.status(400).json({ status: "gagal", message: "scheduleId wajib berupa UUID valid", error_code: "VALIDATION_ERROR" });
   }
 
   if (!status || !["confirmed", "missed", "snoozed"].includes(status)) {
-    return res.status(400).json({ status: "error", message: "Status harus confirmed, missed, atau snoozed", error_code: "VALIDATION_ERROR" });
+    return res.status(400).json({ status: "gagal", message: "Status harus dikonfirmasi, terlewat, atau ditunda", error_code: "VALIDATION_ERROR" });
   }
 
   if (scheduledTime && !isValidDateTime(scheduledTime)) {
-    return res.status(400).json({ status: "error", message: "scheduledTime harus format tanggal valid", error_code: "VALIDATION_ERROR" });
+    return res.status(400).json({ status: "gagal", message: "scheduledTime harus format tanggal valid", error_code: "VALIDATION_ERROR" });
   }
 
   if (confirmedAt && !isValidDateTime(confirmedAt)) {
-    return res.status(400).json({ status: "error", message: "confirmedAt harus format tanggal valid", error_code: "VALIDATION_ERROR" });
+    return res.status(400).json({ status: "gagal", message: "confirmedAt harus format tanggal valid", error_code: "VALIDATION_ERROR" });
   }
 
   if (snoozeCount !== undefined && (!Number.isInteger(snoozeCount) || snoozeCount < 0)) {
-    return res.status(400).json({ status: "error", message: "snoozeCount harus angka positif", error_code: "VALIDATION_ERROR" });
+    return res.status(400).json({ status: "gagal", message: "snoozeCount harus angka positif", error_code: "VALIDATION_ERROR" });
   }
 
   next();

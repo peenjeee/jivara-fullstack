@@ -30,7 +30,7 @@ const limiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: {
-    status: 'error',
+    status: 'gagal',
     message: 'Terlalu banyak permintaan, silakan coba lagi nanti.',
   },
 });
@@ -127,7 +127,7 @@ app.get('/', (req: Request, res: Response) => {
 
 // 404 Handler
 app.use((req: Request, res: Response) => {
-  res.status(404).json({ status: 'error', message: 'Endpoint tidak ditemukan' });
+  res.status(404).json({ status: 'gagal', message: 'Endpoint tidak ditemukan' });
 });
 
 // Global Error Handler
@@ -140,7 +140,7 @@ app.use((err: { status?: number; message?: string }, req: Request, res: Response
   }
 
   res.status(statusCode).json({
-    status: 'error',
+    status: 'gagal',
     message: isServerError ? 'Terjadi kesalahan pada server' : (err.message || 'Terjadi kesalahan'),
   });
 });

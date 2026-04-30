@@ -11,7 +11,7 @@ export const register = async (req: AuthRequest, res: Response) => {
     const newUser = await authService.registerUser(req.body);
 
     res.status(201).json({
-      status: "success",
+      status: "berhasil",
       data: {
         user_id: newUser.id,
         fullName: newUser.fullName,
@@ -28,7 +28,7 @@ export const register = async (req: AuthRequest, res: Response) => {
     // console.error("Register Error:", error);
     
     res.status(status).json({
-      status: "error",
+      status: "gagal",
       message: isInternalError ? "Terjadi kesalahan pada server" : (err.message || "Terjadi kesalahan"),
       ...(err.code && { error_code: err.code }),
     });
@@ -43,7 +43,7 @@ export const login = async (req: AuthRequest, res: Response) => {
   try {
     const data = await authService.loginUser(req.body);
 
-    res.status(200).json({ status: "success", data });
+    res.status(200).json({ status: "berhasil", data });
   } catch (error: unknown) {
     const err = error as { status?: number; message?: string; code?: string };
     const status = err.status || 500;
@@ -52,7 +52,7 @@ export const login = async (req: AuthRequest, res: Response) => {
     // console.error("Login Error:", error);
     
     res.status(status).json({
-      status: "error",
+      status: "gagal",
       message: isInternalError ? "Terjadi kesalahan pada server" : (err.message || "Terjadi kesalahan"),
       ...(err.code && { error_code: err.code }),
     });
@@ -67,7 +67,7 @@ export const refresh = async (req: AuthRequest, res: Response) => {
   try {
     const data = await authService.refreshAccessToken(req.body.refresh_token);
 
-    res.status(200).json({ status: "success", data });
+    res.status(200).json({ status: "berhasil", data });
   } catch (error: unknown) {
     const err = error as { status?: number; message?: string; code?: string };
     const status = err.status || 500;
@@ -76,7 +76,7 @@ export const refresh = async (req: AuthRequest, res: Response) => {
     // console.error("Refresh Error:", error);
     
     res.status(status).json({
-      status: "error",
+      status: "gagal",
       message: isInternalError ? "Terjadi kesalahan pada server" : (err.message || "Terjadi kesalahan"),
       ...(err.code && { error_code: err.code }),
     });
@@ -92,7 +92,7 @@ export const logout = async (req: AuthRequest, res: Response) => {
     await authService.invalidateRefreshToken(req.body.refresh_token);
 
     res.status(200).json({
-      status: "success",
+      status: "berhasil",
       message: "Berhasil keluar dari akun",
     });
   } catch (error: unknown) {
@@ -100,7 +100,7 @@ export const logout = async (req: AuthRequest, res: Response) => {
     const status = err.status || 500;
     // console.error("Logout Error:", error);
     res.status(status).json({
-      status: "error",
+      status: "gagal",
       message: err.message || "Terjadi kesalahan pada server",
     });
   }
@@ -114,7 +114,7 @@ export const getMe = async (req: AuthRequest, res: Response) => {
   try {
     const profile = await authService.getUserProfile(req.user!.id);
 
-    res.status(200).json({ status: "success", data: profile });
+    res.status(200).json({ status: "berhasil", data: profile });
   } catch (error: unknown) {
     const err = error as { status?: number; message?: string };
     const status = err.status || 500;
@@ -123,7 +123,7 @@ export const getMe = async (req: AuthRequest, res: Response) => {
     // console.error("GetMe Error:", error);
     
     res.status(status).json({
-      status: "error",
+      status: "gagal",
       message: isInternalError ? "Terjadi kesalahan pada server" : (err.message || "Terjadi kesalahan"),
     });
   }

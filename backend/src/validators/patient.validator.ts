@@ -12,23 +12,23 @@ export const validatePatientCreate = (req: Request, res: Response, next: NextFun
   const { fullName, email, password, gender, assignedNurseId } = req.body;
 
   if (isMissing(fullName)) {
-    return res.status(400).json({ status: "error", message: "Nama lengkap wajib diisi", error_code: "VALIDATION_ERROR" });
+    return res.status(400).json({ status: "gagal", message: "Nama lengkap wajib diisi", error_code: "VALIDATION_ERROR" });
   }
 
   if (isMissing(email) || !isValidEmail(email)) {
-    return res.status(400).json({ status: "error", message: "Email wajib valid", error_code: "VALIDATION_ERROR" });
+    return res.status(400).json({ status: "gagal", message: "Email wajib valid", error_code: "VALIDATION_ERROR" });
   }
 
   if (isMissing(password) || String(password).length < 8) {
-    return res.status(400).json({ status: "error", message: "Kata sandi minimal harus 8 karakter", error_code: "VALIDATION_ERROR" });
+    return res.status(400).json({ status: "gagal", message: "Kata sandi minimal harus 8 karakter", error_code: "VALIDATION_ERROR" });
   }
 
   if (gender && !["male", "female"].includes(gender)) {
-    return res.status(400).json({ status: "error", message: "Gender harus male atau female", error_code: "VALIDATION_ERROR" });
+    return res.status(400).json({ status: "gagal", message: "Gender harus laki-laki atau perempuan", error_code: "VALIDATION_ERROR" });
   }
 
   if (assignedNurseId && !isValidUuid(assignedNurseId)) {
-    return res.status(400).json({ status: "error", message: "assignedNurseId tidak valid", error_code: "VALIDATION_ERROR" });
+    return res.status(400).json({ status: "gagal", message: "assignedNurseId tidak valid", error_code: "VALIDATION_ERROR" });
   }
 
   next();
@@ -38,11 +38,11 @@ export const validatePatientUpdate = (req: Request, res: Response, next: NextFun
   const { email, gender } = req.body;
 
   if (email && !isValidEmail(email)) {
-    return res.status(400).json({ status: "error", message: "Email wajib valid", error_code: "VALIDATION_ERROR" });
+    return res.status(400).json({ status: "gagal", message: "Email wajib valid", error_code: "VALIDATION_ERROR" });
   }
 
   if (gender && !["male", "female"].includes(gender)) {
-    return res.status(400).json({ status: "error", message: "Gender harus male atau female", error_code: "VALIDATION_ERROR" });
+    return res.status(400).json({ status: "gagal", message: "Gender harus laki-laki atau perempuan", error_code: "VALIDATION_ERROR" });
   }
 
   next();
@@ -52,7 +52,7 @@ export const validateAssignPatient = (req: Request, res: Response, next: NextFun
   const { nurseId } = req.body;
 
   if (isMissing(nurseId) || !isValidUuid(nurseId)) {
-    return res.status(400).json({ status: "error", message: "nurseId wajib berupa UUID valid", error_code: "VALIDATION_ERROR" });
+    return res.status(400).json({ status: "gagal", message: "nurseId wajib berupa UUID valid", error_code: "VALIDATION_ERROR" });
   }
 
   next();

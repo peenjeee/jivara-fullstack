@@ -213,8 +213,8 @@ const main = async () => {
   await seedMedicationLogs(schedule.id, patient.id);
 
   console.log(JSON.stringify({
-    status: "success",
-    message: "Demo seed data ready",
+    status: "berhasil",
+    message: "Data demo berhasil disiapkan",
     credentials: {
       password: DEMO_PASSWORD,
       admin: admin.email,
