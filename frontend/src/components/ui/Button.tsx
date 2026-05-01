@@ -26,10 +26,10 @@ const VARIANT_STYLES = {
 
 const HOVER_VARIANTS = {
   primary: {
-    filter: "brightness(1.1)",
+    backgroundColor: "var(--primary-hover)",
   },
   outline: {
-    backgroundColor: "var(--primary)",
+    backgroundColor: "var(--primary-hover)",
     color: "#ffffff",
   },
 } as const;

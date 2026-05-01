@@ -16,7 +16,7 @@ export default function Modal({ isOpen, title, description, children, onClose }:
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[50000] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[50000] flex items-start justify-center overflow-y-auto p-4 sm:items-center" data-lenis-prevent>
           <motion.div
             className="absolute inset-0 bg-dark/45 backdrop-blur-sm"
             initial={{ opacity: 0 }}
@@ -30,7 +30,8 @@ export default function Modal({ isOpen, title, description, children, onClose }:
             role="dialog"
             aria-modal="true"
             aria-labelledby="modal-title"
-            className="relative max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-[32px] bg-white p-6 shadow-[0_24px_80px_rgba(15,23,42,0.22)] sm:p-8"
+            data-lenis-prevent
+            className="relative max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-[32px] bg-white p-6 pb-8 shadow-[0_24px_80px_rgba(15,23,42,0.22)] sm:max-h-[92vh] sm:p-8"
             initial={{ opacity: 0, y: 28, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 18, scale: 0.98 }}

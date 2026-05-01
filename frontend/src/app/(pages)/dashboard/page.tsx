@@ -1,46 +1,14 @@
 "use client";
 
-import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { useAuthStore } from '@/store/auth';
-import api from '@/lib/axios';
 import { DashboardLayout } from '@/components/dashboard';
 import { PatientTable } from '@/components/patients';
 import SummaryCard from '@/components/ui/SummaryCard';
 import { dashboardStats, recentPatients } from '@/lib/mocks/dashboard';
 
 export default function DashboardPage() {
-  const { user, setAuth, token, refreshToken } = useAuthStore();
-  const [profileLoadFailed, setProfileLoadFailed] = useState(false);
-  const isLoadingUser = Boolean(token && !user && !profileLoadFailed);
-
-  useEffect(() => {
-    if (!isLoadingUser) {
-      return;
-    }
-
-    const fetchUser = async () => {
-      try {
-        const { data } = await api.get('/auth/me');
-        if (token && refreshToken) {
-          setAuth(data.data, token, refreshToken);
-        }
-      } catch {
-        // Auth middleware handles invalid sessions; keep dashboard from flashing a loader loop.
-        setProfileLoadFailed(true);
-      }
-    };
-
-    fetchUser();
-  }, [isLoadingUser, setAuth, token, refreshToken]);
-
-  if (isLoadingUser) {
-    return (
-      <div className="min-h-screen bg-surface flex items-center justify-center p-5">
-        <p className="text-gray-500 font-medium">Memuat data pengguna...</p>
-      </div>
-    );
-  }
+  const { user } = useAuthStore();
 
   if (!user) return null;
 
@@ -63,10 +31,11 @@ export default function DashboardPage() {
           </h1>
         </motion.section>
 
-        <section className="mt-6 grid gap-4 md:grid-cols-3">
+        <section className="mt-6 grid auto-rows-fr grid-cols-2 items-stretch gap-4 md:grid-cols-3">
           {dashboardStats.map((stat, index) => (
             <motion.div
               key={stat.label}
+              className={`h-full ${index === 2 ? "col-span-2 md:col-span-1" : ""}`}
               initial={{ opacity: 0, y: 22 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: 0.08 + index * 0.08 }}

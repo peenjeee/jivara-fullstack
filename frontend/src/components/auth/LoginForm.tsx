@@ -70,8 +70,7 @@ export default function LoginForm() {
 
   return (
     <AuthCard
-      title="MASUK"
-      subtitle="Akses dashboard kesehatan Pasien Anda sekarang."
+      title="Masuk"
       footer={
         <p className="text-muted font-body">
           Belum punya akun?{" "}

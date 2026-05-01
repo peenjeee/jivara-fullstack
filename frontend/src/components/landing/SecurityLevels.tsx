@@ -4,19 +4,14 @@ import SecurityCard from "@/components/ui/SecurityCard";
 
 const levels = [
   {
-    title: "Safe (Aman)",
-    color: "text-safe",
-    description: "Tidak ada interaksi signifikan. Makanan ini aman dikonsumsi bersamaan dengan obat yang sedang aktif."
+    title: "Low Risk",
+    color: "text-leaf",
+    description: "Tidak ada interaksi signifikan. Makanan aman dikonsumsi sesuai anjuran obat yang sedang aktif."
   },
   {
-    title: "Caution (Hati-hati)",
-    color: "text-warning",
-    description: "Perlu penyesuaian porsi atau pengaturan jarak waktu konsumsi. Sebaiknya konsultasi jika ragu."
-  },
-  {
-    title: "Danger (Bahaya)",
+    title: "High Risk",
     color: "text-danger",
-    description: "Risiko tinggi interaksi serius. Pasien dilarang mengonsumsi makanan ini, dan peringatan akan dikirim ke perawat."
+    description: "Risiko tinggi interaksi serius. Pasien dilarang mengonsumsi makanan ini, dan peringatan dikirim ke perawat."
   }
 ];
 
@@ -29,7 +24,7 @@ export default function SecurityLevels() {
         subtitle="Keamanan"
         description="Klasifikasi interaksi makanan dan obat yang konsisten untuk meminimalisir risiko medis dan efek samping."
       />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-x-[50px] lg:gap-y-[58px]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:gap-x-[64px] lg:gap-y-[58px]">
         {levels.map((level) => (
           <SecurityCard
             key={level.title}
@@ -40,4 +35,3 @@ export default function SecurityLevels() {
     </Section>
   );
 }
-

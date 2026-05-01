@@ -12,7 +12,7 @@ const stats = [
     value: "+67",
     helper: "",
     tone: "safe",
-    color: "primary",
+    color: "emerald",
     icon: HeartPulse,
   },
   {
@@ -20,7 +20,7 @@ const stats = [
     value: "+6.7K",
     helper: "",
     tone: "safe",
-    color: "primary",
+    color: "leaf",
     icon: UsersRound,
   },
 ] as const;
@@ -40,7 +40,7 @@ export default function Stats() {
         </h2>
       </motion.div>
 
-      <div className="mx-auto mt-10 grid max-w-4xl gap-4 sm:grid-cols-2 lg:mt-12">
+      <div className="mx-auto mt-10 grid max-w-4xl grid-cols-2 gap-3 sm:gap-4 lg:mt-12">
         {stats.map((stat, index) => (
           <motion.div
             key={stat.label}

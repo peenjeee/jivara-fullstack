@@ -66,8 +66,7 @@ export default function RegisterForm() {
 
   return (
     <AuthCard
-      title="DAFTAR"
-      subtitle="Mulai monitoring kesehatan Pasien Anda bersama Jivara."
+      title="Daftar"
       footer={
         <p className="text-muted font-body">
           Sudah punya akun?{" "}

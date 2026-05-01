@@ -19,7 +19,7 @@ export const dashboardStats: DashboardStat[] = [
     value: "6767",
     helper: "",
     tone: "safe",
-    color: "primary",
+    color: "pine",
     icon: UsersRound,
   },
   {
@@ -27,7 +27,7 @@ export const dashboardStats: DashboardStat[] = [
     value: "67%",
     helper: "Target bulanan 90%",
     tone: "safe",
-    color: "safe",
+    color: "leaf",
     icon: CheckCircle2,
     progress: 86,
   },
@@ -36,7 +36,7 @@ export const dashboardStats: DashboardStat[] = [
     value: "67",
     helper: "Memerlukan perhatian segera",
     tone: "critical",
-    color: "danger",
+    color: "lime",
     icon: AlertTriangle,
   },
 ];

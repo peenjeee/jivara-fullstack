@@ -11,26 +11,37 @@ const steps = [
     title: "Registrasi",
     description: "Perawat mendaftarkan pasien dan jadwal obat secara terpusat melalui dashboard administratif yang aman.",
     icon: ClipboardList,
+    color: "emerald",
   },
   {
     number: "02",
     title: "Pengingat Cerdas",
     description: "Pasien menerima notifikasi pengingat berulang untuk konsumsi obat dan cek interaksi makanan.",
     icon: BellRing,
+    color: "leaf",
   },
   {
     number: "03",
     title: "Scan Makanan",
     description: "Kamera mendeteksi jenis makanan dan langsung mencocokkan interaksinya dengan obat pasien.",
     icon: Camera,
+    color: "pine",
   },
   {
     number: "04",
     title: "Monitoring",
     description: "Sistem memberikan alert 'Danger' atau 'Caution' ke perawat jika pasien mencoba mengonsumsi makanan yang berisiko.",
     icon: HeartPulse,
+    color: "forest",
   }
-];
+] as const;
+
+const stepColorStyles = {
+  emerald: "bg-emerald/15 text-emerald",
+  leaf: "bg-leaf/15 text-leaf",
+  pine: "bg-pine/15 text-pine",
+  forest: "bg-forest/15 text-forest",
+} as const;
 
 export default function Workflow() {
   return (
@@ -47,7 +58,7 @@ export default function Workflow() {
         viewport={{ once: true, amount: 0.25 }}
         transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
       >
-        <div className="absolute inset-x-10 top-[118px] hidden border-t-2 border-dotted border-primary/40 lg:block" />
+        <div className="absolute inset-x-10 top-[118px] hidden border-t-2 border-dotted border-emerald/40 lg:block" />
 
         <div className="grid gap-5 lg:grid-cols-4 lg:gap-6">
           {steps.map((step) => {
@@ -63,7 +74,7 @@ export default function Workflow() {
                 transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: Number(step.number) * 0.05 }}
               >
                 <div className="flex items-start gap-4 lg:flex-col lg:items-center lg:text-center">
-                  <div className="relative z-10 flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary ring-8 ring-white">
+                  <div className={`relative z-10 flex h-16 w-16 shrink-0 items-center justify-center rounded-full ring-8 ring-white ${stepColorStyles[step.color]}`}>
                     <Icon size={26} strokeWidth={2.4} />
                   </div>
 

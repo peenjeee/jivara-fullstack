@@ -17,7 +17,7 @@ const actionConfig = {
 
 export default function PatientActions({ patient, actions = ["view"], onAction }: PatientActionsProps) {
   return (
-    <div className="flex items-center justify-end gap-1">
+    <div className="flex items-center justify-end gap-0.5">
       {actions.map((action) => {
         const config = actionConfig[action];
         const Icon = config.icon;
@@ -25,11 +25,11 @@ export default function PatientActions({ patient, actions = ["view"], onAction }
         return (
           <button
             key={action}
-            className={`inline-flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors ${config.className}`}
+            className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition-colors ${config.className}`}
             aria-label={`${config.label} ${patient.name}`}
             onClick={() => onAction?.(action, patient)}
           >
-            <Icon size={17} />
+            <Icon size={16} />
           </button>
         );
       })}

@@ -13,7 +13,7 @@ import PatientPagination from "./PatientPagination";
 import PatientTable from "./PatientTable";
 import PatientToolbar, { type PatientFilter } from "./PatientToolbar";
 
-const pageSize = 3;
+const pageSize = 10;
 
 export default function PatientListPage() {
   const [patientRecords, setPatientRecords] = useState(initialPatients);

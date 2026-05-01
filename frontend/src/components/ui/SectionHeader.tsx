@@ -18,8 +18,8 @@ export default function SectionHeader({
   light = false,
 }: SectionHeaderProps) {
   const titleColor = light ? "text-white" : "text-text-main";
-  const subtitleColor = light ? "text-white/60" : "text-muted";
-  const descColor = light ? "text-white/80" : "text-muted";
+  const subtitleColor = light ? "text-white/60" : "text-(--primary)";
+  const descColor = light ? "text-white/80" : "text-(--text-main)";
 
   return (
     <div className={`grid grid-cols-1 lg:grid-cols-[1.1fr_1fr] gap-5 lg:gap-20 items-start mb-10 lg:mb-20 ${className}`}>

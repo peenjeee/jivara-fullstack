@@ -18,18 +18,17 @@ export default function Features() {
             damping: 20,
             delay: 0.1,
           }}
-          className="rounded-full"
+          className="mb-[46px] flex h-[176px] w-[176px] items-center justify-center rounded-full bg-white shadow-[0_18px_50px_rgba(15,23,42,0.12)]"
         >
           <Image
-            className="w-[148px] h-[148px] rounded-full object-cover mb-[46px]"
-            src="/images/logo/logo.png"
-            alt="Jiva Avatar"
-            width={148}
-            height={148}
-            style={{ objectFit: 'contain', background: 'var(--bg)' }}
+            className="h-auto w-[142px]"
+            src="/images/logo/text.png"
+            alt="Jivara"
+            width={180}
+            height={58}
           />
         </motion.div>
-        <p className="block absolute left-0 right-0 top-[180px] md:top-[304px] text-white/[0.08] font-display text-[clamp(32px,10vw,178px)] font-extrabold leading-none text-center whitespace-nowrap" aria-hidden="true">JIVARA</p>
+        <p className="pointer-events-none absolute left-0 right-0 top-[180px] z-[1] block whitespace-nowrap text-center font-display text-[clamp(100px,11vw,178px)] font-extrabold leading-none text-white/10 md:top-[304px]" aria-hidden="true">JIVARA</p>
         <div className="relative z-[2] w-[min(850px,calc(100%-48px))]">
           <motion.div
             initial={{ opacity: 0, y: 40 }}
@@ -42,7 +41,7 @@ export default function Features() {
               whileHover={{ scale: 1.02, y: -5 }}
               transition={{ type: "spring", stiffness: 400, damping: 25 }}
             >
-              Mencegah interaksi obat dan makanan dengan <span className="text-dark">cerdas</span> dan <i className="font-[Georgia,serif] italic font-medium">mudah</i> digunakan.
+              Mencegah interaksi obat dan makanan dengan <span className="text-(--lime)">cerdas</span> dan <i className="font-(--font-body) italic font-medium leaf text-(--lime)">mudah</i> digunakan.
             </motion.h2>
           </motion.div>
           <motion.div

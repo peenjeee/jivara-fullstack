@@ -6,6 +6,7 @@ import { LogIn } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useScrollThreshold, useLockBodyScroll } from "@/hooks";
 import Button from "@/components/ui/Button";
+import Image from "next/image";
 
 const NAV_LINKS = [
   { name: "Fitur", href: "/#fitur" },
@@ -24,20 +25,27 @@ export default function Navbar() {
   return (
     <>
       <nav
-          className={`fixed inset-x-0 top-0 z-[10000] transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] px-4 lg:px-[84px] ${isScrolled
-            ? "h-[72px] bg-white/85 backdrop-blur-[20px] shadow-[0_8px_26px_rgba(15,23,42,0.06)]"
-            : "h-[72px] lg:h-[90px] bg-bg"
+        className={`fixed inset-x-0 top-0 z-[10000] transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] px-4 lg:px-[84px] ${isScrolled
+          ? "h-[72px] bg-white/85 backdrop-blur-[20px] shadow-[0_8px_26px_rgba(15,23,42,0.06)]"
+          : "h-[72px] lg:h-[90px] bg-bg"
           }`}
         aria-label="Navigasi utama"
       >
         <div className="max-w-[1440px] mx-auto h-full flex justify-between items-center relative w-full">
-            <Link
-              className="font-display text-2xl font-extrabold tracking-[-0.02em] text-text-main"
-              href="/"
-              aria-label="Jivara home"
-            >
-              Jivara
-            </Link>
+          <Link
+            className="font-display text-2xl font-extrabold tracking-[-0.02em] text-text-main"
+            href="/"
+            aria-label="Jivara home"
+          >
+            <Image
+              src="/images/logo/logo_notext.png"
+              alt="Jiva - maskot Jivara"
+              width={100}
+              height={100}
+              priority
+              className="w-full h-auto drop-shadow-2xl"
+            />
+          </Link>
 
           <div className="flex items-center gap-6">
             <div className="hidden lg:flex items-center gap-8 xl:gap-10">
@@ -99,7 +107,7 @@ export default function Navbar() {
 
             {/* Drawer Panel */}
             <motion.div
-              className="absolute top-0 right-0 w-4/5 max-w-[340px] h-full bg-bg pt-8 px-8 pb-10 flex flex-col shadow-[-10px_0_50px_rgba(0,0,0,0.1)]"
+              className="absolute top-0 right-0 w-4/5 max-w-[340px] h-full bg-bg pt-5 px-8 pb-10 flex flex-col shadow-[-10px_0_50px_rgba(0,0,0,0.1)]"
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
@@ -109,13 +117,18 @@ export default function Navbar() {
                 damping: 30,
               }}
             >
-              <div className="flex items-center mb-12">
-                <span className="font-display text-2xl font-extrabold tracking-[-0.02em] text-text-main">
-                  Jivara
-                </span>
+              <div className="flex items-center mb-4">
+                <Image
+                  src="/images/logo/notext.png"
+                  alt="Jivara"
+                  width={132}
+                  height={42}
+                  priority
+                  className="h-auto w-[118px]"
+                />
               </div>
 
-              <div className="flex flex-col gap-8">
+              <div className="flex flex-col gap-7">
                 {NAV_LINKS.map((link, i) => (
                   <motion.div
                     key={link.name}

@@ -12,7 +12,7 @@ interface PatientStatusBadgeProps {
 
 export default function PatientStatusBadge({ status }: PatientStatusBadgeProps) {
   return (
-    <span className={`inline-flex min-w-[156px] justify-center rounded-full px-3 py-1.5 text-center text-xs font-extrabold leading-tight ${statusStyles[status]}`}>
+    <span className={`inline-flex min-w-[140px] justify-center rounded-full px-3 py-1.5 text-center text-xs font-extrabold leading-tight ${statusStyles[status]}`}>
       {status}
     </span>
   );

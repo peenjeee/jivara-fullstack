@@ -23,29 +23,37 @@ export default function PatientTable({ patients, title, showViewAll = false, act
         </div>
       )}
 
-      <div className="hidden overflow-x-auto sm:block">
-        <table className="w-full min-w-[860px] text-left">
+      <div className="hidden sm:block">
+        <table className="w-full table-fixed text-left">
+          <colgroup>
+            <col className="w-[25%]" />
+            <col className="w-[8%]" />
+            <col className="w-[19%]" />
+            <col className="w-[16%]" />
+            <col className="w-[18%]" />
+            <col className="w-[14%]" />
+          </colgroup>
           <thead className="bg-surface text-xs font-extrabold uppercase tracking-[0.08em] text-muted">
             <tr>
-              <th className="px-7 py-4">Nama Pasien / ID</th>
-              <th className="px-7 py-4">Usia</th>
-              <th className="px-7 py-4">Status</th>
-              <th className="px-7 py-4">Kunjungan Terakhir</th>
-              <th className="px-7 py-4">Kepatuhan</th>
-              <th className="px-7 py-4 text-right">Aksi</th>
+              <th className="px-3 py-4 lg:px-5">Nama Pasien</th>
+              <th className="px-3 py-4 lg:px-5">Usia</th>
+              <th className="px-3 py-4 lg:px-5">Status</th>
+              <th className="px-3 py-4 lg:px-5">Kunjungan Terakhir</th>
+              <th className="px-3 py-4 lg:px-5">Kepatuhan</th>
+              <th className="px-3 py-4 text-right lg:px-5">Aksi</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
             {patients.map((patient) => (
               <tr key={patient.id} className="transition-colors hover:bg-surface/60">
-                <td className="px-7 py-4">
+                <td className="px-3 py-4 lg:px-5">
                   <PatientIdentity patient={patient} />
                 </td>
-                <td className="px-7 py-4 text-sm font-bold text-muted">{patient.age}</td>
-                <td className="px-7 py-4"><PatientStatusBadge status={patient.status} /></td>
-                <td className="px-7 py-4 text-sm font-bold text-muted">{patient.lastVisit}</td>
-                <td className="px-7 py-4"><PatientAdherence value={patient.adherence} /></td>
-                <td className="px-7 py-4"><PatientActions patient={patient} actions={actions} onAction={onAction} /></td>
+                <td className="px-3 py-4 text-sm font-bold text-muted lg:px-5">{patient.age}</td>
+                <td className="px-3 py-4 lg:px-5"><PatientStatusBadge status={patient.status} /></td>
+                <td className="px-3 py-4 text-sm font-bold text-muted lg:px-5">{patient.lastVisit}</td>
+                <td className="px-3 py-4 lg:px-5"><PatientAdherence value={patient.adherence} /></td>
+                <td className="px-3 py-4 lg:px-5"><PatientActions patient={patient} actions={actions} onAction={onAction} /></td>
               </tr>
             ))}
           </tbody>
@@ -60,7 +68,7 @@ export default function PatientTable({ patients, title, showViewAll = false, act
               <PatientActions patient={patient} actions={actions} onAction={onAction} />
             </div>
             <div className="mt-4 grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 text-sm font-bold text-muted">
-              <span>{patient.id}</span>
+              <span>{patient.age} tahun</span>
               <span>{patient.lastVisit}</span>
               <PatientStatusBadge status={patient.status} />
               <PatientAdherence value={patient.adherence} />
@@ -78,13 +86,13 @@ function PatientIdentity({ patient }: { readonly patient: PatientRecord }) {
       {patient.image ? (
         <Image src={patient.image} alt="" width={42} height={42} className="h-[42px] w-[42px] shrink-0 rounded-full object-cover" />
       ) : (
-        <span className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full bg-indigo-100 text-sm font-extrabold text-indigo-500">
+        <span className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full bg-emerald/10 text-sm font-extrabold text-emerald">
           {patient.avatar}
         </span>
       )}
-      <div>
-        <p className="font-extrabold text-text-main">{patient.name}</p>
-        <p className="mt-0.5 text-sm font-semibold text-muted">{patient.id} • {patient.gender}</p>
+      <div className="min-w-0">
+        <p className="break-words font-extrabold leading-tight text-text-main">{patient.name}</p>
+        <p className="mt-0.5 text-sm font-semibold text-muted">{patient.age} tahun</p>
       </div>
     </div>
   );
@@ -94,7 +102,7 @@ function PatientAdherence({ value }: { readonly value: number }) {
   const tone = value < 50 ? "bg-danger" : value < 75 ? "bg-warning" : "bg-primary";
 
   return (
-    <div className="flex min-w-[160px] items-center gap-3">
+    <div className="flex min-w-0 items-center gap-3">
       <div className="h-2 flex-1 rounded-full bg-line">
         <div className={`h-full rounded-full ${tone}`} style={{ width: `${value}%` }} />
       </div>

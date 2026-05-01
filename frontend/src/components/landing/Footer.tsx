@@ -95,3 +95,14 @@ export default function Footer() {
     </footer>
   );
 }
+
+export function SimpleFooter({ className = "" }: { readonly className?: string }) {
+  return (
+    <footer className={`bg-primary px-5 py-8 text-white ${className}`}>
+      <div className="mx-auto flex w-full max-w-[1440px] flex-col items-center justify-between gap-4 text-center text-[11px] font-extrabold uppercase tracking-[0.16em] text-white/70 sm:flex-row sm:text-left">
+        <span>&copy; {new Date().getFullYear()} Jivara</span>
+        <span>Stay on track, stay healthy</span>
+      </div>
+    </footer>
+  );
+}

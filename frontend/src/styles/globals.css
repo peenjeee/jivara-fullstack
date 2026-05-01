@@ -2,7 +2,7 @@
 
 /* Custom Tailwind Theme */
 @theme {
-  --font-display: var(--font-syne), "Syne", system-ui, sans-serif;
+  --font-display: var(--font-archivo), "Archivo", system-ui, sans-serif;
   --font-body: var(--font-inter), "Inter", system-ui, sans-serif;
   --animate-fade-lift: fadeLift 0.85s cubic-bezier(0.16, 1, 0.3, 1) both;
   --animate-marquee: marquee 30s linear infinite;
@@ -10,6 +10,11 @@
 
   /* Custom Colors mapped from CSS variables */
   --color-primary: var(--primary);
+  --color-forest: var(--forest);
+  --color-emerald: var(--emerald);
+  --color-pine: var(--pine);
+  --color-leaf: var(--leaf);
+  --color-lime: var(--lime);
   --color-bg: var(--bg);
   --color-text-main: var(--text);
   --color-muted: var(--muted);
@@ -20,27 +25,37 @@
   --color-warning: var(--warning);
   --color-danger: var(--danger);
   --color-primary-dark: var(--primary-dark);
+  --color-primary-hover: var(--primary-hover);
 }
 
 /* CSS Variables  */
 :root {
-  --primary: #10b981;
-  --primary-rgb: 16, 185, 129;
+  --forest: #0c5531;
+  --emerald: #19804e;
+  --pine: #147245;
+  --leaf: #419939;
+  --lime: #7baa2e;
+  --primary: #147245;
+  --primary-rgb: 20, 114, 69;
+  --primary-hover: #0c5531;
   --bg: #ffffff;
   --text: #0f172a;
   --muted: #64748b;
   --dark: #0f172a;
   --surface: #f8fafc;
   --line: rgba(15, 23, 42, 0.1);
-  --safe: #16a34a;
+  --safe: #419939;
   --warning: #f59e0b;
   --danger: #dc2626;
-  --primary-dark: #064e3b;
+  --primary-dark: #0c5531;
 }
 
 /* Base Resets  */
 * {
   box-sizing: border-box;
+  -webkit-scrollbar { display: none; }
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 body {

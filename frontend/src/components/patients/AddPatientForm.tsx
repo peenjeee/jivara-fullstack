@@ -53,7 +53,7 @@ export function createPatientRecord(values: AddPatientValues, order: number): Pa
   };
 }
 
-export default function AddPatientForm({ initialValues, mode = "add", onSubmit, onCancel }: AddPatientFormProps) {
+export default function AddPatientForm({ initialValues, mode = "add", onSubmit }: AddPatientFormProps) {
   const [fullName, setFullName] = useState(initialValues?.fullName ?? "");
   const [age, setAge] = useState(initialValues?.age ? String(initialValues.age) : "");
   const [gender, setGender] = useState<"Pria" | "Wanita">(initialValues?.gender ?? "Pria");
@@ -201,9 +201,6 @@ export default function AddPatientForm({ initialValues, mode = "add", onSubmit, 
       />
 
       <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
-        <Button type="button" variant="outline" onClick={onCancel}>
-          Batal
-        </Button>
         <Button type="submit" icon={<UserPlus size={18} />}>
           {mode === "add" ? "Simpan Pasien" : "Simpan Perubahan"}
         </Button>

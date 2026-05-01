@@ -1,3 +1,7 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { LogOut, Settings } from "lucide-react";
 
 interface DashboardAccountActionsProps {
@@ -5,14 +9,23 @@ interface DashboardAccountActionsProps {
 }
 
 export default function DashboardAccountActions({ onLogout }: DashboardAccountActionsProps) {
+  const pathname = usePathname();
+  const isSettingsActive = pathname.startsWith("/settings");
+
   return (
     <>
-      <button className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-bold text-muted transition-colors hover:bg-surface hover:text-text-main">
+      <Link
+        href="/settings"
+        aria-current={isSettingsActive ? "page" : undefined}
+        className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-bold transition-colors ${
+          isSettingsActive ? "text-primary" : "text-muted hover:bg-surface hover:text-text-main"
+        }`}
+      >
         <Settings size={18} />
         Pengaturan
-      </button>
+      </Link>
       <button
-        className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-bold text-muted transition-colors hover:bg-surface hover:text-danger"
+        className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-bold text-main transition-colors hover:bg-surface hover:text-danger"
         onClick={onLogout}
       >
         <LogOut size={18} />

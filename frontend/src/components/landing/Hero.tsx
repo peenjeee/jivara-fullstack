@@ -42,7 +42,7 @@ export default function Hero() {
       aria-labelledby="hero-title"
     >
       <motion.div
-        className="relative lg:absolute lg:top-[15vh] lg:right-[2vw] w-[min(280px,70vw)] lg:w-[min(460px,40vw)] h-auto lg:h-[min(580px,60vh)] flex items-center justify-center z-50 mx-auto lg:mx-0 pointer-events-none lg:pointer-events-auto"
+        className="relative lg:absolute lg:top-[20vh] lg:right-[4.5vw] w-[min(280px,70vw)] lg:w-[min(460px,40vw)] h-auto lg:h-[min(580px,60vh)] flex items-center justify-center z-50 mx-auto lg:mx-0 pointer-events-none lg:pointer-events-auto"
         aria-label="Maskot Jiva"
         style={{
           scale: mascotScale,
@@ -79,7 +79,7 @@ export default function Hero() {
           y: contentY,
         }}
       >
-        <h1 id="hero-title" className="font-display text-[clamp(28px,8vw,44px)] lg:text-[clamp(40px,6.4vw,76px)] font-extrabold leading-[1.1] lg:leading-[1.05] tracking-[-0.02em] uppercase">
+        <h1 id="hero-title" className="font-display text-[clamp(28px,8vw,44px)] lg:text-[clamp(40px,6.4vw,76px)] font-extrabold leading-[1.1] lg:leading-[1.05] tracking-[-0.02em]">
           <motion.span
             className="block text-primary"
             initial={{ opacity: 0, y: 30 }}
@@ -94,7 +94,7 @@ export default function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: 0.35 }}
           >
-            Stay on Track, Stay{' '}
+            Stay on Track, Stay
             <TypeAnimation
               sequence={[
                 'Healthy',
@@ -106,7 +106,7 @@ export default function Hero() {
               speed={10}
               repeat={Infinity}
               cursor={false}
-              className="text-primary inline-block"
+              className="block min-h-[1.05em] text-primary"
             />
           </motion.span>
         </h1>

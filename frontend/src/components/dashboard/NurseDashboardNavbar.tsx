@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { Menu } from "lucide-react";
@@ -21,9 +22,9 @@ export default function NurseDashboardNavbar({ onLogout }: NurseDashboardNavbarP
 
   return (
     <>
-      <header className="sticky top-0 z-[10000] bg-white/90 shadow-[0_8px_26px_rgba(15,23,42,0.06)] backdrop-blur-[20px] lg:hidden">
+      <header className="sticky top-0 fixed inset-0 z-[35000] lg:hidden bg-surface">
         <div className="flex h-[76px] items-center justify-between px-4">
-          <h1 className="font-display text-3xl font-extrabold tracking-[-0.05em] text-text-main">Jivara</h1>
+          <Image src="/images/logo/notext.png" alt="Jivara" width={132} height={42} priority className="h-auto w-[118px]" />
           <button
             className="flex h-11 w-11 items-center justify-center rounded-xl text-text-main transition-colors"
             onClick={() => setIsMenuOpen(true)}
@@ -57,7 +58,7 @@ export default function NurseDashboardNavbar({ onLogout }: NurseDashboardNavbarP
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
             >
               <div className="flex items-start justify-between gap-4">
-                <span className="font-display text-3xl font-extrabold tracking-[-0.05em] text-text-main">Jivara</span>
+                <Image src="/images/logo/notext.png" alt="Jivara" width={132} height={42} priority className="h-auto w-[118px]" />
               </div>
 
               <DashboardSidebar
@@ -73,6 +74,6 @@ export default function NurseDashboardNavbar({ onLogout }: NurseDashboardNavbarP
   );
 }
 
-function getActiveNavLabel(pathname: string): DashboardNavLabel {
-  return DASHBOARD_NAV_ITEMS.find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))?.label ?? "Dashboard";
+function getActiveNavLabel(pathname: string): DashboardNavLabel | undefined {
+  return DASHBOARD_NAV_ITEMS.find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))?.label;
 }

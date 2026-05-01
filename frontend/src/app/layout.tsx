@@ -1,14 +1,14 @@
 import type { Metadata, Viewport } from "next";
-import { Syne, Inter } from "next/font/google";
+import { Archivo, Inter } from "next/font/google";
 import type { ReactNode } from "react";
 import "@/styles/globals.css";
 import ScrollProvider from "@/providers/ScrollProvider";
 
-const syne = Syne({
+const archivo = Archivo({
   subsets: ["latin"],
   display: "swap",
-  variable: "--font-syne",
-  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-archivo",
+  weight: ["300", "400", "700"],
 });
 
 const inter = Inter({
@@ -19,7 +19,7 @@ const inter = Inter({
 });
  
 export const viewport: Viewport = {
-  themeColor: "#10b981",
+  themeColor: "#147245",
 };
 
 export const metadata: Metadata = {
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
     "Platform kesehatan berbasis AI untuk pengingat obat, deteksi interaksi makanan-obat, dan pemantauan pasien jarak jauh.",
   keywords: ["jivara", "pengingat obat", "keamanan makanan", "kesehatan AI", "monitoring pasien", "interaksi obat makanan"],
   openGraph: {
-    title: "Tetap Terjaga, Tetap Sehat — Jivara",
+    title: "Stay on track, stay healthy",
     description: "Pengingat obat, scan makanan AI, dan monitoring perawat dalam satu aplikasi.",
     type: "website"
   },
@@ -51,7 +51,7 @@ interface RootLayoutProps {
 
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
-    <html lang="id" className={`${syne.variable} ${inter.variable} relative`}>
+    <html lang="id" className={`${archivo.variable} ${inter.variable} relative`}>
       <body className="font-body relative overflow-x-hidden">
         <ScrollProvider>
           {children}
