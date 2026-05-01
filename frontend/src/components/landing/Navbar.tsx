@@ -38,7 +38,7 @@ export default function Navbar() {
             aria-label="Jivara home"
           >
             <Image
-              src="/images/logo/logo_notext.png"
+              src="/images/logo/notext.png"
               alt="Jiva - maskot Jivara"
               width={100}
               height={100}
