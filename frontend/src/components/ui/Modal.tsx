@@ -23,7 +23,6 @@ export default function Modal({ isOpen, title, description, children, onClose }:
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.25 }}
-            onClick={onClose}
           />
 
           <motion.section
@@ -37,7 +36,7 @@ export default function Modal({ isOpen, title, description, children, onClose }:
             exit={{ opacity: 0, y: 18, scale: 0.98 }}
             transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
           >
-            <div className="mb-7 flex items-start justify-between gap-5">
+            <div className="sticky -top-6 z-10 -mx-6 -mt-6 mb-7 flex items-start justify-between gap-5 rounded-t-[32px]  bg-white px-6 pt-6 pb-5 sm:-top-8 sm:-mx-8 sm:-mt-8 sm:px-8 sm:pt-8">
               <div>
                 <h2 id="modal-title" className="font-display text-2xl font-extrabold tracking-[-0.04em] text-text-main sm:text-3xl">
                   {title}

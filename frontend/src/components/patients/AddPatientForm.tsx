@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { Home, Lock, Mail, Phone, User, UserPlus } from "lucide-react";
-import AuthInput from "@/components/ui/AuthInput";
+import { useState, type FormEvent, type ReactNode } from "react";
+import { UserPlus } from "lucide-react";
 import Button from "@/components/ui/Button";
+import FormStickyActions from "@/components/ui/FormStickyActions";
 import { showWarning } from "@/lib/swal";
 import type { PatientRecord } from "@/lib/mocks/patients";
 
@@ -25,6 +25,7 @@ interface AddPatientFormProps {
 }
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PATIENT_INPUT_CLASS = "min-h-12 w-full rounded-2xl bg-surface px-4 text-sm font-semibold text-text-main shadow-[0_2px_8px_rgba(15,23,42,0.08)] outline-none transition-shadow placeholder:text-muted focus:shadow-[0_0_0_2px_rgba(20,114,69,0.18),0_2px_8px_rgba(15,23,42,0.08)]";
 
 export function createPatientRecord(values: AddPatientValues, order: number): PatientRecord {
   const initials = values.fullName
@@ -56,7 +57,7 @@ export function createPatientRecord(values: AddPatientValues, order: number): Pa
 export default function AddPatientForm({ initialValues, mode = "add", onSubmit }: AddPatientFormProps) {
   const [fullName, setFullName] = useState(initialValues?.fullName ?? "");
   const [age, setAge] = useState(initialValues?.age ? String(initialValues.age) : "");
-  const [gender, setGender] = useState<"Pria" | "Wanita">(initialValues?.gender ?? "Pria");
+  const [gender, setGender] = useState<"Pria" | "Wanita" | "">(initialValues?.gender ?? "");
   const [phone, setPhone] = useState(initialValues?.phone ?? "");
   const [email, setEmail] = useState(initialValues?.email ?? "");
   const [password, setPassword] = useState(initialValues?.password ?? "");
@@ -111,100 +112,73 @@ export default function AddPatientForm({ initialValues, mode = "add", onSubmit }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5" noValidate>
-      <div className="grid gap-5 sm:grid-cols-2">
-        <AuthInput
-          id="patientName"
-          label="Nama Lengkap"
-          type="text"
-          placeholder="Nama pasien"
-          value={fullName}
-          onChange={(event) => setFullName(event.target.value)}
-          icon={<User size={20} />}
-        />
-        <AuthInput
-          id="patientAge"
-          label="Umur"
-          type="number"
-          placeholder="42"
-          value={age}
-          onChange={(event) => setAge(event.target.value)}
-          icon={<User size={20} />}
-        />
-      </div>
+      <section className="space-y-5 rounded-3xl bg-surface p-4 sm:p-5">
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field label="Nama Lengkap" required>
+            <input id="patientName" name="patientName" type="text" placeholder="Nama pasien" value={fullName} onChange={(event) => setFullName(event.target.value)} className={PATIENT_INPUT_CLASS} />
+          </Field>
+          <Field label="Umur" required>
+            <input id="patientAge" name="patientAge" type="number" placeholder="42" value={age} onChange={(event) => setAge(event.target.value)} className={PATIENT_INPUT_CLASS} />
+          </Field>
+        </div>
 
-      <div className="grid gap-5 sm:grid-cols-2">
-        <fieldset>
-          <legend className="mb-2 block text-sm font-semibold text-dark">
-            Kelamin <span className="text-red-500">*</span>
-          </legend>
-          <div className="flex flex-wrap gap-7 py-3">
-            {(["Pria", "Wanita"] as const).map((option) => (
-              <label
-                key={option}
-                className="flex cursor-pointer items-center gap-2.5 text-sm font-extrabold text-muted transition-colors hover:text-text-main"
-              >
-                <input
-                  type="radio"
-                  name="patientGender"
-                  value={option}
-                  checked={gender === option}
-                  onChange={() => setGender(option)}
-                  className="h-5 w-5 appearance-none rounded-full border-2 border-muted bg-white bg-clip-content p-[3px] transition-all checked:border-primary checked:bg-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                />
-                <span className={gender === option ? "text-text-main" : "text-muted"}>{option}</span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
-        <AuthInput
-          id="patientPhone"
-          label="Nomor Telepon"
-          type="text"
-          placeholder="+628..."
-          value={phone}
-          onChange={(event) => setPhone(event.target.value)}
-          icon={<Phone size={20} />}
-        />
-      </div>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <fieldset>
+            <legend className="mb-2 block text-sm font-extrabold text-text-main">
+              Kelamin <span className="text-red-500">*</span>
+            </legend>
+            <div className="flex flex-wrap gap-7 py-3">
+              {(["Pria", "Wanita"] as const).map((option) => (
+                <label
+                  key={option}
+                  className="flex cursor-pointer items-center gap-2.5 text-sm font-extrabold text-muted transition-colors hover:text-text-main"
+                >
+                  <input
+                    type="radio"
+                    name="patientGender"
+                    value={option}
+                    checked={gender === option}
+                    onChange={() => setGender(option)}
+                    className="h-5 w-5 appearance-none rounded-full border-2 border-muted bg-white bg-clip-content p-[3px] transition-all checked:border-primary checked:bg-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                  <span className={gender === option ? "text-text-main" : "text-muted"}>{option}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <Field label="Nomor Telepon" required>
+            <input id="patientPhone" name="patientPhone" type="text" placeholder="+628..." value={phone} onChange={(event) => setPhone(event.target.value)} className={PATIENT_INPUT_CLASS} />
+          </Field>
+        </div>
 
-      <div className="grid gap-5 sm:grid-cols-2">
-        <AuthInput
-          id="patientEmail"
-          label="Email"
-          type="email"
-          placeholder="pasien@email.com"
-          autoComplete="username"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          icon={<Mail size={20} />}
-        />
-        <AuthInput
-          id="patientPassword"
-          label="Password"
-          type="password"
-          placeholder="********"
-          autoComplete="new-password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          icon={<Lock size={20} />}
-        />
-      </div>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field label="Email" required>
+            <input id="patientEmail" name="patientEmail" type="email" placeholder="pasien@email.com" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} className={PATIENT_INPUT_CLASS} />
+          </Field>
+          <Field label="Password" required>
+            <input id="patientPassword" name="patientPassword" type="password" placeholder="********" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} className={PATIENT_INPUT_CLASS} />
+          </Field>
+        </div>
 
-      <AuthInput
-        id="patientAddress"
-        label="Alamat"
-        type="text"
-        placeholder="Alamat pasien"
-        value={address}
-        onChange={(event) => setAddress(event.target.value)}
-        icon={<Home size={20} />}
-      />
+        <Field label="Alamat" required>
+          <input id="patientAddress" name="patientAddress" type="text" placeholder="Alamat pasien" value={address} onChange={(event) => setAddress(event.target.value)} className={PATIENT_INPUT_CLASS} />
+        </Field>
+      </section>
 
-      <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
+      <FormStickyActions>
         <Button type="submit" icon={<UserPlus size={18} />}>
           {mode === "add" ? "Simpan Pasien" : "Simpan Perubahan"}
         </Button>
-      </div>
+      </FormStickyActions>
     </form>
+  );
+}
+
+function Field({ label, required = false, children }: { readonly label: string; readonly required?: boolean; readonly children: ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-extrabold text-text-main">{label}{required && <span className="text-danger"> *</span>}</span>
+      {children}
+    </label>
   );
 }

@@ -5,12 +5,13 @@ interface AuthInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   id: string;
   required?: boolean;
   icon?: React.ReactNode;
+  labelClassName?: string;
 }
 
-const AuthInput = ({ label, id, required = true, icon, className = '', ...props }: AuthInputProps) => {
+const AuthInput = ({ label, id, required = true, icon, className = '', labelClassName = '', name, ...props }: AuthInputProps) => {
   return (
     <div>
-      <label className="block text-sm font-semibold text-dark mb-2" htmlFor={id}>
+      <label className={`block text-sm font-semibold text-dark mb-2 ${labelClassName}`} htmlFor={id}>
         {label} {required && <span className="text-red-500">*</span>}
       </label>
       <div className="relative">
@@ -21,6 +22,7 @@ const AuthInput = ({ label, id, required = true, icon, className = '', ...props 
         )}
         <input
           id={id}
+          name={name ?? id}
           className={`w-full py-4 ${icon ? 'pl-14 pr-5' : 'px-5'} bg-surface shadow-sm rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-body ${className}`}
           {...props}
         />

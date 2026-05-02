@@ -45,8 +45,9 @@
   --surface: #f8fafc;
   --line: rgba(15, 23, 42, 0.1);
   --safe: #419939;
-  --warning: #f59e0b;
-  --danger: #dc2626;
+  --warning: #ffc107;
+  --danger: #df4759;
+  --blue: #467fd0;
   --primary-dark: #0c5531;
 }
 
@@ -84,6 +85,13 @@ button {
   cursor: pointer;
 }
 
+/* input,
+textarea,
+select,
+button {
+  font: inherit;
+} */
+
 h1,
 h2,
 h3,
@@ -102,6 +110,21 @@ ul {
 ::selection {
   background: var(--primary);
   color: var(--bg);
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--text);
+  box-shadow: 0 0 0 1000px var(--surface) inset, 0 2px 8px rgba(15, 23, 42, 0.08) !important;
+  transition: background-color 9999s ease-out, color 9999s ease-out;
 }
 
 /* Scroll Reveal  */

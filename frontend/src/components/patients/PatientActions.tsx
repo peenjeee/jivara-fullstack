@@ -12,7 +12,7 @@ interface PatientActionsProps {
 const actionConfig = {
   view: { label: "Lihat detail", icon: Eye, className: "hover:bg-primary/10 hover:text-primary" },
   edit: { label: "Edit", icon: Edit3, className: "hover:bg-warning/10 hover:text-warning" },
-  delete: { label: "Hapus", icon: Trash2, className: "hover:bg-danger/10 hover:text-danger" },
+  delete: { label: "Hapus", icon: Trash2, className: "text-danger hover:bg-danger/10 hover:text-danger" },
 } as const;
 
 export default function PatientActions({ patient, actions = ["view"], onAction }: PatientActionsProps) {
@@ -21,11 +21,12 @@ export default function PatientActions({ patient, actions = ["view"], onAction }
       {actions.map((action) => {
         const config = actionConfig[action];
         const Icon = config.icon;
+        const baseTone = action === "delete" ? "text-danger" : "text-muted";
 
         return (
           <button
             key={action}
-            className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition-colors ${config.className}`}
+            className={`inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors ${baseTone} ${config.className}`}
             aria-label={`${config.label} ${patient.name}`}
             onClick={() => onAction?.(action, patient)}
           >

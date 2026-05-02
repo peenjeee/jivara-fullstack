@@ -37,12 +37,17 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: "/favicon.ico" },
-      { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png" },
+      { url: "/images/logo/splash.png", sizes: "1080x1080", type: "image/png" },
     ],
     apple: [
-      { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/images/logo/splash.png", sizes: "1080x1080", type: "image/png" },
     ],
+  },
+  appleWebApp: {
+    capable: true,
+    title: "Jivara",
+    statusBarStyle: "default",
+    startupImage: "/images/logo/splash.png",
   },
   manifest: "/manifest.json",
 };

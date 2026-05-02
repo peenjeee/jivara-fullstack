@@ -34,7 +34,7 @@ export const dashboardStats: DashboardStat[] = [
   {
     label: "Peringatan Kritis",
     value: "67",
-    helper: "Memerlukan perhatian segera",
+    helper: "",
     tone: "critical",
     color: "lime",
     icon: AlertTriangle,

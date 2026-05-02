@@ -138,7 +138,7 @@ export default function PatientListPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.18 }}
       >
-        <PatientTable patients={paginatedPatients} actions={["view", "edit", "delete"]} onAction={handlePatientAction} embedded />
+        <PatientTable patients={paginatedPatients} actions={["view", "edit", "delete"]} onAction={handlePatientAction} embedded emptyMessage="Tidak ada data pasien." />
         <PatientPagination
           currentPage={currentPage}
           totalPages={totalPages}

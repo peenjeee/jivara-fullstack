@@ -16,7 +16,7 @@ export default function NotificationSettingsForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-      <ToggleRow id="criticalAlert" title="Peringatan kritis" description="Notifikasi saat pasien memiliki risiko interaksi makanan dan obat tinggi." checked={criticalAlert} onChange={setCriticalAlert} />
+      <ToggleRow id="criticalAlert" title="Peringatan Obat" description="Notifikasi saat pasien memiliki risiko interaksi makanan dan obat tinggi." checked={criticalAlert} onChange={setCriticalAlert} />
       <div className="flex justify-end pt-2">
         <Button type="submit" icon={<Save size={18} />}>Simpan</Button>
       </div>

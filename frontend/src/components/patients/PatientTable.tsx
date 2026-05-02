@@ -11,9 +11,12 @@ interface PatientTableProps {
   readonly actions?: readonly PatientAction[];
   readonly onAction?: (action: PatientAction, patient: PatientRecord) => void;
   readonly embedded?: boolean;
+  readonly emptyMessage?: string;
 }
 
-export default function PatientTable({ patients, title, showViewAll = false, actions = ["view"], onAction, embedded = false }: PatientTableProps) {
+export default function PatientTable({ patients, title, showViewAll = false, actions = ["view"], onAction, embedded = false, emptyMessage = "Tidak ada data yang tersedia." }: PatientTableProps) {
+  const isEmpty = patients.length === 0;
+
   return (
     <section id="pasien" className={`overflow-hidden bg-white ${embedded ? "rounded-t-3xl" : "rounded-3xl shadow-[0_10px_30px_rgba(15,23,42,0.08)]"}`}>
       {(title || showViewAll) && (
@@ -44,37 +47,49 @@ export default function PatientTable({ patients, title, showViewAll = false, act
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
-            {patients.map((patient) => (
-              <tr key={patient.id} className="transition-colors hover:bg-surface/60">
-                <td className="px-3 py-4 lg:px-5">
-                  <PatientIdentity patient={patient} />
+            {isEmpty ? (
+              <tr>
+                <td colSpan={6} className="px-5 py-12 text-center text-sm font-bold text-muted">
+                  {emptyMessage}
                 </td>
-                <td className="px-3 py-4 text-sm font-bold text-muted lg:px-5">{patient.age}</td>
-                <td className="px-3 py-4 lg:px-5"><PatientStatusBadge status={patient.status} /></td>
-                <td className="px-3 py-4 text-sm font-bold text-muted lg:px-5">{patient.lastVisit}</td>
-                <td className="px-3 py-4 lg:px-5"><PatientAdherence value={patient.adherence} /></td>
-                <td className="px-3 py-4 lg:px-5"><PatientActions patient={patient} actions={actions} onAction={onAction} /></td>
               </tr>
-            ))}
+            ) : (
+              patients.map((patient) => (
+                <tr key={patient.id} className="transition-colors hover:bg-surface/60">
+                  <td className="px-3 py-4 lg:px-5">
+                    <PatientIdentity patient={patient} />
+                  </td>
+                  <td className="px-3 py-4 text-sm font-bold text-muted lg:px-5">{patient.age}</td>
+                  <td className="px-3 py-4 lg:px-5"><PatientStatusBadge status={patient.status} /></td>
+                  <td className="px-3 py-4 text-sm font-bold text-muted lg:px-5">{patient.lastVisit}</td>
+                  <td className="px-3 py-4 lg:px-5"><PatientAdherence value={patient.adherence} /></td>
+                  <td className="px-3 py-4 lg:px-5"><PatientActions patient={patient} actions={actions} onAction={onAction} /></td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
 
       <div className="divide-y divide-line sm:hidden">
-        {patients.map((patient) => (
-          <article key={patient.id} className="p-5">
-            <div className="flex items-start justify-between gap-4">
-              <PatientIdentity patient={patient} />
-              <PatientActions patient={patient} actions={actions} onAction={onAction} />
-            </div>
-            <div className="mt-4 grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 text-sm font-bold text-muted">
-              <span>{patient.age} tahun</span>
-              <span>{patient.lastVisit}</span>
-              <PatientStatusBadge status={patient.status} />
-              <PatientAdherence value={patient.adherence} />
-            </div>
-          </article>
-        ))}
+        {isEmpty ? (
+          <p className="px-5 py-12 text-center text-sm font-bold text-muted">{emptyMessage}</p>
+        ) : (
+          patients.map((patient) => (
+            <article key={patient.id} className="p-5">
+              <div className="flex items-start justify-between gap-4">
+                <PatientIdentity patient={patient} />
+                <PatientActions patient={patient} actions={actions} onAction={onAction} />
+              </div>
+              <div className="mt-4 grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 text-sm font-bold text-muted">
+                <span>{patient.age} tahun</span>
+                <span>{patient.lastVisit}</span>
+                <PatientStatusBadge status={patient.status} />
+                <PatientAdherence value={patient.adherence} />
+              </div>
+            </article>
+          ))
+        )}
       </div>
     </section>
   );
