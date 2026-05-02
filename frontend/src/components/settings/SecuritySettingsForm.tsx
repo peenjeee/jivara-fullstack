@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { Lock, Save } from "lucide-react";
 import AuthInput from "@/components/ui/AuthInput";
 import Button from "@/components/ui/Button";
-import { showSuccess, showWarning } from "@/lib/swal";
+import { showToast, showWarning } from "@/lib/swal";
 import { useAuthStore } from "@/store/auth";
 
 export default function SecuritySettingsForm() {
@@ -34,7 +34,7 @@ export default function SecuritySettingsForm() {
     setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
-    showSuccess("Kata sandi berhasil diperbarui.");
+    showToast("Kata sandi berhasil diperbarui.");
   };
 
   return (

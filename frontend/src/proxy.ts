@@ -8,7 +8,7 @@ const protectedRoutes = ['/dashboard', '/patients', '/schedule', '/activity-log'
 // Route yang TIDAK boleh diakses jika sudah login
 const authRoutes = ['/login', '/register'];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   await updateSession(request);
 
   const token = request.cookies.get('jivara-token')?.value;

@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, ReactNode } from "react";
 import Lenis from "lenis";
+import { usePathname } from "next/navigation";
+import { useEffect, useRef, type ReactNode } from "react";
 
 interface ScrollProviderProps {
   children: ReactNode;
 }
 
 export default function ScrollProvider({ children }: ScrollProviderProps) {
+  const pathname = usePathname();
+  const lenisRef = useRef<Lenis | null>(null);
+
   useEffect(() => {
     const lenis = new Lenis({
       duration: 1.2,
@@ -18,6 +22,7 @@ export default function ScrollProvider({ children }: ScrollProviderProps) {
       wheelMultiplier: 1,
       touchMultiplier: 2,
     });
+    lenisRef.current = lenis;
 
     let rafId: number;
 
@@ -64,11 +69,21 @@ export default function ScrollProvider({ children }: ScrollProviderProps) {
     document.addEventListener("click", handleAnchorClick);
 
     return () => {
+      lenisRef.current = null;
       cancelAnimationFrame(rafId);
       lenis.destroy();
       document.removeEventListener("click", handleAnchorClick);
     };
   }, []);
+
+  useEffect(() => {
+    if (window.location.hash) {
+      return;
+    }
+
+    lenisRef.current?.scrollTo(0, { immediate: true });
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [pathname]);
 
   return <>{children}</>;
 }

@@ -1,7 +1,24 @@
 import "@/styles/globals.css";
 import ScrollProvider from "@/providers/ScrollProvider";
 import type { Metadata, Viewport } from "next";
+import { Archivo, Inter } from "next/font/google";
 import type { ReactNode } from "react";
+
+const archivo = Archivo({
+  subsets: ["latin"],
+  display: "swap",
+  preload: false,
+  variable: "--font-archivo",
+  weight: ["300", "400", "700"],
+});
+
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  preload: false,
+  variable: "--font-inter",
+  weight: ["300", "400", "500", "600", "700"],
+});
  
 export const viewport: Viewport = {
   themeColor: "#147245",
@@ -36,15 +53,7 @@ interface RootLayoutProps {
 
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
-    <html lang="id" className="relative" suppressHydrationWarning>
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Archivo:wght@300;400;700&family=Inter:wght@300;400;500;600;700&display=swap"
-          rel="stylesheet"
-        />
-      </head>
+    <html lang="id" className={`${archivo.variable} ${inter.variable} relative`} suppressHydrationWarning>
       <body className="font-body relative overflow-x-hidden">
         <ScrollProvider>
           {children}

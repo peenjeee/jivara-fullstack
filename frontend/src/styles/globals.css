@@ -1,12 +1,9 @@
-@layer theme, base, components, utilities;
-@import "tailwindcss/theme.css" layer(theme);
-@import "tailwindcss/preflight.css" layer(base);
-@import "tailwindcss/utilities.css" layer(utilities);
+@import "tailwindcss";
 
 /* Custom Tailwind Theme */
 @theme {
-  --font-display: "Archivo", system-ui, sans-serif;
-  --font-body: "Inter", system-ui, sans-serif;
+  --font-display: var(--font-archivo), "Archivo", system-ui, sans-serif;
+  --font-body: var(--font-inter), "Inter", system-ui, sans-serif;
   --animate-fade-lift: fadeLift 0.85s cubic-bezier(0.16, 1, 0.3, 1) both;
   --animate-marquee: marquee 30s linear infinite;
   --animate-mascot-float: mascotFloat 4s ease-in-out 1.4s infinite;

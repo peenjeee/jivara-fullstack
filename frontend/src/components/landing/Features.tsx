@@ -24,8 +24,8 @@ export default function Features() {
             className="h-auto w-[142px]"
             src="/images/logo/text.png"
             alt="Jivara"
-            width={180}
-            height={58}
+            width={1080}
+            height={1080}
             style={{ height: "auto" }}
           />
         </motion.div>

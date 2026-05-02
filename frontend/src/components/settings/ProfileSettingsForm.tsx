@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { Mail, Phone, Save, User } from "lucide-react";
 import AuthInput from "@/components/ui/AuthInput";
 import Button from "@/components/ui/Button";
-import { showSuccess, showWarning } from "@/lib/swal";
+import { showToast, showWarning } from "@/lib/swal";
 import { useAuthStore } from "@/store/auth";
 
 export default function ProfileSettingsForm() {
@@ -31,7 +31,7 @@ export default function ProfileSettingsForm() {
       setAuth({ ...user, fullName: trimmedName, email: trimmedEmail, phone: trimmedPhone }, token, refreshToken);
     }
 
-    showSuccess("Profil berhasil diperbarui.");
+    showToast("Profil berhasil diperbarui.");
   };
 
   return (

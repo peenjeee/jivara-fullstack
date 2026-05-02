@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { Save } from "lucide-react";
 import Button from "@/components/ui/Button";
-import { showSuccess } from "@/lib/swal";
+import { showToast } from "@/lib/swal";
 import ToggleRow from "./ToggleRow";
 
 export default function NotificationSettingsForm() {
@@ -11,7 +11,7 @@ export default function NotificationSettingsForm() {
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
-    showSuccess("Preferensi notifikasi berhasil disimpan.");
+    showToast("Preferensi notifikasi berhasil disimpan.");
   };
 
   return (
