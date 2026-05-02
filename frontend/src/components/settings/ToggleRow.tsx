@@ -3,13 +3,14 @@
 import { motion } from "motion/react";
 
 interface ToggleRowProps {
+  readonly id: string;
   readonly title: string;
   readonly description: string;
   readonly checked: boolean;
   readonly onChange: (checked: boolean) => void;
 }
 
-export default function ToggleRow({ title, description, checked, onChange }: ToggleRowProps) {
+export default function ToggleRow({ id, title, description, checked, onChange }: ToggleRowProps) {
   return (
     <motion.label
       className="flex cursor-pointer items-center justify-between gap-5 rounded-3xl bg-surface p-5"
@@ -22,6 +23,8 @@ export default function ToggleRow({ title, description, checked, onChange }: Tog
         <span className="mt-1 block text-sm leading-6 text-muted">{description}</span>
       </span>
       <input
+        id={id}
+        name={id}
         type="checkbox"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}

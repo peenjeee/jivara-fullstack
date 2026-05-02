@@ -4,6 +4,7 @@ import { useDeferredValue, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { Plus } from "lucide-react";
 import Button from "@/components/ui/Button";
+import { getNextPatientOrder } from "@/helpers/patients";
 import { patients as initialPatients, type PatientRecord } from "@/lib/mocks/patients";
 import { showConfirm, showToast } from "@/lib/swal";
 import AddPatientModal from "./AddPatientModal";
@@ -48,7 +49,7 @@ export default function PatientListPage() {
   };
 
   const handleAddPatient = (values: AddPatientValues) => {
-    setPatientRecords((currentPatients) => [createPatientRecord(values, currentPatients.length + 1), ...currentPatients]);
+    setPatientRecords((currentPatients) => [createPatientRecord(values, getNextPatientOrder(currentPatients)), ...currentPatients]);
     setIsAddModalOpen(false);
     setSearch("");
     setActiveFilter("all");

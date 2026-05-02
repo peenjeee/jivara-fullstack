@@ -26,6 +26,7 @@ export default function Features() {
             alt="Jivara"
             width={180}
             height={58}
+            style={{ height: "auto" }}
           />
         </motion.div>
         <p className="pointer-events-none absolute left-0 right-0 top-[180px] z-[1] block whitespace-nowrap text-center font-display text-[clamp(100px,11vw,178px)] font-extrabold leading-none text-white/10 md:top-[304px]" aria-hidden="true">JIVARA</p>

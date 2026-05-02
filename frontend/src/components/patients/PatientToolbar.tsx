@@ -26,6 +26,8 @@ export default function PatientToolbar({ search, activeFilter, onSearchChange, o
         <label className="flex min-h-12 items-center gap-3 rounded-full bg-surface px-4 text-muted">
           <Search size={18} />
           <input
+            id="patientSearch"
+            name="patientSearch"
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
             className="w-full bg-transparent text-sm font-semibold text-text-main outline-none placeholder:text-muted"
