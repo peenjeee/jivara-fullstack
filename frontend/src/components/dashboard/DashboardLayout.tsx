@@ -1,12 +1,14 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useRouter } from "next/navigation";
 import Cookies from "js-cookie";
 import api from "@/lib/axios";
 import { SimpleFooter } from "@/components/landing/Footer";
 import { showConfirm, showToast } from "@/lib/swal";
 import { useAuthStore } from "@/store/auth";
+import { useIsStandalonePwa } from "@/hooks";
+import PwaTopLogoBar from "@/components/ui/PwaTopLogoBar";
+import DashboardBottomNav from "./DashboardBottomNav";
 import NurseDashboardNavbar from "./NurseDashboardNavbar";
 
 interface DashboardLayoutProps {
@@ -15,7 +17,7 @@ interface DashboardLayoutProps {
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const { logout, refreshToken } = useAuthStore();
-  const router = useRouter();
+  const isStandalonePwa = useIsStandalonePwa();
 
   const handleLogout = async () => {
     const result = await showConfirm("Keluar Akun?", "Anda perlu masuk kembali untuk mengakses data Anda.", "Ya, Keluar");
@@ -29,16 +31,19 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
       logout();
       Cookies.remove("jivara-token");
+      window.localStorage.removeItem("jivara-auth-storage");
       showToast("Berhasil keluar dari akun.", "success");
-      router.push("/login");
+      window.location.replace("/login");
     }
   };
 
   return (
     <div className="flex min-h-screen flex-col bg-surface">
       <NurseDashboardNavbar onLogout={handleLogout} />
-      <div className="flex-1">{children}</div>
-      <SimpleFooter className="lg:ml-[280px]" />
+      {isStandalonePwa && <PwaTopLogoBar />}
+      <div className={`flex-1 ${isStandalonePwa ? "pt-[calc(76px+env(safe-area-inset-top))] pb-28 lg:pt-0 lg:pb-0" : ""}`}>{children}</div>
+      <SimpleFooter className={`lg:ml-[280px] ${isStandalonePwa ? "pb-24 lg:pb-0" : ""}`} />
+      {isStandalonePwa && <DashboardBottomNav />}
     </div>
   );
 }

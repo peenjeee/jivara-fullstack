@@ -2,11 +2,82 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { motion, useScroll, useTransform } from "motion/react";
 import { TypeAnimation } from 'react-type-animation';
+import { Download } from "lucide-react";
+import Button from "@/components/ui/Button";
+import { showConfirm, showToast, showWarning } from "@/lib/swal";
 
 export default function Hero() {
+  const router = useRouter();
   const [innerHeight, setInnerHeight] = useState(800);
+  const [isInstalled, setIsInstalled] = useState(false);
+  const [canPromptInstall, setCanPromptInstall] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(display-mode: standalone)");
+    const getIsStandalone = () => mediaQuery.matches || Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
+    const updateInstallState = () => {
+      const standalone = getIsStandalone();
+      if (standalone) window.localStorage.setItem("jivara-pwa-installed", "true");
+      setIsInstalled(standalone || window.localStorage.getItem("jivara-pwa-installed") === "true");
+      setCanPromptInstall(Boolean(window.__jivaraInstallPrompt));
+    };
+    const handleAppInstalled = () => {
+      window.localStorage.setItem("jivara-pwa-installed", "true");
+      updateInstallState();
+    };
+
+    updateInstallState();
+    const installStateTimer = window.setTimeout(() => {
+      const hasPrompt = Boolean(window.__jivaraInstallPrompt);
+      setCanPromptInstall(hasPrompt);
+      if (!hasPrompt && navigator.serviceWorker?.controller) setIsInstalled(true);
+    }, 1200);
+    mediaQuery.addEventListener("change", updateInstallState);
+    window.addEventListener("beforeinstallprompt", updateInstallState);
+    window.addEventListener("appinstalled", handleAppInstalled);
+    return () => {
+      window.clearTimeout(installStateTimer);
+      mediaQuery.removeEventListener("change", updateInstallState);
+      window.removeEventListener("beforeinstallprompt", updateInstallState);
+      window.removeEventListener("appinstalled", handleAppInstalled);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    const isStandalone = window.matchMedia("(display-mode: standalone)").matches || Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
+
+    if (isStandalone) {
+      router.push("/dashboard");
+      return;
+    }
+
+    if (isInstalled && !canPromptInstall) {
+      showWarning("Aplikasi Jivara sudah terpasang. Buka aplikasi dari homescreen, launcher, atau daftar aplikasi browser.", "Buka App");
+      return;
+    }
+
+    const installPrompt = window.__jivaraInstallPrompt;
+
+    if (!installPrompt) {
+      showWarning("Untuk memasang aplikasi Jivara, buka menu browser lalu pilih Install App atau Add to Home Screen. Di iOS, gunakan Share lalu Add to Home Screen.", "Install App");
+      return;
+    }
+
+    const result = await showConfirm("Install aplikasi Jivara?", "Pasang Aplikasi Jivara agar akses dashboard, jadwal obat, dan log aktivitas lebih mudah.", "Install App");
+
+    if (!result.isConfirmed) return;
+
+    await installPrompt.prompt();
+    const choice = await installPrompt.userChoice;
+    window.__jivaraInstallPrompt = null;
+
+    if (choice.outcome === "accepted") {
+      showToast("Jivara sedang dipasang.", "success");
+    }
+  };
 
   useEffect(() => {
     const handleResize = () => {
@@ -118,6 +189,17 @@ export default function Hero() {
         >
           <strong className="text-primary font-extrabold">Jivara</strong> membantu pasien patuh minum obat dan mendeteksi interaksi berbahaya dengan makanan menggunakan teknologi <i className="text-dark font-extrabold not-italic">Computer Vision</i>
         </motion.p>
+
+        <motion.div
+          className="mt-7 flex justify-center lg:justify-start"
+          initial={{ opacity: 0, y: 28 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: 0.62 }}
+        >
+          <Button type="button" size="sm" icon={<Download size={16} />} onClick={handleInstallClick}>
+            {isInstalled && !canPromptInstall ? "Buka App" : "Install App"}
+          </Button>
+        </motion.div>
 
       </motion.div>
     </motion.section>

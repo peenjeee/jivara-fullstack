@@ -21,6 +21,7 @@ export type ErrorVariant =
   | "502"
   | "503"
   | "504"
+  | "offline"
   | "unknown";
 
 const ERROR_CONTENT: Record<ErrorVariant, {
@@ -119,6 +120,12 @@ const ERROR_CONTENT: Record<ErrorVariant, {
     description: "Server membutuhkan waktu terlalu lama untuk menerima respons dari layanan lain.",
     codeLabel: "504",
   },
+  offline: {
+    eyebrow: "Offline",
+    title: "Koneksi terputus",
+    description: "Jivara tidak bisa memuat halaman karena perangkat sedang offline. Periksa koneksi internet lalu coba kembali.",
+    codeLabel: "OFF",
+  },
   unknown: {
     eyebrow: "Unexpected Error",
     title: "Terjadi kesalahan",
@@ -136,7 +143,7 @@ interface ErrorPageProps {
 export default function ErrorPage({ variant, reset, children }: ErrorPageProps) {
   const content = ERROR_CONTENT[variant];
   const backHref = variant === "401" ? "/login" : "/";
-  const backLabel = variant === "401" ? "Masuk" : "Kembali";
+  const backLabel = variant === "401" ? "Masuk" : variant === "offline" ? "Coba Lagi" : "Kembali";
 
   return (
     <div className="flex min-h-screen flex-col bg-white">

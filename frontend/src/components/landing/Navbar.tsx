@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { LogIn } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { useScrollThreshold, useLockBodyScroll } from "@/hooks";
+import { useIsStandalonePwa, useScrollThreshold, useLockBodyScroll } from "@/hooks";
 import Button from "@/components/ui/Button";
 import Image from "next/image";
 
@@ -18,6 +18,7 @@ const NAV_LINKS = [
 
 export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const isStandalonePwa = useIsStandalonePwa();
   const isScrolled = useScrollThreshold(20);
 
   useLockBodyScroll(isMenuOpen);
@@ -25,7 +26,7 @@ export default function Navbar() {
   return (
     <>
       <nav
-        className={`fixed inset-x-0 top-0 z-[10000] transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] px-4 lg:px-[84px] ${isScrolled
+        className={`fixed inset-x-0 top-0 z-[10000] transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] px-4 lg:px-[84px] ${isStandalonePwa ? "hidden lg:block" : ""} ${isScrolled
           ? "h-[72px] bg-white/85 backdrop-blur-[20px] shadow-[0_8px_26px_rgba(15,23,42,0.06)]"
           : "h-[72px] lg:h-[90px] bg-bg"
           }`}
@@ -93,7 +94,7 @@ export default function Navbar() {
 
       {/* Mobile Drawer with AnimatePresence */}
       <AnimatePresence>
-        {isMenuOpen && (
+        {isMenuOpen && !isStandalonePwa && (
           <div className="fixed inset-0 z-[35000] lg:hidden">
             {/* Backdrop */}
             <motion.div

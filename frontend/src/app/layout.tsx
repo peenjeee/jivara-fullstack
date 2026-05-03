@@ -1,4 +1,6 @@
 import "@/styles/globals.css";
+import BackToTopButton from "@/components/ui/BackToTopButton";
+import PwaInstallPromptProvider from "@/providers/PwaInstallPromptProvider";
 import ScrollProvider from "@/providers/ScrollProvider";
 import type { Metadata, Viewport } from "next";
 import { Archivo, Inter } from "next/font/google";
@@ -61,7 +63,10 @@ export default function RootLayout({ children }: RootLayoutProps) {
     <html lang="id" className={`${archivo.variable} ${inter.variable} relative`} suppressHydrationWarning>
       <body className="font-body relative overflow-x-hidden">
         <ScrollProvider>
-          {children}
+          <PwaInstallPromptProvider>
+            {children}
+            <BackToTopButton />
+          </PwaInstallPromptProvider>
         </ScrollProvider>
       </body>
     </html>

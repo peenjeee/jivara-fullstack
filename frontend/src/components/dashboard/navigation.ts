@@ -1,7 +1,7 @@
-import { CalendarClock, LayoutDashboard, ListChecks, UserRound } from "lucide-react";
+import { CalendarClock, Home, ListChecks, UserRound } from "lucide-react";
 
 export const DASHBOARD_NAV_ITEMS = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Dashboard", href: "/dashboard", icon: Home },
   { label: "Pasien", href: "/patients", icon: UserRound },
   { label: "Jadwal", href: "/schedule", icon: CalendarClock },
   { label: "Log Aktivitas", href: "/activity-log", icon: ListChecks },

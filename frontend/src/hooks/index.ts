@@ -33,3 +33,22 @@ export const useLockBodyScroll = (lock: boolean) => {
     };
   }, [lock]);
 };
+
+/**
+ * Hook untuk mendeteksi app dibuka sebagai installed PWA/standalone.
+ */
+export const useIsStandalonePwa = () => {
+  const [isStandalone, setIsStandalone] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(display-mode: standalone)");
+    const getIsStandalone = () => mediaQuery.matches || Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
+    const updateStandaloneState = () => setIsStandalone(getIsStandalone());
+
+    updateStandaloneState();
+    mediaQuery.addEventListener("change", updateStandaloneState);
+    return () => mediaQuery.removeEventListener("change", updateStandaloneState);
+  }, []);
+
+  return isStandalone;
+};

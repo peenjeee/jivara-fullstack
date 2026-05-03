@@ -2,11 +2,23 @@
   "name": "Jivara - Stay on Track, Stay Healthy",
   "short_name": "Jivara",
   "description": "Jivara adalah platform kesehatan berbasis AI untuk pengingat obat, deteksi interaksi makanan-obat, dan pemantauan pasien jarak jauh.",
-  "start_url": "/",
+  "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#147245",
   "icons": [
+    {
+      "src": "/images/logo/splash.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/images/logo/splash.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
     {
       "src": "/images/logo/splash.png",
       "sizes": "1080x1080",

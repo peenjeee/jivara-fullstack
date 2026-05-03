@@ -5,7 +5,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { Menu } from "lucide-react";
-import { useLockBodyScroll } from "@/hooks";
+import { useIsStandalonePwa, useLockBodyScroll } from "@/hooks";
 import DashboardSidebar from "./DashboardSidebar";
 import { DASHBOARD_NAV_ITEMS, type DashboardNavLabel } from "./navigation";
 
@@ -15,6 +15,7 @@ interface NurseDashboardNavbarProps {
 
 export default function NurseDashboardNavbar({ onLogout }: NurseDashboardNavbarProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const isStandalonePwa = useIsStandalonePwa();
   const pathname = usePathname();
   const activeItem = getActiveNavLabel(pathname);
 
@@ -22,7 +23,7 @@ export default function NurseDashboardNavbar({ onLogout }: NurseDashboardNavbarP
 
   return (
     <>
-      <header className="sticky top-0 fixed inset-0 z-[35000] lg:hidden bg-surface">
+      {!isStandalonePwa && <header className="sticky top-0 fixed inset-0 z-[35000] lg:hidden bg-surface">
         <div className="flex h-[76px] items-center justify-between px-4">
           <Image src="/images/logo/notext.png" alt="Jivara" width={132} height={42} priority className="h-auto w-[118px]" />
           <button
@@ -33,14 +34,14 @@ export default function NurseDashboardNavbar({ onLogout }: NurseDashboardNavbarP
             <Menu size={24} />
           </button>
         </div>
-      </header>
+      </header>}
 
       <aside className="fixed inset-y-0 left-0 z-[10000] hidden w-[280px] flex-col bg-white px-7 py-8 shadow-[8px_0_26px_rgba(15,23,42,0.06)] lg:flex">
         <DashboardSidebar activeItem={activeItem} onLogout={onLogout} />
       </aside>
 
       <AnimatePresence>
-        {isMenuOpen && (
+        {isMenuOpen && !isStandalonePwa && (
           <div className="fixed inset-0 z-[35000] lg:hidden">
             <motion.div
               className="absolute inset-0 bg-black/25 backdrop-blur-[6px]"
