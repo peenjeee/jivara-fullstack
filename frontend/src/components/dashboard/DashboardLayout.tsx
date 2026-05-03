@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import Cookies from "js-cookie";
+import { LogOut } from "lucide-react";
 import api from "@/lib/axios";
 import { SimpleFooter } from "@/components/landing/Footer";
 import { showConfirm, showToast } from "@/lib/swal";
@@ -40,7 +41,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <div className="flex min-h-screen flex-col bg-surface">
       <NurseDashboardNavbar onLogout={handleLogout} />
-      {isStandalonePwa && <PwaTopLogoBar />}
+      {isStandalonePwa && (
+        <PwaTopLogoBar
+          rightAction={(
+            <button type="button" onClick={handleLogout} className="group inline-flex h-10 w-10 items-center justify-center rounded-full text-text-main transition-colors hover:!text-danger" aria-label="Keluar akun">
+              <LogOut size={19} className="transition-colors group-hover:!text-danger" />
+            </button>
+          )}
+        />
+      )}
       <div className={`flex-1 ${isStandalonePwa ? "pt-[calc(76px+env(safe-area-inset-top))] pb-28 lg:pt-0 lg:pb-0" : ""}`}>{children}</div>
       <SimpleFooter className={`lg:ml-[280px] ${isStandalonePwa ? "pb-24 lg:pb-0" : ""}`} />
       {isStandalonePwa && <DashboardBottomNav />}

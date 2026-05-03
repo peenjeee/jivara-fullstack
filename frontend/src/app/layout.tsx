@@ -1,5 +1,7 @@
 import "@/styles/globals.css";
+import AppSplashScreen from "@/components/ui/AppSplashScreen";
 import BackToTopButton from "@/components/ui/BackToTopButton";
+import PwaPullToRefresh from "@/components/ui/PwaPullToRefresh";
 import PwaInstallPromptProvider from "@/providers/PwaInstallPromptProvider";
 import ScrollProvider from "@/providers/ScrollProvider";
 import type { Metadata, Viewport } from "next";
@@ -65,6 +67,8 @@ export default function RootLayout({ children }: RootLayoutProps) {
         <ScrollProvider>
           <PwaInstallPromptProvider>
             {children}
+            <AppSplashScreen />
+            <PwaPullToRefresh />
             <BackToTopButton />
           </PwaInstallPromptProvider>
         </ScrollProvider>
