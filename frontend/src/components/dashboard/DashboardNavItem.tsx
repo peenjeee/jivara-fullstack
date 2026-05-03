@@ -4,11 +4,13 @@ import type { DashboardNavItemConfig } from "./navigation";
 interface DashboardNavItemProps {
   readonly item: DashboardNavItemConfig;
   readonly isActive: boolean;
+  readonly badgeCount?: number;
   readonly onSelect: () => void;
 }
 
-export default function DashboardNavItem({ item, isActive, onSelect }: DashboardNavItemProps) {
+export default function DashboardNavItem({ item, isActive, badgeCount = 0, onSelect }: DashboardNavItemProps) {
   const Icon = item.icon;
+  const hasBadge = badgeCount > 0;
 
   return (
     <Link
@@ -21,7 +23,12 @@ export default function DashboardNavItem({ item, isActive, onSelect }: Dashboard
     >
       {isActive && <span className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-primary" />}
       <Icon size={18} strokeWidth={2.3} className={isActive ? "!text-primary" : undefined} />
-      <span className={isActive ? "!text-primary" : undefined}>{item.label}</span>
+      <span className={`min-w-0 flex-1 ${isActive ? "!text-primary" : ""}`}>{item.label}</span>
+      {hasBadge && (
+        <span className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-primary px-2 text-[11px] font-extrabold leading-none text-white">
+          {badgeCount > 99 ? "99+" : badgeCount}
+        </span>
+      )}
     </Link>
   );
 }

@@ -12,7 +12,7 @@ const AuthInput = ({ label, id, required = true, icon, className = '', labelClas
   return (
     <div>
       <label className={`block text-sm font-semibold text-dark mb-2 ${labelClassName}`} htmlFor={id}>
-        {label} {required && <span className="text-red-500">*</span>}
+        {label} {required && <span className="text-danger">*</span>}
       </label>
       <div className="relative">
         {icon && (

@@ -1,5 +1,6 @@
 import { Eye, PauseCircle, Pencil, PlayCircle, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
+import IconActionButton, { type IconActionTone } from "@/components/ui/IconActionButton";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
 
 export type ScheduleAction = "view" | "edit" | "delete" | "toggle";
@@ -42,25 +43,12 @@ export default function ScheduleActions({ schedule, actions = ["view", "edit", "
 function ActionButton({ children, label, variant = "primary", onClick }: {
   readonly children: ReactNode;
   readonly label: string;
-  readonly variant?: "primary" | "danger" | "warning" | "blue" | "delete";
+  readonly variant?: IconActionTone;
   readonly onClick: () => void;
 }) {
-  const toneClass = {
-    primary: "text-muted hover:bg-primary/10 hover:text-primary",
-    danger: "text-muted hover:bg-danger/10 hover:text-danger",
-    warning: "text-muted hover:bg-warning/10 hover:text-warning",
-    blue: "text-muted hover:bg-blue-50 hover:text-blue-700",
-    delete: "text-danger hover:bg-danger/10 hover:text-danger",
-  }[variant];
-
   return (
-    <button
-      type="button"
-      aria-label={label}
-      onClick={onClick}
-      className={`inline-flex h-9 w-9 items-center justify-center rounded-full transition-colors ${toneClass}`}
-    >
+    <IconActionButton label={label} tone={variant} onClick={onClick}>
       {children}
-    </button>
+    </IconActionButton>
   );
 }

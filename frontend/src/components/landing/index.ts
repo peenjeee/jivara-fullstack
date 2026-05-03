@@ -7,3 +7,6 @@ export { default as Marquee } from './Marquee';
 export { default as Footer } from './Footer';
 export { default as Stats } from "./Stats";
 export { default as SystemDemoVideo } from "./SystemDemoVideo";
+export { default as LandingReveal } from "./LandingReveal";
+export { default as LandingSummaryGrid } from "./LandingSummaryGrid";
+export { default as WorkflowStepCard } from "./WorkflowStepCard";

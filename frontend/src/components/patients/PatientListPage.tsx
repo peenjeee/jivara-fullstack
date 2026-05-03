@@ -3,6 +3,8 @@
 import { useDeferredValue, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { Plus } from "lucide-react";
+import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
+import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import Button from "@/components/ui/Button";
 import { getNextPatientOrder } from "@/helpers/patients";
 import { patients as initialPatients, type PatientRecord } from "@/lib/mocks/patients";
@@ -45,6 +47,12 @@ export default function PatientListPage() {
 
   const handleFilterChange = (value: PatientFilter) => {
     setActiveFilter(value);
+    setCurrentPage(1);
+  };
+
+  const resetFilters = () => {
+    setSearch("");
+    setActiveFilter("all");
     setCurrentPage(1);
   };
 
@@ -95,28 +103,15 @@ export default function PatientListPage() {
   };
 
   return (
-    <motion.main
-      className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:ml-[280px] lg:w-[calc(100%-280px)] lg:max-w-none lg:px-10 lg:py-8"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-    >
-      <motion.section
-        className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
-        initial={{ opacity: 0, y: 18 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-      >
-        <div>
-          <h1 className="font-display text-3xl font-extrabold tracking-[-0.04em] text-text-main sm:text-4xl">
-            Daftar Pasien
-          </h1>
-        </div>
-
-        <Button size="sm" icon={<Plus size={16} />} onClick={() => setIsAddModalOpen(true)}>
-          Tambah Pasien Baru
-        </Button>
-      </motion.section>
+    <DashboardPageShell>
+      <DashboardPageHeader
+        title="Daftar Pasien"
+        action={(
+          <Button size="sm" icon={<Plus size={16} />} onClick={() => setIsAddModalOpen(true)}>
+            Tambah Pasien Baru
+          </Button>
+        )}
+      />
 
       <motion.div
         className="mt-6"
@@ -127,8 +122,10 @@ export default function PatientListPage() {
         <PatientToolbar
           search={search}
           activeFilter={activeFilter}
+          hasActiveFilters={Boolean(search || activeFilter !== "all")}
           onSearchChange={handleSearchChange}
           onFilterChange={handleFilterChange}
+          onReset={resetFilters}
         />
       </motion.div>
 
@@ -167,6 +164,6 @@ export default function PatientListPage() {
         onClose={() => setEditingPatient(null)}
         onSubmit={handleEditPatient}
       />
-    </motion.main>
+    </DashboardPageShell>
   );
 }

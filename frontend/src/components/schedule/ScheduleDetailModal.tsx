@@ -2,6 +2,7 @@
 
 import { motion } from "motion/react";
 import Modal from "@/components/ui/Modal";
+import DetailItem from "@/components/ui/DetailItem";
 import PatientStatusBadge from "@/components/patients/PatientStatusBadge";
 import type { MedicationScheduleRecord, PatientScheduleGroup } from "@/lib/mocks/schedules";
 import ScheduleActions, { type ScheduleAction } from "./ScheduleActions";
@@ -62,12 +63,12 @@ function MedicineDetail({ schedule, index, onAction }: { readonly schedule: Medi
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        <DetailItem label="Bentuk & Stok" value={`${schedule.medicineForm} - ${schedule.stock} tersisa`} />
-        <DetailItem label="Frekuensi" value={schedule.frequency} />
-        <DetailItem label="Waktu" value={schedule.times.join(", ")} />
-        <DetailItem label="Aturan Makan" value={schedule.mealRule} />
-        <DetailItem label="Reminder" value={schedule.reminderEnabled ? "Aktif" : "Nonaktif"} />
-        <DetailItem label="Tanggal" value={`${schedule.startDate} - ${schedule.endDate || "Berlanjut"}`} />
+        <DetailItem surface="white" label="Bentuk & Stok" value={`${schedule.medicineForm} - ${schedule.stock} tersisa`} />
+        <DetailItem surface="white" label="Frekuensi" value={schedule.frequency} />
+        <DetailItem surface="white" label="Waktu" value={schedule.times.join(", ")} />
+        <DetailItem surface="white" label="Aturan Makan" value={schedule.mealRule} />
+        <DetailItem surface="white" label="Reminder" value={schedule.reminderEnabled ? "Aktif" : "Nonaktif"} />
+        <DetailItem surface="white" label="Tanggal" value={`${schedule.startDate} - ${schedule.endDate || "Berlanjut"}`} />
       </div>
 
       <div className="mt-4 rounded-2xl bg-white p-4">
@@ -75,14 +76,5 @@ function MedicineDetail({ schedule, index, onAction }: { readonly schedule: Medi
         <p className="mt-1 text-sm font-semibold leading-6 text-muted">{schedule.instructions || "Tidak ada instruksi khusus."}</p>
       </div>
     </motion.article>
-  );
-}
-
-function DetailItem({ label, value }: { readonly label: string; readonly value: string }) {
-  return (
-    <div className="rounded-2xl bg-white p-4">
-      <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-muted">{label}</p>
-      <p className="mt-1 text-sm font-bold leading-6 text-text-main">{value}</p>
-    </div>
   );
 }

@@ -2,6 +2,7 @@ import DashboardAccountActions from "./DashboardAccountActions";
 import DashboardNavItem from "./DashboardNavItem";
 import { DASHBOARD_NAV_ITEMS, type DashboardNavLabel } from "./navigation";
 import Image from "next/image";
+import { useActivityLogStore } from "@/store/activityLog";
 
 interface DashboardSidebarProps {
   readonly activeItem?: DashboardNavLabel;
@@ -10,6 +11,8 @@ interface DashboardSidebarProps {
 }
 
 export default function DashboardSidebar({ activeItem, onLogout, onNavigate }: DashboardSidebarProps) {
+  const unreadActivityCount = useActivityLogStore((state) => state.activities.filter((activity) => !activity.read).length);
+
   return (
     <>
       <div className="hidden lg:flex justify-center">
@@ -31,6 +34,7 @@ export default function DashboardSidebar({ activeItem, onLogout, onNavigate }: D
             key={item.label}
             item={item}
             isActive={activeItem === item.label}
+            badgeCount={item.href === "/activity-log" ? unreadActivityCount : 0}
             onSelect={() => onNavigate?.()}
           />
         ))}

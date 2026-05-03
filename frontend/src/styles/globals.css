@@ -182,28 +182,44 @@ select:-webkit-autofill:focus {
 }
 
 /* SweetAlert2 Styling */
-.swal2-popup {
-  border-radius: 24px !important;
+.swal2-container {
+  z-index: 99999 !important;
   font-family: var(--font-body) !important;
 }
 
-.swal2-confirm {
+.swal2-popup {
+  color: var(--text) !important;
+}
+
+.swal2-icon.swal2-success {
+  border-color: var(--primary) !important;
+  color: var(--primary) !important;
+}
+
+.swal2-icon.swal2-success [class^="swal2-success-line"] {
   background-color: var(--primary) !important;
-  border-radius: 9999px !important;
-  padding: 12px 30px !important;
-  font-weight: 600 !important;
 }
 
-.swal2-deny {
-  border-radius: 9999px !important;
+.swal2-icon.swal2-success .swal2-success-ring {
+  border-color: rgba(var(--primary-rgb), 0.25) !important;
 }
 
-.swal2-cancel {
-  border-radius: 9999px !important;
+.swal2-icon.swal2-warning {
+  border-color: var(--warning) !important;
+  color: var(--warning) !important;
 }
 
-.swal2-container {
-  z-index: 99999 !important;
+.swal2-icon.swal2-error {
+  border-color: var(--danger) !important;
+  color: var(--danger) !important;
+}
+
+.swal2-icon.swal2-error [class^="swal2-x-mark-line"] {
+  background-color: var(--danger) !important;
+}
+
+.swal2-timer-progress-bar {
+  background: var(--primary) !important;
 }
 
 /* Reduced Motion  */

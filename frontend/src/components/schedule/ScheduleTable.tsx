@@ -2,6 +2,7 @@
 
 import { motion } from "motion/react";
 import { Eye, Plus } from "lucide-react";
+import IconActionButton from "@/components/ui/IconActionButton";
 import type { PatientScheduleGroup } from "@/lib/mocks/schedules";
 import ScheduleStatusBadge from "./ScheduleStatusBadge";
 
@@ -116,12 +117,12 @@ function GroupActions({ group, onViewDetail, onAddMedicine }: {
 }) {
   return (
     <div className="flex justify-end gap-1.5">
-      <button type="button" onClick={() => onViewDetail(group)} className="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-primary/10 hover:text-primary" aria-label={`Lihat detail ${group.patientName}`}>
+      <IconActionButton label={`Lihat detail ${group.patientName}`} onClick={() => onViewDetail(group)}>
         <Eye size={16} />
-      </button>
-      <button type="button" onClick={() => onAddMedicine(group)} className="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-primary/10 hover:text-primary" aria-label={`Tambah obat ${group.patientName}`}>
+      </IconActionButton>
+      <IconActionButton label={`Tambah obat ${group.patientName}`} onClick={() => onAddMedicine(group)}>
         <Plus size={16} />
-      </button>
+      </IconActionButton>
     </div>
   );
 }

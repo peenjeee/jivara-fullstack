@@ -3,9 +3,11 @@
 import { useDeferredValue, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { BellRing, CalendarClock, CheckCircle2, Plus } from "lucide-react";
+import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
+import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import Button from "@/components/ui/Button";
 import PatientPagination from "@/components/patients/PatientPagination";
-import SummaryCard from "@/components/ui/SummaryCard";
+import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import { getNextScheduleOrder, groupSchedulesByPatient } from "@/helpers/schedules";
 import { patients } from "@/lib/mocks/patients";
 import { medicationSchedules as initialSchedules, type MedicationScheduleRecord } from "@/lib/mocks/schedules";
@@ -18,7 +20,12 @@ import { createScheduleRecord, getEmptyScheduleFormValues, getScheduleFormValues
 import type { ScheduleAction } from "./ScheduleActions";
 
 const pageSize = 10;
-export default function SchedulePage() {
+interface SchedulePageProps {
+  readonly initialPatientName?: string;
+}
+
+export default function SchedulePage({ initialPatientName = "" }: SchedulePageProps) {
+  const linkedPatientName = initialPatientName.trim().toLowerCase();
   const [schedules, setSchedules] = useState(initialSchedules);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<ScheduleFilter>("all");
@@ -26,7 +33,7 @@ export default function SchedulePage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [addMedicinePatientId, setAddMedicinePatientId] = useState<string | null>(null);
   const [editingSchedule, setEditingSchedule] = useState<MedicationScheduleRecord | null>(null);
-  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
+  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(() => initialSchedules.find((schedule) => schedule.patientName.toLowerCase() === linkedPatientName)?.patientId ?? null);
   const [returnToDetailPatientId, setReturnToDetailPatientId] = useState<string | null>(null);
   const deferredSearch = useDeferredValue(search);
 
@@ -73,6 +80,12 @@ export default function SchedulePage() {
 
   const handleFilterChange = (value: ScheduleFilter) => {
     setActiveFilter(value);
+    setCurrentPage(1);
+  };
+
+  const resetFilters = () => {
+    setSearch("");
+    setActiveFilter("all");
     setCurrentPage(1);
   };
 
@@ -147,40 +160,17 @@ export default function SchedulePage() {
   };
 
   return (
-    <motion.main
-      className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:ml-[280px] lg:w-[calc(100%-280px)] lg:max-w-none lg:px-10 lg:py-8"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-    >
-      <motion.section
-        className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
-        initial={{ opacity: 0, y: 18 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-      >
-        <div>
-          <h1 className="font-display text-3xl font-extrabold tracking-[-0.04em] text-text-main sm:text-4xl">Jadwal Obat</h1>
-        </div>
+    <DashboardPageShell>
+      <DashboardPageHeader
+        title="Jadwal Obat"
+        action={(
+          <Button size="sm" icon={<Plus size={16} />} onClick={() => setIsAddModalOpen(true)}>
+            Tambah Jadwal
+          </Button>
+        )}
+      />
 
-        <Button size="sm" icon={<Plus size={16} />} onClick={() => setIsAddModalOpen(true)}>
-          Tambah Jadwal
-        </Button>
-      </motion.section>
-
-      <section className="mt-6 grid auto-rows-fr grid-cols-2 items-stretch gap-4 md:grid-cols-3">
-        {summaryStats.map((stat, index) => (
-          <motion.div
-            key={stat.label}
-            className={`h-full ${index === 2 ? "col-span-2 md:col-span-1" : ""}`}
-            initial={{ opacity: 0, y: 22 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: 0.08 + index * 0.08 }}
-          >
-            <SummaryCard stat={stat} />
-          </motion.div>
-        ))}
-      </section>
+      <SummaryCardGrid stats={summaryStats} />
 
       <motion.div
         className="mt-6"
@@ -188,7 +178,7 @@ export default function SchedulePage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: 0.32 }}
       >
-        <ScheduleToolbar search={search} activeFilter={activeFilter} onSearchChange={handleSearchChange} onFilterChange={handleFilterChange} />
+        <ScheduleToolbar search={search} activeFilter={activeFilter} hasActiveFilters={Boolean(search || activeFilter !== "all")} onSearchChange={handleSearchChange} onFilterChange={handleFilterChange} onReset={resetFilters} />
       </motion.div>
 
       <motion.div
@@ -237,6 +227,6 @@ export default function SchedulePage() {
         onSubmit={handleEditSchedule}
       />
       <ScheduleDetailModal group={selectedGroup} onClose={() => setSelectedPatientId(null)} onAction={handleScheduleAction} />
-    </motion.main>
+    </DashboardPageShell>
   );
 }

@@ -1,10 +1,18 @@
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { SchedulePage } from "@/components/schedule";
 
-export default function ScheduleRoute() {
+interface ScheduleRouteProps {
+  readonly searchParams?: Promise<{
+    readonly patientName?: string;
+  }>;
+}
+
+export default async function ScheduleRoute({ searchParams }: ScheduleRouteProps) {
+  const params = await searchParams;
+
   return (
     <DashboardLayout>
-      <SchedulePage />
+      <SchedulePage initialPatientName={params?.patientName} />
     </DashboardLayout>
   );
 }

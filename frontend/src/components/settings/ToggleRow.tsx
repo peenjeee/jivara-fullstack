@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
+import Switch from "@/components/ui/Switch";
 
 interface ToggleRowProps {
   readonly id: string;
@@ -22,14 +23,7 @@ export default function ToggleRow({ id, title, description, checked, onChange }:
         <span className="block font-extrabold text-text-main">{title}</span>
         <span className="mt-1 block text-sm leading-6 text-muted">{description}</span>
       </span>
-      <input
-        id={id}
-        name={id}
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-        className="h-5 w-5 shrink-0 accent-primary"
-      />
+      <Switch id={id} checked={checked} onCheckedChange={onChange} ariaLabel={title} className="shrink-0" />
     </motion.label>
   );
 }

@@ -1,9 +1,13 @@
 "use client";
 
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useState, type FormEvent } from "react";
 import { UserPlus } from "lucide-react";
 import Button from "@/components/ui/Button";
+import FormField from "@/components/ui/FormField";
+import FormSection from "@/components/ui/FormSection";
 import FormStickyActions from "@/components/ui/FormStickyActions";
+import NumberStepper from "@/components/ui/NumberStepper";
+import { FORM_INPUT_CLASS } from "@/components/ui/formStyles";
 import { showWarning } from "@/lib/swal";
 import type { PatientRecord } from "@/lib/mocks/patients";
 
@@ -25,7 +29,7 @@ interface AddPatientFormProps {
 }
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PATIENT_INPUT_CLASS = "min-h-12 w-full rounded-2xl bg-surface px-4 text-sm font-semibold text-text-main shadow-[0_2px_8px_rgba(15,23,42,0.08)] outline-none transition-shadow placeholder:text-muted focus:shadow-[0_0_0_2px_rgba(20,114,69,0.18),0_2px_8px_rgba(15,23,42,0.08)]";
+const PATIENT_INPUT_CLASS = FORM_INPUT_CLASS;
 
 export function createPatientRecord(values: AddPatientValues, order: number): PatientRecord {
   const initials = values.fullName
@@ -112,20 +116,20 @@ export default function AddPatientForm({ initialValues, mode = "add", onSubmit }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5" noValidate>
-      <section className="space-y-5 rounded-3xl bg-surface p-4 sm:p-5">
+      <FormSection>
         <div className="grid gap-5 sm:grid-cols-2">
-          <Field label="Nama Lengkap" required>
+          <FormField label="Nama Lengkap" required>
             <input id="patientName" name="patientName" type="text" placeholder="Nama pasien" value={fullName} onChange={(event) => setFullName(event.target.value)} className={PATIENT_INPUT_CLASS} />
-          </Field>
-          <Field label="Umur" required>
-            <input id="patientAge" name="patientAge" type="number" placeholder="42" value={age} onChange={(event) => setAge(event.target.value)} className={PATIENT_INPUT_CLASS} />
-          </Field>
+          </FormField>
+          <FormField label="Umur" required>
+            <NumberStepper id="patientAge" name="patientAge" value={age} min={1} required ariaLabel="Umur pasien" onChange={setAge} />
+          </FormField>
         </div>
 
         <div className="grid gap-5 sm:grid-cols-2">
           <fieldset>
             <legend className="mb-2 block text-sm font-extrabold text-text-main">
-              Kelamin <span className="text-red-500">*</span>
+              Kelamin <span className="text-danger">*</span>
             </legend>
             <div className="flex flex-wrap gap-7 py-3">
               {(["Pria", "Wanita"] as const).map((option) => (
@@ -146,24 +150,24 @@ export default function AddPatientForm({ initialValues, mode = "add", onSubmit }
               ))}
             </div>
           </fieldset>
-          <Field label="Nomor Telepon" required>
+          <FormField label="Nomor Telepon" required>
             <input id="patientPhone" name="patientPhone" type="text" placeholder="+628..." value={phone} onChange={(event) => setPhone(event.target.value)} className={PATIENT_INPUT_CLASS} />
-          </Field>
+          </FormField>
         </div>
 
         <div className="grid gap-5 sm:grid-cols-2">
-          <Field label="Email" required>
+          <FormField label="Email" required>
             <input id="patientEmail" name="patientEmail" type="email" placeholder="pasien@email.com" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} className={PATIENT_INPUT_CLASS} />
-          </Field>
-          <Field label="Password" required>
+          </FormField>
+          <FormField label="Password" required>
             <input id="patientPassword" name="patientPassword" type="password" placeholder="********" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} className={PATIENT_INPUT_CLASS} />
-          </Field>
+          </FormField>
         </div>
 
-        <Field label="Alamat" required>
+        <FormField label="Alamat" required>
           <input id="patientAddress" name="patientAddress" type="text" placeholder="Alamat pasien" value={address} onChange={(event) => setAddress(event.target.value)} className={PATIENT_INPUT_CLASS} />
-        </Field>
-      </section>
+        </FormField>
+      </FormSection>
 
       <FormStickyActions>
         <Button type="submit" icon={<UserPlus size={18} />}>
@@ -171,14 +175,5 @@ export default function AddPatientForm({ initialValues, mode = "add", onSubmit }
         </Button>
       </FormStickyActions>
     </form>
-  );
-}
-
-function Field({ label, required = false, children }: { readonly label: string; readonly required?: boolean; readonly children: ReactNode }) {
-  return (
-    <label className="block">
-      <span className="mb-2 block text-sm font-extrabold text-text-main">{label}{required && <span className="text-danger"> *</span>}</span>
-      {children}
-    </label>
   );
 }

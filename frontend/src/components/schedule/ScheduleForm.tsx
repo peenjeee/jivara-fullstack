@@ -1,9 +1,11 @@
 "use client";
 
 import { Plus } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import Button from "@/components/ui/Button";
+import FormField from "@/components/ui/FormField";
 import FormStickyActions from "@/components/ui/FormStickyActions";
+import SelectField from "@/components/ui/SelectField";
 import type { PatientRecord } from "@/lib/mocks/patients";
 import type { MealRule, MedicationScheduleRecord, MedicationScheduleStatus, MedicineForm } from "@/lib/mocks/schedules";
 import { showWarning } from "@/lib/swal";
@@ -174,24 +176,23 @@ export default function ScheduleForm({ patients, initialValues, mode = "add", pa
   };
 
   return (
-    <form action={handleSubmit} className="space-y-5" noValidate>
-      <Field label="Pasien" required>
+    <form action={handleSubmit} className="min-w-0 space-y-5" noValidate>
+      <FormField label="Pasien" required>
         {patientLocked && <input type="hidden" name="patientId" value={values.patientId} />}
-        <select
+        <SelectField
           id="schedulePatientId"
           name={patientLocked ? undefined : "patientId"}
           defaultValue={values.patientId}
+          options={[{ label: "Pilih pasien", value: "", disabled: true }, ...patients.map((patient) => ({ label: patient.name, value: patient.id }))]}
+          placeholder="Pilih pasien"
           className={SCHEDULE_INPUT_CLASS}
           required
           disabled={patientLocked}
-          onChange={(event) => setSelectedPatientId(event.target.value)}
-        >
-          <option value="">Pilih pasien</option>
-          {patients.map((patient) => <option key={patient.id} value={patient.id}>{patient.name}</option>)}
-        </select>
-      </Field>
+          onChange={setSelectedPatientId}
+        />
+      </FormField>
 
-      <div className="space-y-5">
+      <div className="min-w-0 space-y-5">
         {medicineKeys.map((key, index) => {
           const medicineValues = values.medicines[index] ?? emptyMedicine;
 
@@ -210,7 +211,7 @@ export default function ScheduleForm({ patients, initialValues, mode = "add", pa
       </div>
 
       {canManageBlocks && (
-        <button type="button" onClick={addMedicineBlock} className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-2 text-sm font-extrabold text-primary">
+        <button type="button" onClick={addMedicineBlock} className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-2 text-sm font-bold text-primary hover:bg-primary hover:text-white">
           <Plus size={16} /> Tambah Obat
         </button>
       )}
@@ -221,14 +222,5 @@ export default function ScheduleForm({ patients, initialValues, mode = "add", pa
         </Button>
       </FormStickyActions>
     </form>
-  );
-}
-
-function Field({ label, required = false, children }: { readonly label: string; readonly required?: boolean; readonly children: ReactNode }) {
-  return (
-    <label className="block">
-      <span className="mb-2 block text-sm font-extrabold text-text-main">{label}{required && <span className="text-danger"> *</span>}</span>
-      {children}
-    </label>
   );
 }

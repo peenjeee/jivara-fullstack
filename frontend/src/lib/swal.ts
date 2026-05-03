@@ -1,11 +1,15 @@
-import Swal, { SweetAlertOptions } from 'sweetalert2';
+import Swal, { type SweetAlertOptions } from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 
 const MySwal = withReactContent(Swal);
 
-/**
- * Base configuration for Toast notifications
- */
+const popupClass = 'rounded-[32px] border border-line bg-white px-6 py-7 text-text-main shadow-[0_24px_80px_rgba(15,23,42,0.22)]';
+const titleClass = 'font-display text-2xl font-extrabold tracking-[-0.04em] text-text-main';
+const textClass = 'text-sm font-semibold leading-6 text-muted';
+const confirmButtonClass = 'mx-1 inline-flex items-center justify-center rounded-full border border-white/10 bg-primary px-7 py-3 text-[13px] font-bold uppercase leading-none tracking-[0.1em] text-white transition-colors hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-primary/25';
+const cancelButtonClass = 'mx-1 inline-flex items-center justify-center rounded-full bg-surface px-7 py-3 text-[13px] font-bold uppercase leading-none tracking-[0.1em] text-text-main transition-colors hover:bg-line focus:outline-none focus:ring-2 focus:ring-primary/20';
+const actionsClass = 'mt-7 flex flex-wrap items-center justify-center gap-3';
+
 const Toast = MySwal.mixin({
   toast: true,
   position: 'top-end',
@@ -13,7 +17,10 @@ const Toast = MySwal.mixin({
   timer: 3000,
   timerProgressBar: true,
   customClass: {
-    container: 'swal2-toast-container-custom'
+    container: 'swal2-toast-container-custom',
+    popup: 'rounded-2xl border border-line bg-white px-4 py-3 text-text-main shadow-[0_18px_45px_rgba(15,23,42,0.16)]',
+    title: 'text-sm font-extrabold text-text-main',
+    timerProgressBar: 'bg-primary',
   },
   didOpen: (toast) => {
     toast.onmouseenter = Swal.stopTimer;
@@ -21,9 +28,6 @@ const Toast = MySwal.mixin({
   }
 });
 
-/**
- * Base configuration for standard Alerts
- */
 const Alert = MySwal.mixin({
   position: 'center',
   toast: false,
@@ -31,8 +35,13 @@ const Alert = MySwal.mixin({
   timer: 3000,
   timerProgressBar: true,
   customClass: {
-    confirmButton: 'px-6 py-3 rounded-2xl font-bold bg-primary text-white hover:bg-primary-dark transition-all mx-2',
-    cancelButton: 'px-6 py-3 rounded-2xl font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all mx-2',
+    popup: popupClass,
+    title: titleClass,
+    htmlContainer: textClass,
+    confirmButton: confirmButtonClass,
+    cancelButton: cancelButtonClass,
+    actions: actionsClass,
+    timerProgressBar: 'bg-primary',
   },
   buttonsStyling: false,
 });
@@ -91,8 +100,8 @@ export const showConfirm = (title: string = 'Apakah Anda yakin?', text: string =
     title,
     text,
     icon: 'warning',
-    position: 'center', 
-    toast: false, 
+    position: 'center',
+    toast: false,
     showConfirmButton: true,
     showCancelButton: true,
     confirmButtonText,
@@ -111,6 +120,11 @@ export const showLoading = (title: string = 'Mohon Tunggu', text: string = 'Memp
     text,
     allowOutsideClick: false,
     showConfirmButton: false,
+    customClass: {
+      popup: popupClass,
+      title: titleClass,
+      htmlContainer: textClass,
+    },
     didOpen: () => {
       MySwal.showLoading();
     },
