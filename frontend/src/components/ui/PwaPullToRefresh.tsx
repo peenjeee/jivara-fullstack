@@ -92,7 +92,7 @@ export default function PwaPullToRefresh() {
     };
   }, [isStandalonePwa, pullDistance, router, status]);
 
-  const label = status === "refreshing" ? "Memperbarui..." : status === "ready" ? "Lepas untuk refresh" : "Tarik untuk refresh";
+  const label = status === "refreshing" ? "Memperbarui ..." : status === "ready" ? "Lepas untuk refresh" : "Tarik untuk refresh";
 
   return (
     <AnimatePresence>

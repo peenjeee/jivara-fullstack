@@ -42,12 +42,13 @@ export const useIsStandalonePwa = () => {
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(display-mode: standalone)");
+    //  const getIsStandalone = () => mediaQuery.matches || Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
     const getIsStandalone = () => mediaQuery.matches || Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone) || window.localStorage.getItem("jivara-pwa-preview") === "true";
     const updateStandaloneState = () => setIsStandalone(getIsStandalone());
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(window.location.search); //
 
-    if (params.get("pwaPreview") === "true") window.localStorage.setItem("jivara-pwa-preview", "true");
-    if (params.get("pwaPreview") === "false") window.localStorage.removeItem("jivara-pwa-preview");
+    if (params.get("pwaPreview") === "true") window.localStorage.setItem("jivara-pwa-preview", "true"); //
+    if (params.get("pwaPreview") === "false") window.localStorage.removeItem("jivara-pwa-preview"); //
 
     updateStandaloneState();
     mediaQuery.addEventListener("change", updateStandaloneState);
