@@ -1,17 +1,19 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Bell, ClipboardList, Siren, TrendingUp } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import type { PatientDetailData } from "@/helpers/patientDetails";
 import { getPatientSummary } from "@/helpers/patientDetails";
-import PatientActivityDistributionChart from "./PatientActivityDistributionChart";
-import PatientAdherenceChart from "./PatientAdherenceChart";
 import PatientFoodScanPanel from "./PatientFoodScanPanel";
 import PatientMedicineList from "./PatientMedicineList";
 import PatientProfileHero from "./PatientProfileHero";
 import PatientRecentActivity from "./PatientRecentActivity";
+
+const PatientAdherenceChart = dynamic(() => import("./PatientAdherenceChart"), { ssr: false });
+const PatientActivityDistributionChart = dynamic(() => import("./PatientActivityDistributionChart"), { ssr: false });
 
 interface PatientDetailPageProps {
   readonly data: PatientDetailData;

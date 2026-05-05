@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { addMonths, getDateKey, getMonthLabel } from "@/helpers/patientSchedule";
@@ -39,8 +39,8 @@ const severityDotClasses: Record<ActivitySeverity, string> = {
 
 export default function PatientActivityCalendar({ month, activities, onMonthChange, onViewDetail }: PatientActivityCalendarProps) {
   const [openOverflowDateKey, setOpenOverflowDateKey] = useState<string | null>(null);
-  const today = new Date();
-  const calendarDays = getActivityCalendarDays(month, activities, today);
+  const today = useMemo(() => new Date(), []);
+  const calendarDays = useMemo(() => getActivityCalendarDays(month, activities, today), [activities, month, today]);
 
   const goToToday = () => {
     setOpenOverflowDateKey(null);

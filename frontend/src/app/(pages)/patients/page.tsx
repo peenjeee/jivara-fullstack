@@ -1,10 +1,5 @@
-import DashboardLayout from "@/components/dashboard/DashboardLayout";
-import { PatientListPage } from "@/components/patients";
+import PatientsRouteClient from "@/components/patients/PatientsRouteClient";
 
 export default function PatientsPage() {
-  return (
-    <DashboardLayout>
-      <PatientListPage />
-    </DashboardLayout>
-  );
+  return <PatientsRouteClient />;
 }

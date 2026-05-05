@@ -27,7 +27,7 @@ export default function NurseDashboardNavbar({ onLogout }: NurseDashboardNavbarP
 
   return (
     <>
-      {!isStandalonePwa && <header className="sticky top-0 fixed inset-0 z-[35000] lg:hidden bg-surface">
+      {!isStandalonePwa && <header className="sticky top-0 z-[35000] bg-surface lg:hidden">
         <div className="flex h-[76px] items-center justify-between px-4">
           <Image src="/images/logo/notext.png" alt="Jivara" width={132} height={42} priority sizes="118px" className="h-auto w-[118px]" />
           <button

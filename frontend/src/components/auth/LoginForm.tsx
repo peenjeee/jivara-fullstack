@@ -55,7 +55,7 @@ export default function LoginForm() {
       Cookies.set("jivara-token", access_token, {
         expires: 7,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
+        sameSite: "strict",
       });
 
       showToast("Anda berhasil masuk.", "success");

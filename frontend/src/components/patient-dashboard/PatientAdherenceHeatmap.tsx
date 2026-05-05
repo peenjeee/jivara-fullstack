@@ -195,14 +195,15 @@ function HeatmapDayCell({ day, sizeClass, onShow, onHide }: { readonly day: Heat
 
   return (
     <span
-      className="relative"
+      className="relative inline-block rounded-[5px] outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
       onMouseEnter={(event) => onShow(label, event.currentTarget.getBoundingClientRect())}
       onMouseLeave={onHide}
       onFocus={(event) => onShow(label, event.currentTarget.getBoundingClientRect())}
       onBlur={onHide}
-      tabIndex={-1}
+      tabIndex={0}
+      aria-label={label}
     >
-      <span className={`${sizeClass} block ${surfaceClass}`} aria-label={label} />
+      <span className={`${sizeClass} block ${surfaceClass}`} />
     </span>
   );
 }

@@ -2,11 +2,8 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { updateSession } from './lib/supabase/middleware';
 
-// Route yang memerlukan autentikasi
-// const protectedRoutes = ['/dashboard', '/patients', '/schedule', '/activity-log', '/settings'];
-
-// Sementara dikosongkan agar demo/PWA preview bisa mengakses semua halaman tanpa login.
-const protectedRoutes: string[] = [];
+// Route yang memerlukan autentikasi.
+const protectedRoutes = ['/dashboard', '/patients', '/schedule', '/activity-log', '/settings', '/food-scan'];
 
 // Route yang TIDAK boleh diakses jika sudah login
 const authRoutes = ['/login', '/register'];

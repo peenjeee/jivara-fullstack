@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { RefreshCw } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useIsStandalonePwa } from "@/hooks";
 
 const threshold = 82;
@@ -17,10 +17,18 @@ export default function PwaPullToRefresh() {
   const isStandalonePwa = useIsStandalonePwa();
   const startYRef = useRef(0);
   const isTrackingRef = useRef(false);
+  const pullDistanceRef = useRef(0);
+  const statusRef = useRef<RefreshStatus>("idle");
   const [pullDistance, setPullDistance] = useState(0);
   const [status, setStatus] = useState<RefreshStatus>("idle");
   const progress = Math.min(pullDistance / threshold, 1);
   const isVisible = status !== "idle";
+
+  const resetPullState = useCallback(() => {
+    isTrackingRef.current = false;
+    setStatus("idle");
+    setPullDistance(0);
+  }, []);
 
   useEffect(() => {
     document.documentElement.classList.toggle("pwa-standalone", isStandalonePwa);
@@ -33,6 +41,14 @@ export default function PwaPullToRefresh() {
   }, [isStandalonePwa]);
 
   useEffect(() => {
+    pullDistanceRef.current = pullDistance;
+  }, [pullDistance]);
+
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
+  useEffect(() => {
     if (!isStandalonePwa) return;
 
     const handleTouchStart = (event: TouchEvent) => {
@@ -43,7 +59,7 @@ export default function PwaPullToRefresh() {
     };
 
     const handleTouchMove = (event: TouchEvent) => {
-      if (!isTrackingRef.current || status === "refreshing") return;
+      if (!isTrackingRef.current || statusRef.current === "refreshing") return;
 
       const currentY = event.touches[0]?.clientY ?? 0;
       const distance = currentY - startYRef.current;
@@ -64,7 +80,7 @@ export default function PwaPullToRefresh() {
 
       isTrackingRef.current = false;
 
-      if (pullDistance >= threshold) {
+      if (pullDistanceRef.current >= threshold) {
         setStatus("refreshing");
         setPullDistance(threshold);
         router.refresh();
@@ -90,7 +106,7 @@ export default function PwaPullToRefresh() {
       window.removeEventListener("touchend", handleTouchEnd);
       window.removeEventListener("touchcancel", handleTouchEnd);
     };
-  }, [isStandalonePwa, pullDistance, router, status]);
+  }, [isStandalonePwa, resetPullState, router]);
 
   const label = status === "refreshing" ? "Memperbarui ..." : status === "ready" ? "Lepas untuk refresh" : "Tarik untuk refresh";
 
@@ -118,12 +134,6 @@ export default function PwaPullToRefresh() {
       )}
     </AnimatePresence>
   );
-
-  function resetPullState() {
-    isTrackingRef.current = false;
-    setStatus("idle");
-    setPullDistance(0);
-  }
 }
 
 function shouldIgnoreTarget(target: EventTarget | null) {

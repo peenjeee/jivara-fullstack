@@ -11,8 +11,11 @@ interface ScrollProviderProps {
 export default function ScrollProvider({ children }: ScrollProviderProps) {
   const pathname = usePathname();
   const lenisRef = useRef<Lenis | null>(null);
+  const shouldUseLenis = pathname === "/";
 
   useEffect(() => {
+    if (!shouldUseLenis) return;
+
     const lenis = new Lenis({
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
@@ -74,16 +77,16 @@ export default function ScrollProvider({ children }: ScrollProviderProps) {
       lenis.destroy();
       document.removeEventListener("click", handleAnchorClick);
     };
-  }, []);
+  }, [shouldUseLenis]);
 
   useEffect(() => {
     if (window.location.hash) {
       return;
     }
 
-    lenisRef.current?.scrollTo(0, { immediate: true });
+    if (shouldUseLenis) lenisRef.current?.scrollTo(0, { immediate: true });
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
-  }, [pathname]);
+  }, [pathname, shouldUseLenis]);
 
   return <>{children}</>;
 }

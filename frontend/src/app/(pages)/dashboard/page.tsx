@@ -1,21 +1,25 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { DashboardLayout } from "@/components/dashboard";
-import NurseDashboardPage from "@/components/dashboard/NurseDashboardPage";
-import PatientDashboardPage from "@/components/patient-dashboard/PatientDashboardPage";
 import { useAuthStore } from "@/store/auth";
 import { useSplashScreen } from "@/components/ui/AppSplashScreen";
+import { getDashboardRole } from "@/components/dashboard/navigation";
+
+const NurseDashboardPage = dynamic(() => import("@/components/dashboard/NurseDashboardPage"), { ssr: false });
+const PatientDashboardPage = dynamic(() => import("@/components/patient-dashboard/PatientDashboardPage"), { ssr: false });
 
 export default function DashboardPage() {
   const user = useAuthStore((state) => state.user);
-  const shouldShowNurseDashboard = user?.role === "nurse" || user?.role === "admin";
+  const hasAuthHydrated = useAuthStore((state) => state.hasHydrated);
+  const dashboardRole = getDashboardRole(user?.role);
   const { isSplashFinished } = useSplashScreen();
 
-  if (!isSplashFinished) return null;
+  if (!hasAuthHydrated || !isSplashFinished) return null;
 
   return (
     <DashboardLayout>
-      {shouldShowNurseDashboard ? <NurseDashboardPage /> : <PatientDashboardPage />}
+      {dashboardRole === "nurse" ? <NurseDashboardPage /> : <PatientDashboardPage />}
     </DashboardLayout>
   );
 }

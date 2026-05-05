@@ -35,7 +35,9 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
+  if (OFFLINE_ASSETS.includes(url.pathname)) {
+    event.respondWith(fetch(event.request).catch(() => caches.match(url.pathname)));
+  }
 });
 
 self.addEventListener("push", (event) => {

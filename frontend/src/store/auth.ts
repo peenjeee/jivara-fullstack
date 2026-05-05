@@ -22,6 +22,12 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'jivara-auth-storage',
+      partialize: (state) => ({
+        user: state.user,
+        token: state.token,
+        refreshToken: state.refreshToken,
+        isAuthenticated: state.isAuthenticated,
+      }),
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);
       },
