@@ -1,3 +1,5 @@
+"use client";
+
 import ErrorPage from "@/components/errors/ErrorPage";
 import { useSplashScreen } from "@/components/ui/AppSplashScreen";
 
