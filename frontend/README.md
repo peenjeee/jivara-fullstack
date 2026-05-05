@@ -48,7 +48,7 @@ Ini adalah antarmuka pengguna (Frontend) untuk platform Jivara. Dibangun menggun
    ```bash
    cp .env.local.example .env.local
    ```
-   *Pastikan untuk mengatur `NEXT_PUBLIC_API_URL` agar mengarah ke API Backend (biasanya `http://localhost:5000` di lokal).*
+   *Pastikan untuk mengatur `NEXT_PUBLIC_API_URL` agar mengarah ke API Backend (biasanya `http://localhost:3001` di lokal).*
 
 ---
 

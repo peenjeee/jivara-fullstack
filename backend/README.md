@@ -60,7 +60,7 @@ npm run dev
 ```
 *Perintah ini menggunakan `ts-node-dev` untuk auto-reload saat ada perubahan kode.*
 
-Server secara default akan berjalan di `http://localhost:5000` (atau port lain yang ditentukan di `.env`).
+Server secara default akan berjalan di `http://localhost:3001` (atau port lain yang ditentukan di `.env`).
 
 ---
 
