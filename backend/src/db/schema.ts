@@ -245,7 +245,30 @@ export const notifications = pgTable("notifications", {
 }));
 
 // ─────────────────────────────────────────────
-// 13. AUDIT LOGS
+// 13. PUSH SUBSCRIPTIONS
+// ─────────────────────────────────────────────
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  patientId: uuid("patient_id")
+    .notNull()
+    .references(() => patients.id, { onDelete: "cascade" }),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  endpoint: text("endpoint").notNull().unique(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  userAgent: text("user_agent"),
+  isEnabled: boolean("is_enabled").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  patientIdx: index("idx_push_subscriptions_patient").on(table.patientId),
+  enabledIdx: index("idx_push_subscriptions_enabled").on(table.isEnabled),
+}));
+
+// ─────────────────────────────────────────────
+// 14. AUDIT LOGS
 // ─────────────────────────────────────────────
 export const auditLogs = pgTable("audit_logs", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -269,6 +292,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   refreshTokens: many(refreshTokens),
   patients: many(patients),
   nurses: many(nurses),
+  pushSubscriptions: many(pushSubscriptions),
   auditLogs: many(auditLogs),
 }));
 
@@ -290,6 +314,7 @@ export const patientsRelations = relations(patients, ({ one, many }) => ({
   medicationLogs: many(medicationLogs),
   foodScans: many(foodScans),
   notifications: many(notifications),
+  pushSubscriptions: many(pushSubscriptions),
 }));
 
 export const nursesRelations = relations(nurses, ({ one, many }) => ({
@@ -373,6 +398,17 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
   patient: one(patients, {
     fields: [notifications.patientId],
     references: [patients.id],
+  }),
+}));
+
+export const pushSubscriptionsRelations = relations(pushSubscriptions, ({ one }) => ({
+  patient: one(patients, {
+    fields: [pushSubscriptions.patientId],
+    references: [patients.id],
+  }),
+  user: one(users, {
+    fields: [pushSubscriptions.userId],
+    references: [users.id],
   }),
 }));
 

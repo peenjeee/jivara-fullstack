@@ -15,7 +15,7 @@ const sendError = (res: Response, error: unknown) => {
 
 export const uploadFoodImage = async (req: AuthRequest, res: Response) => {
   try {
-    const data = await foodAiService.uploadFoodImage(req.body);
+    const data = await foodAiService.uploadFoodImage(req.body, req.user);
     res.status(200).json({ status: "berhasil", data });
   } catch (error) {
     sendError(res, error);
@@ -24,7 +24,7 @@ export const uploadFoodImage = async (req: AuthRequest, res: Response) => {
 
 export const detectFood = async (req: AuthRequest, res: Response) => {
   try {
-    const data = await foodAiService.detectFood(req.body);
+    const data = await foodAiService.detectFood(req.body, req.user);
     res.status(200).json({ status: "berhasil", data });
   } catch (error) {
     sendError(res, error);
@@ -33,7 +33,7 @@ export const detectFood = async (req: AuthRequest, res: Response) => {
 
 export const checkInteraction = async (req: AuthRequest, res: Response) => {
   try {
-    const data = await foodAiService.checkInteraction(req.body);
+    const data = await foodAiService.checkInteraction(req.body, req.user);
     res.status(200).json({ status: "berhasil", data });
   } catch (error) {
     sendError(res, error);

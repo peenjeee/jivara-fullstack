@@ -15,7 +15,7 @@ const sendError = (res: Response, error: unknown) => {
 
 export const createMedicationLog = async (req: AuthRequest, res: Response) => {
   try {
-    const log = await medicationLogService.createMedicationLog(req.body);
+    const log = await medicationLogService.createMedicationLog(req.body, req.user);
     const message = req.body.status === "confirmed"
       ? "Obat dikonfirmasi. Terima kasih! [DONE]"
       : "Riwayat obat berhasil dicatat";
@@ -28,7 +28,7 @@ export const createMedicationLog = async (req: AuthRequest, res: Response) => {
 
 export const listMedicationLogs = async (req: AuthRequest, res: Response) => {
   try {
-    const result = await medicationLogService.listMedicationLogs(req.query);
+    const result = await medicationLogService.listMedicationLogs(req.query, req.user);
     res.status(200).json({ status: "berhasil", data: result.data, meta: result.meta });
   } catch (error) {
     sendError(res, error);

@@ -15,7 +15,7 @@ const sendError = (res: Response, error: unknown) => {
 
 export const getAdherence = async (req: AuthRequest, res: Response) => {
   try {
-    const data = await adherenceService.getAdherenceStats(req.query);
+    const data = await adherenceService.getAdherenceStats(req.query, req.user);
     res.status(200).json({ status: "berhasil", data });
   } catch (error) {
     sendError(res, error);

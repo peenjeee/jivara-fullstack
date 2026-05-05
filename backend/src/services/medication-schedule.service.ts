@@ -6,6 +6,7 @@ import {
   MedicationScheduleListQuery,
   MedicationScheduleUpdateDTO,
 } from "../types/medication-schedule.types";
+import { AccessUser, assertCanAccessPatient, scopedPatientFilter } from "./access-control.service";
 
 const getBooleanFilter = (value?: string) => {
   if (value === undefined || value === "all") return undefined;
@@ -28,12 +29,15 @@ const ensurePrescriptionExists = async (prescriptionId: string) => {
   }
 };
 
-export const listMedicationSchedules = async (query: MedicationScheduleListQuery) => {
+export const listMedicationSchedules = async (query: MedicationScheduleListQuery, user?: AccessUser) => {
   const patientId = query.patientId || query.patient_id;
   const activeFilter = getBooleanFilter(query.isActive || query.is_active);
   const conditions = [];
+  const scopedFilter = await scopedPatientFilter(medicationSchedules.patientId, user, patientId);
 
-  if (patientId) conditions.push(eq(medicationSchedules.patientId, patientId));
+  if (!scopedFilter.scope.allowed) return [];
+  if (scopedFilter.condition) conditions.push(scopedFilter.condition);
+
   if (activeFilter !== undefined) conditions.push(eq(medicationSchedules.isActive, activeFilter));
 
   return db
@@ -43,18 +47,21 @@ export const listMedicationSchedules = async (query: MedicationScheduleListQuery
     .orderBy(desc(medicationSchedules.createdAt));
 };
 
-export const getMedicationScheduleById = async (id: string) => {
+export const getMedicationScheduleById = async (id: string, user?: AccessUser) => {
   const schedule = await db.select().from(medicationSchedules).where(eq(medicationSchedules.id, id)).limit(1);
 
   if (schedule.length === 0) {
     throw { status: 404, message: "Jadwal obat tidak ditemukan", code: "SCHEDULE_NOT_FOUND" };
   }
 
+  if (user) await assertCanAccessPatient(user, schedule[0].patientId);
+
   return schedule[0];
 };
 
-export const createMedicationSchedule = async (dto: MedicationScheduleCreateDTO, createdBy?: string) => {
+export const createMedicationSchedule = async (dto: MedicationScheduleCreateDTO, createdBy?: string, user?: AccessUser) => {
   await ensurePatientExists(dto.patientId);
+  if (user) await assertCanAccessPatient(user, dto.patientId);
   if (dto.prescriptionId) await ensurePrescriptionExists(dto.prescriptionId);
 
   const [schedule] = await db
@@ -74,8 +81,8 @@ export const createMedicationSchedule = async (dto: MedicationScheduleCreateDTO,
   return schedule;
 };
 
-export const updateMedicationSchedule = async (id: string, dto: MedicationScheduleUpdateDTO) => {
-  await getMedicationScheduleById(id);
+export const updateMedicationSchedule = async (id: string, dto: MedicationScheduleUpdateDTO, user?: AccessUser) => {
+  await getMedicationScheduleById(id, user);
 
   if (dto.prescriptionId) await ensurePrescriptionExists(dto.prescriptionId);
 
@@ -100,8 +107,8 @@ export const updateMedicationSchedule = async (id: string, dto: MedicationSchedu
   return schedule;
 };
 
-export const deactivateMedicationSchedule = async (id: string) => {
-  await getMedicationScheduleById(id);
+export const deactivateMedicationSchedule = async (id: string, user?: AccessUser) => {
+  await getMedicationScheduleById(id, user);
 
   await db
     .update(medicationSchedules)

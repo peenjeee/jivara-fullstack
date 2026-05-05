@@ -3,11 +3,11 @@ import { db } from "../db";
 import {
   medicationLogs,
   medicationSchedules,
-  patientNurseAssignments,
   patients,
   users,
 } from "../db/schema";
 import { AdherenceQuery } from "../types/adherence.types";
+import { AccessUser, assertCanAccessPatient, getNurseIdForUser, getAssignedPatientIdsForNurse } from "./access-control.service";
 
 const getPeriodDays = (period?: string) => {
   if (period === "90d") return 90;
@@ -99,18 +99,6 @@ const buildScheduledOccurrences = (
   return occurrences;
 };
 
-const getAssignedPatientIds = async (nurseId: string) => {
-  const assignments = await db
-    .select({ patientId: patientNurseAssignments.patientId })
-    .from(patientNurseAssignments)
-    .where(and(
-      eq(patientNurseAssignments.nurseId, nurseId),
-      eq(patientNurseAssignments.isActive, true),
-    ));
-
-  return assignments.map((assignment) => assignment.patientId);
-};
-
 const getPatientName = async (patientId?: string) => {
   if (!patientId) return null;
 
@@ -124,20 +112,23 @@ const getPatientName = async (patientId?: string) => {
   return patient[0]?.fullName || null;
 };
 
-export const getAdherenceStats = async (query: AdherenceQuery) => {
+export const getAdherenceStats = async (query: AdherenceQuery, user?: AccessUser) => {
   const period = query.period || "7d";
   const days = getPeriodDays(period);
   const startDate = getStartDate(days);
   const patientId = query.patientId || query.patient_id;
-  const nurseId = query.nurseId || query.nurse_id;
+  const nurseId = user?.role === "nurse"
+    ? await getNurseIdForUser(user.id)
+    : query.nurseId || query.nurse_id;
   const logConditions = [gte(medicationLogs.scheduledTime, startDate)];
   const scheduleConditions = [eq(medicationSchedules.isActive, true)];
 
   if (patientId) {
+    if (user) await assertCanAccessPatient(user, patientId);
     logConditions.push(eq(medicationLogs.patientId, patientId));
     scheduleConditions.push(eq(medicationSchedules.patientId, patientId));
   } else if (nurseId) {
-    const assignedPatientIds = await getAssignedPatientIds(nurseId);
+    const assignedPatientIds = await getAssignedPatientIdsForNurse(nurseId);
     if (assignedPatientIds.length === 0) {
       return {
         patientId: null,

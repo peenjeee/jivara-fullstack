@@ -17,7 +17,7 @@ const getParam = (value: string | string[] | undefined) => Array.isArray(value) 
 
 export const listPatients = async (req: AuthRequest, res: Response) => {
   try {
-    const result = await patientService.listPatients(req.query);
+    const result = await patientService.listPatients(req.query, req.user);
     res.status(200).json({ status: "berhasil", data: result.data, meta: result.meta });
   } catch (error) {
     sendError(res, error);
@@ -26,7 +26,7 @@ export const listPatients = async (req: AuthRequest, res: Response) => {
 
 export const getPatient = async (req: AuthRequest, res: Response) => {
   try {
-    const patient = await patientService.getPatientById(getParam(req.params.id));
+    const patient = await patientService.getPatientById(getParam(req.params.id), req.user);
     res.status(200).json({ status: "berhasil", data: patient });
   } catch (error) {
     sendError(res, error);
@@ -48,7 +48,7 @@ export const createPatient = async (req: AuthRequest, res: Response) => {
 
 export const updatePatient = async (req: AuthRequest, res: Response) => {
   try {
-    const patient = await patientService.updatePatient(getParam(req.params.id), req.body);
+    const patient = await patientService.updatePatient(getParam(req.params.id), req.body, req.user);
     res.status(200).json({ status: "berhasil", data: patient, message: "Data pasien berhasil diperbarui" });
   } catch (error) {
     sendError(res, error);

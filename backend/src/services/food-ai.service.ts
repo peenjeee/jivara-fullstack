@@ -13,6 +13,7 @@ import {
   InteractionCheckDTO,
   NutritionDTO,
 } from "../types/food-ai.types";
+import { AccessUser, assertCanAccessPatient } from "./access-control.service";
 
 const MOCK_DETECTED_ITEMS = [
   {
@@ -48,17 +49,22 @@ const ensurePatientExists = async (patientId: string) => {
   }
 };
 
-const ensureScanExists = async (scanId: string) => {
+const ensureScanExists = async (scanId: string, patientId?: string) => {
   const scan = await db.select().from(foodScans).where(eq(foodScans.id, scanId)).limit(1);
   if (scan.length === 0) {
     throw { status: 404, message: "Scan makanan tidak ditemukan", code: "SCAN_NOT_FOUND" };
   }
 
+  if (patientId && scan[0].patientId !== patientId) {
+    throw { status: 403, message: "Scan makanan tidak sesuai dengan pasien", code: "FORBIDDEN" };
+  }
+
   return scan[0];
 };
 
-export const uploadFoodImage = async (dto: FoodUploadDTO) => {
+export const uploadFoodImage = async (dto: FoodUploadDTO, user?: AccessUser) => {
   await ensurePatientExists(dto.patientId);
+  if (user) await assertCanAccessPatient(user, dto.patientId);
 
   const [scan] = await db
     .insert(foodScans)
@@ -78,11 +84,12 @@ export const uploadFoodImage = async (dto: FoodUploadDTO) => {
   };
 };
 
-export const detectFood = async (dto: FoodDetectDTO) => {
+export const detectFood = async (dto: FoodDetectDTO, user?: AccessUser) => {
   await ensurePatientExists(dto.patientId);
+  if (user) await assertCanAccessPatient(user, dto.patientId);
 
   const scan = dto.imageId
-    ? await ensureScanExists(dto.imageId)
+    ? await ensureScanExists(dto.imageId, dto.patientId)
     : (await db
       .insert(foodScans)
       .values({
@@ -134,9 +141,10 @@ export const detectFood = async (dto: FoodDetectDTO) => {
   };
 };
 
-export const checkInteraction = async (dto: InteractionCheckDTO) => {
+export const checkInteraction = async (dto: InteractionCheckDTO, user?: AccessUser) => {
   await ensurePatientExists(dto.patientId);
-  await ensureScanExists(dto.scanId);
+  if (user) await assertCanAccessPatient(user, dto.patientId);
+  await ensureScanExists(dto.scanId, dto.patientId);
 
   const activeMedications = await db
     .select({ drugName: medicationSchedules.drugName, dosage: medicationSchedules.dosage })

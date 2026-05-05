@@ -6,6 +6,7 @@ import {
   PrescriptionListQuery,
   PrescriptionUpdateDTO,
 } from "../types/prescription.types";
+import { AccessUser, assertCanAccessPatient, scopedPatientFilter } from "./access-control.service";
 
 const ensurePatientExists = async (patientId: string) => {
   const patient = await db.select({ id: patients.id }).from(patients).where(eq(patients.id, patientId)).limit(1);
@@ -14,9 +15,13 @@ const ensurePatientExists = async (patientId: string) => {
   }
 };
 
-export const listPrescriptions = async (query: PrescriptionListQuery) => {
+export const listPrescriptions = async (query: PrescriptionListQuery, user?: AccessUser) => {
   const patientId = query.patientId || query.patient_id;
-  const where = patientId ? eq(prescriptions.patientId, patientId) : undefined;
+  const scopedFilter = await scopedPatientFilter(prescriptions.patientId, user, patientId);
+
+  if (!scopedFilter.scope.allowed) return [];
+
+  const where = scopedFilter.condition || undefined;
 
   const rows = await db
     .select()
@@ -44,12 +49,14 @@ export const listPrescriptions = async (query: PrescriptionListQuery) => {
   }));
 };
 
-export const getPrescriptionById = async (id: string) => {
+export const getPrescriptionById = async (id: string, user?: AccessUser) => {
   const prescription = await db.select().from(prescriptions).where(eq(prescriptions.id, id)).limit(1);
 
   if (prescription.length === 0) {
     throw { status: 404, message: "Resep tidak ditemukan", code: "PRESCRIPTION_NOT_FOUND" };
   }
+
+  if (user) await assertCanAccessPatient(user, prescription[0].patientId);
 
   const medications = await db
     .select({
@@ -66,8 +73,9 @@ export const getPrescriptionById = async (id: string) => {
   return { ...prescription[0], medications };
 };
 
-export const createPrescription = async (dto: PrescriptionCreateDTO, createdBy?: string) => {
+export const createPrescription = async (dto: PrescriptionCreateDTO, createdBy?: string, user?: AccessUser) => {
   await ensurePatientExists(dto.patientId);
+  if (user) await assertCanAccessPatient(user, dto.patientId);
 
   const [prescription] = await db
     .insert(prescriptions)
@@ -84,8 +92,8 @@ export const createPrescription = async (dto: PrescriptionCreateDTO, createdBy?:
   return { ...prescription, medications: [] };
 };
 
-export const updatePrescription = async (id: string, dto: PrescriptionUpdateDTO) => {
-  await getPrescriptionById(id);
+export const updatePrescription = async (id: string, dto: PrescriptionUpdateDTO, user?: AccessUser) => {
+  await getPrescriptionById(id, user);
 
   const updates: Partial<typeof prescriptions.$inferInsert> = {};
   if (dto.diagnosis !== undefined) updates.diagnosis = dto.diagnosis;
@@ -99,11 +107,11 @@ export const updatePrescription = async (id: string, dto: PrescriptionUpdateDTO)
     .where(eq(prescriptions.id, id))
     .returning();
 
-  return getPrescriptionById(prescription.id);
+  return getPrescriptionById(prescription.id, user);
 };
 
-export const deletePrescription = async (id: string) => {
-  await getPrescriptionById(id);
+export const deletePrescription = async (id: string, user?: AccessUser) => {
+  await getPrescriptionById(id, user);
 
   await db.transaction(async (tx) => {
     await tx

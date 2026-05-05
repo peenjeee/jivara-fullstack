@@ -48,7 +48,7 @@ router.use(authenticateToken);
  *       200:
  *         description: Daftar pasien berhasil diambil
  */
-router.get("/", authorizeRoles("nurse", "admin"), patientController.listPatients);
+router.get("/", authorizeRoles("patient", "nurse", "admin"), patientController.listPatients);
 
 /**
  * @swagger
@@ -70,7 +70,7 @@ router.get("/", authorizeRoles("nurse", "admin"), patientController.listPatients
  *       404:
  *         description: Pasien tidak ditemukan
  */
-router.get("/:id", authorizeRoles("nurse", "admin"), patientController.getPatient);
+router.get("/:id", authorizeRoles("patient", "nurse", "admin"), patientController.getPatient);
 
 /**
  * @swagger

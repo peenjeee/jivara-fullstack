@@ -8,6 +8,7 @@ import {
   users,
 } from "../db/schema";
 import { AUTH_CONSTANTS } from "../types/auth.types";
+import { AccessUser, assertCanAccessPatient, scopedPatientFilter } from "./access-control.service";
 import {
   PatientCreateDTO,
   PatientListQuery,
@@ -20,9 +21,19 @@ const parsePagination = (query: PatientListQuery) => {
   return { page, limit, offset: (page - 1) * limit };
 };
 
-export const listPatients = async (query: PatientListQuery) => {
+export const listPatients = async (query: PatientListQuery, user?: AccessUser) => {
   const { page, limit, offset } = parsePagination(query);
   const conditions = [];
+  const scopedFilter = await scopedPatientFilter(patients.id, user);
+
+  if (!scopedFilter.scope.allowed) {
+    return {
+      data: [],
+      meta: { page, limit, total: 0 },
+    };
+  }
+
+  if (scopedFilter.condition) conditions.push(scopedFilter.condition);
 
   if (query.status === "active") {
     conditions.push(eq(patients.isActive, true));
@@ -79,7 +90,9 @@ export const listPatients = async (query: PatientListQuery) => {
   };
 };
 
-export const getPatientById = async (patientId: string) => {
+export const getPatientById = async (patientId: string, user?: AccessUser) => {
+  if (user) await assertCanAccessPatient(user, patientId);
+
   const row = await db
     .select({
       id: patients.id,
@@ -182,8 +195,8 @@ export const createPatient = async (dto: PatientCreateDTO, createdBy?: string) =
   });
 };
 
-export const updatePatient = async (patientId: string, dto: PatientUpdateDTO) => {
-  const existing = await getPatientById(patientId);
+export const updatePatient = async (patientId: string, dto: PatientUpdateDTO, user?: AccessUser) => {
+  const existing = await getPatientById(patientId, user);
 
   const userUpdates: Partial<typeof users.$inferInsert> = {};
   if (dto.fullName !== undefined) userUpdates.fullName = dto.fullName;

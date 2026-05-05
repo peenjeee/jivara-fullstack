@@ -17,7 +17,7 @@ const getParam = (value: string | string[] | undefined) => Array.isArray(value) 
 
 export const listMedicationSchedules = async (req: AuthRequest, res: Response) => {
   try {
-    const schedules = await medicationScheduleService.listMedicationSchedules(req.query);
+    const schedules = await medicationScheduleService.listMedicationSchedules(req.query, req.user);
     res.status(200).json({ status: "berhasil", data: schedules });
   } catch (error) {
     sendError(res, error);
@@ -26,7 +26,7 @@ export const listMedicationSchedules = async (req: AuthRequest, res: Response) =
 
 export const getMedicationSchedule = async (req: AuthRequest, res: Response) => {
   try {
-    const schedule = await medicationScheduleService.getMedicationScheduleById(getParam(req.params.id));
+    const schedule = await medicationScheduleService.getMedicationScheduleById(getParam(req.params.id), req.user);
     res.status(200).json({ status: "berhasil", data: schedule });
   } catch (error) {
     sendError(res, error);
@@ -35,7 +35,7 @@ export const getMedicationSchedule = async (req: AuthRequest, res: Response) => 
 
 export const createMedicationSchedule = async (req: AuthRequest, res: Response) => {
   try {
-    const schedule = await medicationScheduleService.createMedicationSchedule(req.body, req.user?.id);
+    const schedule = await medicationScheduleService.createMedicationSchedule(req.body, req.user?.id, req.user);
     res.status(201).json({
       status: "berhasil",
       data: schedule,
@@ -48,7 +48,7 @@ export const createMedicationSchedule = async (req: AuthRequest, res: Response) 
 
 export const updateMedicationSchedule = async (req: AuthRequest, res: Response) => {
   try {
-    const schedule = await medicationScheduleService.updateMedicationSchedule(getParam(req.params.id), req.body);
+    const schedule = await medicationScheduleService.updateMedicationSchedule(getParam(req.params.id), req.body, req.user);
     res.status(200).json({
       status: "berhasil",
       data: schedule,
@@ -61,7 +61,7 @@ export const updateMedicationSchedule = async (req: AuthRequest, res: Response) 
 
 export const deactivateMedicationSchedule = async (req: AuthRequest, res: Response) => {
   try {
-    await medicationScheduleService.deactivateMedicationSchedule(getParam(req.params.id));
+    await medicationScheduleService.deactivateMedicationSchedule(getParam(req.params.id), req.user);
     res.status(200).json({ status: "berhasil", message: "Jadwal obat berhasil dinonaktifkan" });
   } catch (error) {
     sendError(res, error);

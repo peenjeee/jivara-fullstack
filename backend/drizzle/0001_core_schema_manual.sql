@@ -116,6 +116,19 @@ CREATE TABLE IF NOT EXISTS "notifications" (
   "created_at" timestamp DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS "push_subscriptions" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  "patient_id" uuid NOT NULL REFERENCES "public"."patients"("id") ON DELETE cascade,
+  "user_id" uuid NOT NULL REFERENCES "public"."users"("id") ON DELETE cascade,
+  "endpoint" text NOT NULL UNIQUE,
+  "p256dh" text NOT NULL,
+  "auth" text NOT NULL,
+  "user_agent" text,
+  "is_enabled" boolean DEFAULT true,
+  "created_at" timestamp DEFAULT now(),
+  "updated_at" timestamp DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS "audit_logs" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
   "user_id" uuid REFERENCES "public"."users"("id"),
@@ -145,6 +158,8 @@ CREATE INDEX IF NOT EXISTS "idx_detected_items_scan" ON "detected_items" USING b
 CREATE INDEX IF NOT EXISTS "idx_interaction_results_scan" ON "interaction_results" USING btree ("scan_id");
 CREATE INDEX IF NOT EXISTS "idx_notifications_patient" ON "notifications" USING btree ("patient_id");
 CREATE INDEX IF NOT EXISTS "idx_notifications_status" ON "notifications" USING btree ("status");
+CREATE INDEX IF NOT EXISTS "idx_push_subscriptions_patient" ON "push_subscriptions" USING btree ("patient_id");
+CREATE INDEX IF NOT EXISTS "idx_push_subscriptions_enabled" ON "push_subscriptions" USING btree ("is_enabled");
 CREATE INDEX IF NOT EXISTS "idx_audit_user" ON "audit_logs" USING btree ("user_id");
 CREATE INDEX IF NOT EXISTS "idx_audit_resource" ON "audit_logs" USING btree ("resource_type", "resource_id");
 CREATE INDEX IF NOT EXISTS "idx_audit_date" ON "audit_logs" USING btree ("created_at");

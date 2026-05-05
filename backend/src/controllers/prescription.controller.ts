@@ -17,7 +17,7 @@ const getParam = (value: string | string[] | undefined) => Array.isArray(value) 
 
 export const listPrescriptions = async (req: AuthRequest, res: Response) => {
   try {
-    const data = await prescriptionService.listPrescriptions(req.query);
+    const data = await prescriptionService.listPrescriptions(req.query, req.user);
     res.status(200).json({ status: "berhasil", data });
   } catch (error) {
     sendError(res, error);
@@ -26,7 +26,7 @@ export const listPrescriptions = async (req: AuthRequest, res: Response) => {
 
 export const getPrescription = async (req: AuthRequest, res: Response) => {
   try {
-    const data = await prescriptionService.getPrescriptionById(getParam(req.params.id));
+    const data = await prescriptionService.getPrescriptionById(getParam(req.params.id), req.user);
     res.status(200).json({ status: "berhasil", data });
   } catch (error) {
     sendError(res, error);
@@ -35,7 +35,7 @@ export const getPrescription = async (req: AuthRequest, res: Response) => {
 
 export const createPrescription = async (req: AuthRequest, res: Response) => {
   try {
-    const data = await prescriptionService.createPrescription(req.body, req.user?.id);
+    const data = await prescriptionService.createPrescription(req.body, req.user?.id, req.user);
     res.status(201).json({ status: "berhasil", data, message: "Resep berhasil dibuat" });
   } catch (error) {
     sendError(res, error);
@@ -44,7 +44,7 @@ export const createPrescription = async (req: AuthRequest, res: Response) => {
 
 export const updatePrescription = async (req: AuthRequest, res: Response) => {
   try {
-    const data = await prescriptionService.updatePrescription(getParam(req.params.id), req.body);
+    const data = await prescriptionService.updatePrescription(getParam(req.params.id), req.body, req.user);
     res.status(200).json({ status: "berhasil", data, message: "Resep berhasil diperbarui" });
   } catch (error) {
     sendError(res, error);
@@ -53,7 +53,7 @@ export const updatePrescription = async (req: AuthRequest, res: Response) => {
 
 export const deletePrescription = async (req: AuthRequest, res: Response) => {
   try {
-    await prescriptionService.deletePrescription(getParam(req.params.id));
+    await prescriptionService.deletePrescription(getParam(req.params.id), req.user);
     res.status(200).json({ status: "berhasil", message: "Resep berhasil dihapus" });
   } catch (error) {
     sendError(res, error);
