@@ -3,16 +3,21 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "motion/react";
+import { getUnreadActivityCount } from "@/helpers/activityLogs";
+import { patients } from "@/lib/mocks/patients";
 import { useActivityLogStore } from "@/store/activityLog";
 import { useAuthStore } from "@/store/auth";
 import { getDashboardBottomNavItems, getDashboardRole } from "./navigation";
 
 export default function DashboardBottomNav() {
   const pathname = usePathname();
-  const unreadActivityCount = useActivityLogStore((state) => state.activities.filter((activity) => !activity.read).length);
   const userRole = useAuthStore((state) => state.user?.role);
+  const hasAuthHydrated = useAuthStore((state) => state.hasHydrated);
   const dashboardRole = getDashboardRole(userRole);
+  const unreadActivityCount = useActivityLogStore((state) => getUnreadActivityCount(state.activities, dashboardRole === "patient" ? patients[0].id : undefined));
   const bottomNavItems = getDashboardBottomNavItems(dashboardRole);
+
+  if (!hasAuthHydrated) return null;
 
   return (
     <motion.nav
@@ -22,7 +27,7 @@ export default function DashboardBottomNav() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
     >
-      <div className={`grid gap-1 ${dashboardRole === "patient" ? "grid-cols-5" : "grid-cols-4"}`}>
+      <div className={`grid gap-1 ${bottomNavItems.length === 5 ? "grid-cols-5" : "grid-cols-4"}`}>
         {bottomNavItems.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);

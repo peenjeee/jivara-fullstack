@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { BellRing, CalendarClock, CheckCircle2, Plus } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
@@ -33,7 +33,7 @@ export default function SchedulePage({ initialPatientName = "" }: SchedulePagePr
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [addMedicinePatientId, setAddMedicinePatientId] = useState<string | null>(null);
   const [editingSchedule, setEditingSchedule] = useState<MedicationScheduleRecord | null>(null);
-  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(() => initialSchedules.find((schedule) => schedule.patientName.toLowerCase() === linkedPatientName)?.patientId ?? null);
+  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [returnToDetailPatientId, setReturnToDetailPatientId] = useState<string | null>(null);
   const deferredSearch = useDeferredValue(search);
 
@@ -72,6 +72,16 @@ export default function SchedulePage({ initialPatientName = "" }: SchedulePagePr
   const addMedicinePatientGroup = addMedicinePatientId ? allPatientGroups.find((group) => group.patientId === addMedicinePatientId) ?? null : null;
   const totalPages = Math.max(1, Math.ceil(patientGroups.length / pageSize));
   const paginatedGroups = patientGroups.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  useEffect(() => {
+    if (!linkedPatientName) return;
+
+    const linkedPatientId = initialSchedules.find((schedule) => schedule.patientName.toLowerCase() === linkedPatientName)?.patientId;
+    if (!linkedPatientId) return;
+
+    const openTimer = window.setTimeout(() => setSelectedPatientId(linkedPatientId), 420);
+    return () => window.clearTimeout(openTimer);
+  }, [linkedPatientName]);
 
   const handleSearchChange = (value: string) => {
     setSearch(value);

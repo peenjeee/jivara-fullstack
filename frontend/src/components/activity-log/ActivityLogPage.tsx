@@ -1,6 +1,7 @@
 "use client";
 
 import { useDeferredValue, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import { AlertTriangle, Bell, CheckCheck, ClipboardList } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
@@ -24,6 +25,7 @@ interface ActivityLogPageProps {
 }
 
 export default function ActivityLogPage({ initialPatientName = "", initialCategory }: ActivityLogPageProps) {
+  const router = useRouter();
   const activities = useActivityLogStore((state) => state.activities);
   const markActivityAsRead = useActivityLogStore((state) => state.markAsRead);
   const markAllActivitiesAsRead = useActivityLogStore((state) => state.markAllAsRead);
@@ -114,6 +116,15 @@ export default function ActivityLogPage({ initialPatientName = "", initialCatego
     setSelectedFoodScanId(scanId);
   };
 
+  const viewSchedule = (activity: ActivityLogRecord) => {
+    const href = activity.patientName
+      ? `/schedule?patientName=${encodeURIComponent(activity.patientName)}${activity.medicineName ? `&medicineName=${encodeURIComponent(activity.medicineName)}` : ""}`
+      : "/schedule";
+
+    setSelectedActivity(null);
+    window.setTimeout(() => router.push(href), 380);
+  };
+
   return (
     <DashboardPageShell>
       <DashboardPageHeader
@@ -162,7 +173,7 @@ export default function ActivityLogPage({ initialPatientName = "", initialCatego
         />
       </motion.div>
 
-      <ActivityDetailModal activity={selectedActivity} onClose={() => setSelectedActivity(null)} onViewFoodScan={viewFoodScan} />
+      <ActivityDetailModal activity={selectedActivity} onClose={() => setSelectedActivity(null)} onViewFoodScan={viewFoodScan} onViewSchedule={viewSchedule} />
       <FoodScanDetailModal scanId={selectedFoodScanId} onClose={() => setSelectedFoodScanId(null)} />
     </DashboardPageShell>
   );

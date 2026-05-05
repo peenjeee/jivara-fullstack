@@ -17,7 +17,9 @@ export interface AuthState {
   token: string | null;
   refreshToken: string | null;
   isAuthenticated: boolean;
+  hasHydrated: boolean;
   setAuth: (user: User, token: string, refreshToken: string) => void;
+  setHasHydrated: (hasHydrated: boolean) => void;
   updateToken: (token: string) => void;
   logout: () => void;
 }

@@ -19,6 +19,7 @@ export default function NurseDashboardNavbar({ onLogout }: NurseDashboardNavbarP
   const isStandalonePwa = useIsStandalonePwa();
   const pathname = usePathname();
   const userRole = useAuthStore((state) => state.user?.role);
+  const hasAuthHydrated = useAuthStore((state) => state.hasHydrated);
   const dashboardRole = getDashboardRole(userRole);
   const activeItem = getActiveNavLabel(pathname, dashboardRole);
 
@@ -39,12 +40,14 @@ export default function NurseDashboardNavbar({ onLogout }: NurseDashboardNavbarP
         </div>
       </header>}
 
-      <aside className="fixed inset-y-0 left-0 z-[10000] hidden w-[280px] flex-col bg-white px-7 py-8 shadow-[8px_0_26px_rgba(15,23,42,0.06)] lg:flex">
-        <DashboardSidebar activeItem={activeItem} role={dashboardRole} onLogout={onLogout} />
-      </aside>
+      {hasAuthHydrated && (
+        <aside className="fixed inset-y-0 left-0 z-[10000] hidden w-[280px] flex-col bg-white px-7 py-8 shadow-[8px_0_26px_rgba(15,23,42,0.06)] lg:flex">
+          <DashboardSidebar activeItem={activeItem} role={dashboardRole} onLogout={onLogout} />
+        </aside>
+      )}
 
       <AnimatePresence>
-        {isMenuOpen && !isStandalonePwa && (
+        {isMenuOpen && !isStandalonePwa && hasAuthHydrated && (
           <div className="fixed inset-0 z-[35000] lg:hidden">
             <motion.div
               className="absolute inset-0 bg-black/25 backdrop-blur-[6px]"

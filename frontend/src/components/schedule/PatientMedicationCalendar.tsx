@@ -60,13 +60,13 @@ function CalendarDayButton({ day, onSelect }: { readonly day: PatientCalendarDay
   const statusDotClass = day.status === "missed" ? "bg-danger" : day.status === "active" ? "bg-warning" : day.status === "done" ? "bg-primary" : day.status === "upcoming" ? "bg-[var(--blue)]" : "bg-transparent";
   const isDone = day.status === "done";
   const hasSoftGreenBackground = day.isToday || isDone;
-  const dayStateClass = day.isSelected ? "bg-primary text-white hover:bg-primary-hover" : hasSoftGreenBackground ? "bg-primary/10 text-primary hover:bg-primary/15" : "hover:bg-surface";
+  const dayStateClass = day.isSelected ? "bg-text-main text-white hover:bg-dark" : hasSoftGreenBackground ? "bg-surface text-text-main hover:bg-line/60" : "hover:bg-surface";
   const dotClass = day.isSelected && day.status !== "empty" ? "bg-white" : statusDotClass;
 
   return (
     <button
       type="button"
-      className={`group relative flex aspect-square min-h-10 flex-col items-center justify-center rounded-2xl text-sm font-extrabold transition-colors ${dayStateClass} ${day.isCurrentMonth ? "" : "opacity-45"}`}
+      className={`group relative mx-auto flex aspect-square min-h-10 w-full max-w-14 flex-col items-center justify-center rounded-full text-sm font-extrabold transition-colors ${dayStateClass} ${day.isCurrentMonth ? "" : "opacity-45"}`}
       onClick={() => onSelect(day.date)}
       aria-label={day.date.toLocaleDateString("id-ID")}
     >

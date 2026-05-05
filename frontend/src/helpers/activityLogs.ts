@@ -48,3 +48,7 @@ export function groupActivityLogsByDate(logs: readonly ActivityLogRecord[]): Act
       items: [...items].sort((first, second) => new Date(second.timestamp).getTime() - new Date(first.timestamp).getTime()),
     }));
 }
+
+export function getUnreadActivityCount(logs: readonly ActivityLogRecord[], patientId?: string) {
+  return logs.filter((activity) => !activity.read && (!patientId || activity.patientId === patientId)).length;
+}

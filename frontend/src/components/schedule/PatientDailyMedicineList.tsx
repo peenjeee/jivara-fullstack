@@ -26,7 +26,7 @@ export default function PatientDailyMedicineList({ selectedDate, schedules, canC
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: 0.24 }}
     >
-      <h2 className="font-display text-xl font-extrabold tracking-[-0.04em] text-text-main sm:text-2xl">Jadwal Tanggal Terpilih</h2>
+      <h2 className="font-display text-xl font-extrabold tracking-[-0.04em] text-text-main sm:text-2xl">Jadwal Hari Ini</h2>
 
       <div className="mt-5 space-y-4">
         {schedules.length > 0 ? schedules.map((schedule, index) => (

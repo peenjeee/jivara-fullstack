@@ -1,5 +1,4 @@
-import DashboardLayout from "@/components/dashboard/DashboardLayout";
-import { ActivityLogPage } from "@/components/activity-log";
+import { ActivityLogRouteClient } from "@/components/activity-log";
 
 interface ActivityLogRouteProps {
   readonly searchParams?: Promise<{
@@ -11,9 +10,5 @@ interface ActivityLogRouteProps {
 export default async function ActivityLogRoute({ searchParams }: ActivityLogRouteProps) {
   const params = await searchParams;
 
-  return (
-    <DashboardLayout>
-      <ActivityLogPage initialPatientName={params?.patientName} initialCategory={params?.category} />
-    </DashboardLayout>
-  );
+  return <ActivityLogRouteClient initialPatientName={params?.patientName} initialCategory={params?.category} />;
 }

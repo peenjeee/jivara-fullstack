@@ -14,10 +14,12 @@ interface ActivityDetailModalProps {
   readonly activity: ActivityLogRecord | null;
   readonly onClose: () => void;
   readonly onViewFoodScan?: (scanId: string) => void;
+  readonly onViewSchedule?: (activity: ActivityLogRecord) => void;
+  readonly useScheduleQuery?: boolean;
 }
 
-export default function ActivityDetailModal({ activity, onClose, onViewFoodScan }: ActivityDetailModalProps) {
-  const scheduleHref = activity?.patientName
+export default function ActivityDetailModal({ activity, onClose, onViewFoodScan, onViewSchedule, useScheduleQuery = true }: ActivityDetailModalProps) {
+  const scheduleHref = useScheduleQuery && activity?.patientName
     ? `/schedule?patientName=${encodeURIComponent(activity.patientName)}${activity.medicineName ? `&medicineName=${encodeURIComponent(activity.medicineName)}` : ""}`
     : "/schedule";
   const patientHref = activity?.patientId && activity.category === "Kepatuhan" ? `/patients/${encodeURIComponent(activity.patientId)}` : null;
@@ -68,9 +70,15 @@ export default function ActivityDetailModal({ activity, onClose, onViewFoodScan 
             </Link>
           )}
           {shouldShowScheduleLink && (
-            <Link href={scheduleHref} onClick={onClose} className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-7 py-3 text-[13px] font-bold uppercase leading-none tracking-[0.1em] !text-white transition-colors hover:bg-primary-hover [&_svg]:text-white">
-              <CalendarClock size={16} /> Lihat Jadwal
-            </Link>
+            onViewSchedule ? (
+              <button type="button" onClick={() => activity && onViewSchedule(activity)} className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-7 py-3 text-[13px] font-bold uppercase leading-none tracking-[0.1em] !text-white transition-colors hover:bg-primary-hover [&_svg]:text-white">
+                <CalendarClock size={16} /> Lihat Jadwal
+              </button>
+            ) : (
+              <Link href={scheduleHref} onClick={onClose} className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-7 py-3 text-[13px] font-bold uppercase leading-none tracking-[0.1em] !text-white transition-colors hover:bg-primary-hover [&_svg]:text-white">
+                <CalendarClock size={16} /> Lihat Jadwal
+              </Link>
+            )
           )}
           {shouldShowFoodScanLink && activity?.scanId && (
             <button type="button" onClick={() => activity.scanId && onViewFoodScan?.(activity.scanId)} className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-7 py-3 text-[13px] font-bold uppercase leading-none tracking-[0.1em] !text-white transition-colors hover:bg-primary-hover [&_svg]:text-white">

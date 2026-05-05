@@ -2,6 +2,8 @@ import DashboardAccountActions from "./DashboardAccountActions";
 import DashboardNavItem from "./DashboardNavItem";
 import { getDashboardNavItems, type DashboardNavLabel, type DashboardRole } from "./navigation";
 import Image from "next/image";
+import { getUnreadActivityCount } from "@/helpers/activityLogs";
+import { patients } from "@/lib/mocks/patients";
 import { useActivityLogStore } from "@/store/activityLog";
 
 interface DashboardSidebarProps {
@@ -12,7 +14,7 @@ interface DashboardSidebarProps {
 }
 
 export default function DashboardSidebar({ activeItem, role, onLogout, onNavigate }: DashboardSidebarProps) {
-  const unreadActivityCount = useActivityLogStore((state) => state.activities.filter((activity) => !activity.read).length);
+  const unreadActivityCount = useActivityLogStore((state) => getUnreadActivityCount(state.activities, role === "patient" ? patients[0].id : undefined));
   const navItems = getDashboardNavItems(role);
 
   return (

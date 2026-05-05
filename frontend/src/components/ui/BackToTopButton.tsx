@@ -30,7 +30,7 @@ export default function BackToTopButton() {
           type="button"
           aria-label="Kembali ke atas"
           onClick={scrollToTop}
-          className={`fixed right-4 z-[29000] grid h-12 w-12 place-items-center rounded-full bg-primary text-white shadow-[0_14px_34px_rgba(20,114,69,0.28)] transition-colors hover:bg-primary-hover sm:right-6 ${
+          className={`fixed right-4 z-[29000] grid h-12 w-12 place-items-center rounded-full bg-primary text-white transition-colors hover:bg-primary-hover sm:right-6 ${
             isStandalonePwa ? "bottom-32 lg:bottom-6" : "bottom-6"
           }`}
           initial={{ opacity: 0, y: 18, scale: 0.92 }}

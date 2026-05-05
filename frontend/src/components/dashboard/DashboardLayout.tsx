@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Cookies from "js-cookie";
 import { LogOut } from "lucide-react";
@@ -19,6 +20,7 @@ interface DashboardLayoutProps {
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const { logout, refreshToken } = useAuthStore();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const isStandalonePwa = useIsStandalonePwa();
   const router = useRouter();
 
@@ -26,6 +28,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const result = await showConfirm("Keluar Akun?", "Anda perlu masuk kembali untuk mengakses data Anda.", "Ya, Keluar");
 
     if (result.isConfirmed) {
+      setIsLoggingOut(true);
+
       try {
         await api.post("/auth/logout", { refresh_token: refreshToken });
       } catch {
@@ -35,10 +39,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       logout();
       Cookies.remove("jivara-token");
       window.localStorage.removeItem("jivara-auth-storage");
-      showToast("Berhasil keluar dari akun.", "success");
-      router.push("/login");
+      router.replace("/login");
+      window.setTimeout(() => showToast("Berhasil keluar dari akun.", "success"), 120);
     }
   };
+
+  if (isLoggingOut) {
+    return <div className="min-h-screen bg-surface" aria-label="Keluar akun" />;
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-surface">

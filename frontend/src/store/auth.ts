@@ -11,8 +11,10 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       refreshToken: null,
       isAuthenticated: false,
+      hasHydrated: false,
       setAuth: (user, token, refreshToken) => 
         set({ user, token, refreshToken, isAuthenticated: true }),
+      setHasHydrated: (hasHydrated) => set({ hasHydrated }),
       updateToken: (token) => 
         set({ token }),
       logout: () => 
@@ -20,6 +22,9 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'jivara-auth-storage',
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     }
   )
 );

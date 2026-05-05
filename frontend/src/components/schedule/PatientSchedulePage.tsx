@@ -1,8 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { AlarmClock, CalendarClock, CheckCircle2 } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
+import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
+import type { SummaryCardItem } from "@/components/ui/SummaryCard";
 import { getDateKey, getMonthStart, getSchedulesForDate, isSameDate } from "@/helpers/patientSchedule";
 import { patients } from "@/lib/mocks/patients";
 import { medicationSchedules } from "@/lib/mocks/schedules";
@@ -25,6 +28,34 @@ export default function PatientSchedulePage() {
   const schedulesForSelectedDate = useMemo(() => getSchedulesForDate(patientSchedules, selectedDate), [patientSchedules, selectedDate]);
   const selectedDateKey = getDateKey(selectedDate);
   const confirmedScheduleIds = confirmedScheduleDates[selectedDateKey] ?? [];
+  const activeSchedules = patientSchedules.filter((schedule) => schedule.status === "Aktif");
+  const completedScheduleCount = Object.values(confirmedScheduleDates).reduce((total, scheduleIds) => {
+    const patientConfirmedIds = scheduleIds.filter((scheduleId) => patientSchedules.some((schedule) => schedule.id === scheduleId));
+    return total + patientConfirmedIds.length;
+  }, 0);
+  const scheduleStats: SummaryCardItem[] = [
+    {
+      label: "Jadwal Aktif",
+      value: String(activeSchedules.length),
+      tone: "safe",
+      color: "pine",
+      icon: CalendarClock,
+    },
+    {
+      label: "Total Selesai",
+      value: String(completedScheduleCount),
+      tone: "safe",
+      color: "leaf",
+      icon: CheckCircle2,
+    },
+    {
+      label: "Reminder Aktif",
+      value: String(activeSchedules.filter((schedule) => schedule.reminderEnabled).length),
+      tone: "safe",
+      color: "lime",
+      icon: AlarmClock,
+    },
+  ];
 
   const handleDateSelect = (date: Date) => {
     setSelectedDate(date);
@@ -51,6 +82,7 @@ export default function PatientSchedulePage() {
   return (
     <DashboardPageShell>
       <DashboardPageHeader title="Jadwal Obat" />
+      <SummaryCardGrid stats={scheduleStats} />
 
       <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(340px,0.72fr)]">
         <PatientMedicationCalendar
