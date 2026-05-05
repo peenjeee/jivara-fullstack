@@ -44,7 +44,7 @@ function TimeInput({ id, name, defaultValue, removable, onRemove }: { readonly i
         <TimePickerField id={id} name={name} defaultValue={defaultValue} className={SCHEDULE_INPUT_CLASS} required />
       </div>
       {removable && (
-        <button type="button" onClick={onRemove} className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-danger/10 text-danger" aria-label="Hapus waktu">
+        <button type="button" onClick={onRemove} className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl hover:bg-danger/10 text-danger" aria-label="Hapus waktu">
           <Trash2 size={16} />
         </button>
       )}

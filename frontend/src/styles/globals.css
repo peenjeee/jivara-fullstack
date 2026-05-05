@@ -24,6 +24,7 @@
   --color-safe: var(--safe);
   --color-warning: var(--warning);
   --color-danger: var(--danger);
+  --color-blue: var(--blue);
   --color-primary-dark: var(--primary-dark);
   --color-primary-hover: var(--primary-hover);
 }

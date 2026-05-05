@@ -63,7 +63,7 @@ function ScanInputCard({ isScanning, onScan }: { readonly isScanning: boolean; r
           >
             {isScanning ? <Loader2 className="h-14 w-14 animate-spin" /> : <Camera className="h-14 w-14" />}
           </motion.div>
-          <h2 className="mt-6 font-display text-3xl font-extrabold tracking-[-0.05em] text-text-main">Upload foto makanan</h2>
+          <h2 className="mt-6 font-display text-3xl font-extrabold tracking-[-0.05em] text-text-main">Scan Makanan</h2>
         </div>
       </div>
 

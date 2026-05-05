@@ -23,15 +23,6 @@ export const dashboardStats: DashboardStat[] = [
     icon: UsersRound,
   },
   {
-    label: "Kepatuhan Keseluruhan",
-    value: "67%",
-    helper: "Target bulanan 90%",
-    tone: "safe",
-    color: "leaf",
-    icon: CheckCircle2,
-    progress: 86,
-  },
-  {
     label: "Peringatan Kritis",
     value: "67",
     helper: "",
@@ -39,4 +30,13 @@ export const dashboardStats: DashboardStat[] = [
     color: "lime",
     icon: AlertTriangle,
   },
+  {
+    label: "Kepatuhan Keseluruhan",
+    value: "67%",
+    helper: "Target bulanan 90%",
+    tone: "safe",
+    color: "leaf",
+    icon: CheckCircle2,
+    progress: 86,
+  }
 ];

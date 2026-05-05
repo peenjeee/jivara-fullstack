@@ -7,10 +7,8 @@ import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import type { SummaryCardItem } from "@/components/ui/SummaryCard";
 import { patients } from "@/lib/mocks/patients";
 import { medicationSchedules } from "@/lib/mocks/schedules";
-import { showConfirm, showToast } from "@/lib/swal";
 import { usePatientDashboardStore } from "@/store/patientDashboard";
-import PatientNextMedicineCard from "./PatientNextMedicineCard";
-import PatientTodayStatusCard from "./PatientTodayStatusCard";
+import PatientAdherenceHeatmap from "./PatientAdherenceHeatmap";
 
 const mockPatient = patients[0];
 
@@ -18,22 +16,9 @@ export default function PatientDashboardPage() {
   const greeting = getGreeting();
   const patientSchedules = medicationSchedules.filter((schedule) => schedule.patientId === mockPatient.id);
   const activeSchedules = patientSchedules.filter((schedule) => schedule.status === "Aktif");
-  const nextSchedule = activeSchedules[0] ?? patientSchedules[0];
   const lastScan = usePatientDashboardStore((state) => state.lastScan);
-  const confirmedMedicineIds = usePatientDashboardStore((state) => state.confirmedMedicineIds);
-  const confirmMedicine = usePatientDashboardStore((state) => state.confirmMedicine);
-  const hasConfirmedNextMedicine = Boolean(nextSchedule && confirmedMedicineIds.includes(nextSchedule.id));
 
   const stats: SummaryCardItem[] = [
-    {
-      label: "Kepatuhan Saya",
-      value: `${mockPatient.adherence}%`,
-      helper: mockPatient.status,
-      tone: mockPatient.adherence >= 80 ? "safe" : mockPatient.adherence >= 60 ? "warning" : "critical",
-      color: "pine",
-      icon: ShieldCheck,
-      progress: mockPatient.adherence,
-    },
     {
       label: "Obat Aktif",
       value: `${activeSchedules.length}`,
@@ -48,24 +33,16 @@ export default function PatientDashboardPage() {
       color: "lime",
       icon: BellRing,
     },
-  ];
-
-  const handleConfirmMedicine = async () => {
-    if (!nextSchedule || !lastScan) return;
-
-    if (lastScan.risk === "High Risk") {
-      const result = await showConfirm(
-        "Hasil scan berisiko",
-        "Makanan terakhir berpotensi berinteraksi dengan obat. Ikuti rekomendasi AI sebelum melanjutkan.",
-        "Tetap Konfirmasi",
-      );
-
-      if (!result.isConfirmed) return;
+    {
+      label: "Kepatuhan Saya",
+      value: `${mockPatient.adherence}%`,
+      helper: mockPatient.status,
+      tone: mockPatient.adherence >= 80 ? "safe" : mockPatient.adherence >= 60 ? "warning" : "critical",
+      color: "pine",
+      icon: ShieldCheck,
+      progress: mockPatient.adherence,
     }
-
-    confirmMedicine(nextSchedule.id);
-    showToast("Obat berhasil dikonfirmasi.", "success");
-  };
+  ];
 
   return (
     <DashboardPageShell>
@@ -73,15 +50,7 @@ export default function PatientDashboardPage() {
       <SummaryCardGrid stats={stats} />
 
       <div className="mt-6 space-y-6">
-        <PatientTodayStatusCard completed={lastScan ? 3 : 2} total={5} missed={lastScan?.risk === "High Risk" ? 1 : 0} />
-        {nextSchedule && (
-          <PatientNextMedicineCard
-            schedule={nextSchedule}
-            canConfirm={Boolean(lastScan)}
-            confirmed={hasConfirmedNextMedicine}
-            onConfirm={handleConfirmMedicine}
-          />
-        )}
+        <PatientAdherenceHeatmap adherence={mockPatient.adherence} />
       </div>
     </DashboardPageShell>
   );
