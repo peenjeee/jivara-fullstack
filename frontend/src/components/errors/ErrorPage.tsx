@@ -149,7 +149,20 @@ export default function ErrorPage({ variant, reset, children }: ErrorPageProps) 
     <div className="flex min-h-screen flex-col bg-white">
       <main className="flex flex-1 items-start justify-center px-5 pt-0 pb-28 text-center">
         <section className="flex w-full max-w-md flex-col items-center">
-          <LogoHomeLink priority unoptimized={variant === "offline"} />
+          {variant === "offline" ? (
+            <Link href="/" aria-label="Jivara beranda" className="flex w-full justify-center overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element -- Offline fallback must avoid Next image optimizer requests. */}
+              <img
+                src="/images/logo/text.png"
+                alt="Jivara"
+                width={260}
+                height={260}
+                className="mb-[-42px] h-auto w-[210px] translate-x-[-6px] sm:w-[260px]"
+              />
+            </Link>
+          ) : (
+            <LogoHomeLink priority />
+          )}
 
           <div className="mt-3 w-full px-6 py-10 sm:px-10">
             <p className="font-display text-[76px] font-extrabold leading-none tracking-[-0.08em] text-primary sm:text-[96px]">

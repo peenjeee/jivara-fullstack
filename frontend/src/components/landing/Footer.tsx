@@ -1,4 +1,4 @@
-"use client";
+  "use client";
 
 import Link from "next/link";
 import { motion } from "motion/react";
@@ -7,6 +7,11 @@ import { Mail } from "lucide-react";
 const socialLinks = [
   { label: "Email", href: "mailto:hello@jivara.id", icon: Mail },
   { label: "Instagram", href: "https://instagram.com/jivara.id", icon: InstagramIcon },
+] as const;
+
+const footerLinks = [
+  { label: "Team", href: "/team", external: false },
+  { label: "API Docs", href: "/docs", external: true },
 ] as const;
 
 function InstagramIcon({ size = 21 }: { readonly size?: number }) {
@@ -41,32 +46,47 @@ export default function Footer({ className = "" }: { readonly className?: string
           viewport={{ once: true, amount: 0.4 }}
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: 0.15 }}
         >
-          <div className="max-w-md">
-            <h3 className="font-display text-3xl font-extrabold tracking-[-0.04em] text-white">Jivara</h3>
-            <p className="mt-4 text-sm leading-6 text-white/70">
-              Monitoring kepatuhan obat dan keamanan interaksi makanan untuk kesehatan yang lebih baik.
-            </p>
+          <div className="flex flex-col gap-10 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-md">
+              <h3 className="font-display text-3xl font-extrabold tracking-[-0.04em] text-white">Jivara</h3>
+              <p className="mt-4 text-sm leading-6 text-white/70">
+                Monitoring kepatuhan obat dan keamanan interaksi makanan untuk kesehatan yang lebih baik.
+              </p>
 
-            <div className="mt-7 flex gap-3">
-              {socialLinks.map((link) => {
-                const Icon = link.icon;
+              <div className="mt-7 flex gap-3">
+                {socialLinks.map((link) => {
+                  const Icon = link.icon;
 
-                return (
-                  <Link
-                    key={link.label}
-                    href={link.href}
-                    className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white hover:!text-primary"
-                    aria-label={link.label}
-                    target={link.href.startsWith("http") ? "_blank" : undefined}
-                    rel={link.href.startsWith("http") ? "noreferrer" : undefined}
-                  >
-                    <Icon size={21} />
-                  </Link>
-                );
-              })}
+                  return (
+                    <Link
+                      key={link.label}
+                      href={link.href}
+                      className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white hover:!text-primary"
+                      aria-label={link.label}
+                      target={link.href.startsWith("http") ? "_blank" : undefined}
+                      rel={link.href.startsWith("http") ? "noreferrer" : undefined}
+                    >
+                      <Icon size={21} />
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
-          </div>
 
+            <nav className="flex flex-wrap gap-4 lg:justify-end" aria-label="Navigasi footer">
+              {footerLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  target={link.external ? "_blank" : undefined}
+                  rel={link.external ? "noreferrer" : undefined}
+                  className="text-xs font-extrabold uppercase tracking-[0.16em] !text-white/70 transition-colors hover:!text-[var(--bg)]"
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
+          </div>
         </motion.div>
 
         <div className="relative mt-20 lg:mt-32">
@@ -75,7 +95,7 @@ export default function Footer({ className = "" }: { readonly className?: string
             initial={{ opacity: 0, x: 80 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true, amount: 0.2 }}
-            transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}
+            transition={{ duration: 0.9, ease:   [0.16, 1, 0.3, 1], delay: 0.2 }}
           >
             Jivara
           </motion.strong>

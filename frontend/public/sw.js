@@ -1,6 +1,6 @@
 const OFFLINE_URL = "/offline";
-const CACHE_NAME = "jivara-offline-v2";
-const OFFLINE_ASSETS = [OFFLINE_URL, "/images/logo/text.png", "/images/logo/splash.png"];
+const CACHE_NAME = "jivara-offline-v3";
+const OFFLINE_ASSETS = [OFFLINE_URL, "/images/logo/text.png", "/images/logo/notext.png", "/images/logo/splash.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -20,10 +20,18 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
+  const url = new URL(event.request.url);
+
   if (event.request.mode === "navigate") {
     event.respondWith(
       fetch(event.request).catch(() => caches.match(OFFLINE_URL).then((response) => response ?? Response.error())),
     );
+    return;
+  }
+
+  if (url.pathname === "/_next/image" && url.searchParams.get("url")?.startsWith("/images/logo/")) {
+    const logoPath = url.searchParams.get("url");
+    event.respondWith(fetch(event.request).catch(() => caches.match(logoPath)));
     return;
   }
 
