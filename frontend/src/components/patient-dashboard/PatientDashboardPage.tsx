@@ -14,13 +14,14 @@ import PatientAdherenceHeatmap from "./PatientAdherenceHeatmap";
 const mockPatient = patients[0];
 
 export default function PatientDashboardPage() {
+  const lastScan = usePatientDashboardStore((state) => state.lastScan);
   const { isSplashFinished } = useSplashScreen();
 
   if (!isSplashFinished) return null;
+
   const greeting = getGreeting();
   const patientSchedules = medicationSchedules.filter((schedule) => schedule.patientId === mockPatient.id);
   const activeSchedules = patientSchedules.filter((schedule) => schedule.status === "Aktif");
-  const lastScan = usePatientDashboardStore((state) => state.lastScan);
 
   const stats: SummaryCardItem[] = [
     {
