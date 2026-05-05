@@ -8,7 +8,6 @@ import LandingBottomNav from "@/components/landing/LandingBottomNav";
 import Stats from "@/components/landing/Stats";
 import PwaTopLogoBar from "@/components/ui/PwaTopLogoBar";
 import { LogIn } from "lucide-react";
-// import Marquee from "@/components/landing/Marquee";
 import Features from "@/components/landing/Features";
 import Workflow from "@/components/landing/Workflow";
 import SecurityLevels from "@/components/landing/SecurityLevels";
@@ -39,7 +38,6 @@ export default function HomePage() {
 
       <main id="top" className={`relative ${isStandalonePwa ? "pt-[calc(76px+env(safe-area-inset-top))] pb-28 lg:pt-0 lg:pb-0" : ""}`}>
         <Hero />
-        {/* <Marquee /> */}
         <Features />
         <Stats />
         <Workflow />
