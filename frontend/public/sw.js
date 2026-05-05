@@ -37,3 +37,35 @@ self.addEventListener("fetch", (event) => {
 
   event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
 });
+
+self.addEventListener("push", (event) => {
+  const payload = event.data?.json() ?? {};
+  const title = payload.title || "Jivara";
+  const options = {
+    body: payload.body || "Ada notifikasi baru dari Jivara.",
+    icon: "/icons/icon-192x192.png",
+    badge: "/icons/icon-192x192.png",
+    data: payload.data || {},
+    tag: payload.id || payload.type || "jivara-notification",
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const actionUrl = event.notification.data?.action_url || "/dashboard";
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      const existingClient = clients.find((client) => "focus" in client);
+      if (existingClient) {
+        existingClient.focus();
+        if ("navigate" in existingClient) return existingClient.navigate(actionUrl);
+        return undefined;
+      }
+
+      return self.clients.openWindow(actionUrl);
+    }),
+  );
+});

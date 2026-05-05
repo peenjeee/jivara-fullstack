@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
+import DashboardNotificationAlerts from "@/components/dashboard/DashboardNotificationAlerts";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import { PatientTable } from "@/components/patients";
@@ -19,6 +20,7 @@ export default function NurseDashboardPage() {
     <DashboardPageShell>
       <DashboardPageHeader id="overview" title="Ringkasan Pasien" />
       <SummaryCardGrid stats={dashboardStats} />
+      <DashboardNotificationAlerts />
 
       <motion.div
         className="mt-6"

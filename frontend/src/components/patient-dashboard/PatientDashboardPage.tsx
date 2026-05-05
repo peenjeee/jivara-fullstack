@@ -1,12 +1,15 @@
 "use client";
 
 import { BellRing, Pill, ShieldCheck } from "lucide-react";
+import DashboardNotificationAlerts from "@/components/dashboard/DashboardNotificationAlerts";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
+import { getNotificationPatientId } from "@/helpers/notifications";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import type { SummaryCardItem } from "@/components/ui/SummaryCard";
 import { patients } from "@/lib/mocks/patients";
 import { medicationSchedules } from "@/lib/mocks/schedules";
+import { useAuthStore } from "@/store/auth";
 import { usePatientDashboardStore } from "@/store/patientDashboard";
 import { useSplashScreen } from "@/components/ui/AppSplashScreen";
 import PatientAdherenceHeatmap from "./PatientAdherenceHeatmap";
@@ -14,6 +17,7 @@ import PatientAdherenceHeatmap from "./PatientAdherenceHeatmap";
 const mockPatient = patients[0];
 
 export default function PatientDashboardPage() {
+  const user = useAuthStore((state) => state.user);
   const lastScan = usePatientDashboardStore((state) => state.lastScan);
   const { isSplashFinished } = useSplashScreen();
 
@@ -53,6 +57,7 @@ export default function PatientDashboardPage() {
     <DashboardPageShell>
       <DashboardPageHeader title={`${greeting}, ${mockPatient.name}`} />
       <SummaryCardGrid stats={stats} />
+      <DashboardNotificationAlerts patientId={getNotificationPatientId(user)} />
 
       <div className="mt-6 space-y-6">
         <PatientAdherenceHeatmap adherence={mockPatient.adherence} />

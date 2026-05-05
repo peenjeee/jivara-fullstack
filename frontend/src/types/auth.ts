@@ -1,5 +1,6 @@
 export interface User {
   id: string;
+  patientId?: string | null;
   fullName: string;
   email: string;
   phone?: string | null;
