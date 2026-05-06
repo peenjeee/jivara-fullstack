@@ -16,6 +16,10 @@ export interface LoginDTO {
   password: string;
 }
 
+export interface CompletePasswordChangeDTO {
+  newPassword: string;
+}
+
 // ─── DTO Respons ───────────────────────────
 
 export interface TokenPayload {
@@ -41,6 +45,7 @@ export interface UserProfile {
   gender?: string | null;
   address?: string | null;
   isActive?: boolean;
+  mustChangePassword?: boolean | null;
   createdAt?: Date | null;
 }
 

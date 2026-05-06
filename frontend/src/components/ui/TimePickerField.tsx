@@ -35,6 +35,7 @@ export default function TimePickerField({ id, name, defaultValue = "08:00", requ
       <input id={id} name={name} type="hidden" value={value} required={required} />
       <button
         type="button"
+        id={`${id}-button`}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
         onClick={() => setIsOpen((current) => !current)}

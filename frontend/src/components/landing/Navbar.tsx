@@ -43,7 +43,6 @@ export default function Navbar() {
               alt="Jiva - maskot Jivara"
               width={100}
               height={100}
-              priority
               sizes="100px"
               className="w-full h-auto drop-shadow-2xl"
             />

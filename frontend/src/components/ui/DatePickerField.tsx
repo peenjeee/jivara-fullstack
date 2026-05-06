@@ -26,6 +26,7 @@ export default function DatePickerField({ id, name, value, defaultValue = "", re
   const selectedDate = parseDateValue(selectedValue);
   const [visibleMonth, setVisibleMonth] = useState(() => selectedDate ?? new Date());
   const calendarDays = useMemo(() => getCalendarDays(visibleMonth), [visibleMonth]);
+  const inputName = name ?? id;
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
@@ -48,9 +49,10 @@ export default function DatePickerField({ id, name, value, defaultValue = "", re
 
   return (
     <div ref={wrapperRef} className="relative min-w-0 w-full">
-      {name && <input id={id} name={name} type="hidden" value={selectedValue} required={required} />}
+      <input id={id} name={inputName} type="hidden" value={selectedValue} required={required} />
       <button
         type="button"
+        id={`${id}-button`}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
         onClick={() => setIsOpen((current) => !current)}

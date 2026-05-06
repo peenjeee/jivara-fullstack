@@ -36,18 +36,24 @@ export function isSameDate(a: Date, b: Date) {
 }
 
 export function getSchedulesForDate(schedules: readonly MedicationScheduleRecord[], date: Date) {
+  return getSchedulesForDateWithLimit(schedules, date, new Date());
+}
+
+function getSchedulesForDateWithLimit(schedules: readonly MedicationScheduleRecord[], date: Date, today: Date) {
   const dateKey = getDateKey(date);
+  const ongoingDisplayLimit = getDateKey(new Date(today.getFullYear(), today.getMonth() + 1, today.getDate()));
 
   return schedules.filter((schedule) => {
     if (schedule.status !== "Aktif") return false;
     if (schedule.startDate > dateKey) return false;
     if (schedule.endDate && schedule.endDate < dateKey) return false;
+    if (!schedule.endDate && dateKey > ongoingDisplayLimit) return false;
     return true;
   });
 }
 
 export function getDayStatus(schedules: readonly MedicationScheduleRecord[], date: Date, confirmedScheduleDates: Readonly<Record<string, readonly string[]>>, today: Date): PatientScheduleDayStatus {
-  const schedulesForDate = getSchedulesForDate(schedules, date);
+  const schedulesForDate = getSchedulesForDateWithLimit(schedules, date, today);
   if (schedulesForDate.length === 0) return "empty";
 
   const dateKey = getDateKey(date);

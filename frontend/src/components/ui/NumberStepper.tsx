@@ -37,6 +37,7 @@ export default function NumberStepper({ id, name, value, defaultValue = "", min,
     <div className="flex min-h-12 min-w-0 w-full max-w-full overflow-hidden rounded-2xl bg-surface text-sm font-semibold text-text-main shadow-[0_2px_8px_rgba(15,23,42,0.08)] transition-shadow focus-within:shadow-[0_0_0_2px_rgba(20,114,69,0.18),0_2px_8px_rgba(15,23,42,0.08)]">
       <input id={id} name={name ?? id} type="hidden" value={currentValue} required={required} />
       <input
+        id={`${id}-display`}
         type="text"
         inputMode="numeric"
         aria-label={ariaLabel}

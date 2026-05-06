@@ -29,6 +29,7 @@ export default function SelectField<TValue extends string>({ id, name, value, de
   const [internalValue, setInternalValue] = useState<TValue | "">((defaultValue ?? "") as TValue | "");
   const selectedValue = isControlled ? value : internalValue;
   const selectedOption = options.find((option) => option.value === selectedValue);
+  const inputName = name ?? id;
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
@@ -47,9 +48,10 @@ export default function SelectField<TValue extends string>({ id, name, value, de
 
   return (
     <div ref={wrapperRef} className="relative min-w-0 w-full">
-      {name && <input id={id} name={name} type="hidden" value={selectedValue ?? ""} required={required} />}
+      <input id={id} name={inputName} type="hidden" value={selectedValue ?? ""} required={required} />
       <button
         type="button"
+        id={`${id}-button`}
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={isOpen}

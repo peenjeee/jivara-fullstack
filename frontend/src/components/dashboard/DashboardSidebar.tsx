@@ -26,7 +26,6 @@ export default function DashboardSidebar({ activeItem, role, onLogout, onNavigat
             alt="Jivara"
             width={210}
             height={68}
-            priority
             sizes="190px"
             className="h-auto w-[190px]"
           />
