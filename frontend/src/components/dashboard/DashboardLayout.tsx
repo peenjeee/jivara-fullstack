@@ -37,6 +37,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         // Logout backend gagal, lanjutkan logout lokal.
       }
 
+      // Bersihkan state lokal dulu sebelum Clear-Site-Data
+      logout();
+      Cookies.remove("jivara-token");
+      window.localStorage.removeItem("jivara-auth-storage");
+
       // Panggil API route lokal untuk mengirim Clear-Site-Data header ke browser.
       // Header ini menginstruksikan browser membersihkan cache & storage saat logout.
       try {
@@ -45,9 +50,25 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         // Jika gagal, lanjutkan logout lokal.
       }
 
-      logout();
-      Cookies.remove("jivara-token");
-      window.localStorage.removeItem("jivara-auth-storage");
+      // Re-register SW dan preload /login agar halaman bisa dirender.
+      if (isStandalonePwa && "serviceWorker" in navigator) {
+        try {
+          const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+          // Tunggu SW aktif
+          await new Promise<void>((resolve) => {
+            const sw = reg.installing || reg.waiting || reg.active;
+            if (sw?.state === "activated") { resolve(); return; }
+            sw?.addEventListener("statechange", function handler() {
+              if (sw.state === "activated") { sw.removeEventListener("statechange", handler); resolve(); }
+            });
+            // Timeout fallback agar tidak menggantung selamanya
+            window.setTimeout(resolve, 3000);
+          });
+        } catch {
+          // SW gagal re-register, lanjutkan redirect biasa
+        }
+      }
+
       router.replace("/login");
       window.setTimeout(() => showToast("Berhasil keluar dari akun.", "success"), 120);
     }

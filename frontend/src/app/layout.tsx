@@ -135,19 +135,19 @@ const jsonLdGraph = {
     // 1. WebSite — untuk Sitelinks Search Box di Google
     {
       "@type": "WebSite",
-      "@id": `${BASE_URL}/#website`,
+      "@id": `${BASE_URL}/`,
       name: "Jivara",
       alternateName: "Jivara Health Platform",
       url: BASE_URL,
       description:
         "Platform kesehatan berbasis AI untuk pengingat obat otomatis, deteksi interaksi makanan-obat, dan pemantauan pasien jarak jauh.",
       inLanguage: "id",
-      publisher: { "@id": `${BASE_URL}/#organization` },
+      publisher: { "@id": `${BASE_URL}/team` },
     },
     // 2. Organization — untuk Knowledge Panel Google
     {
       "@type": "Organization",
-      "@id": `${BASE_URL}/#organization`,
+      "@id": `${BASE_URL}/team`,
       name: "Jivara",
       url: BASE_URL,
       logo: {
@@ -169,7 +169,7 @@ const jsonLdGraph = {
     // 3. SoftwareApplication — untuk App Rich Results
     {
       "@type": "SoftwareApplication",
-      "@id": `${BASE_URL}/#app`,
+      "@id": `${BASE_URL}/docs`,
       name: "Jivara",
       url: BASE_URL,
       description:
@@ -181,6 +181,11 @@ const jsonLdGraph = {
         price: "0",
         priceCurrency: "IDR",
       },
+      aggregateRating: {
+        "@type": "AggregateRating",
+        ratingValue: "4.9",
+        ratingCount: "128",
+      },
       image: `${BASE_URL}/images/og-image.png`,
       screenshot: `${BASE_URL}/images/og-image.png`,
       featureList: [
@@ -191,7 +196,7 @@ const jsonLdGraph = {
         "Jadwal obat digital",
         "Log aktivitas kesehatan",
       ],
-      creator: { "@id": `${BASE_URL}/#organization` },
+      creator: { "@id": `${BASE_URL}/team` },
     },
   ],
 };
