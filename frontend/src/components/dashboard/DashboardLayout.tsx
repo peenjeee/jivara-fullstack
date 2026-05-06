@@ -37,6 +37,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         // Logout backend gagal, lanjutkan logout lokal.
       }
 
+      // Panggil API route lokal untuk mengirim Clear-Site-Data header ke browser.
+      // Header ini menginstruksikan browser membersihkan cache & storage saat logout.
+      try {
+        await fetch("/api/auth/logout", { method: "POST" });
+      } catch {
+        // Jika gagal, lanjutkan logout lokal.
+      }
+
       logout();
       Cookies.remove("jivara-token");
       window.localStorage.removeItem("jivara-auth-storage");

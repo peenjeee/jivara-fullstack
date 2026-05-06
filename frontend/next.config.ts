@@ -35,10 +35,6 @@ const securityHeaders = [
     value: "https://www.jivara.web.id",
   },
   {
-    key: "Clear-Site-Data",
-    value: '"cache"',
-  },
-  {
     key: "X-Permitted-Cross-Domain-Policies",
     value: "none",
   },
