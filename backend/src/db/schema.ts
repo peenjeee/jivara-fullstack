@@ -28,7 +28,7 @@ export const users = pgTable("users", {
   gender: varchar("gender", { length: 10 }),
   address: text("address"),
   isActive: boolean("is_active").default(true),
-  mustChangePassword: boolean("must_change_password").default(true),
+  mustChangePassword: boolean("must_change_password").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({

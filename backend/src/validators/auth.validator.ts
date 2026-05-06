@@ -69,3 +69,7 @@ export const validateLogin = validate([
 export const validateRefreshToken = validate([
   { field: "refresh_token", label: "Token refresh", required: true },
 ]);
+
+export const validateCompletePasswordChange = validate([
+  { field: "newPassword", label: "Kata sandi baru", required: true, minLength: 8 },
+]);

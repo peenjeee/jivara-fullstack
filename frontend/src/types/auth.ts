@@ -7,6 +7,7 @@ export interface User {
   age: number;
   gender?: string | null;
   address?: string | null;
+  mustChangePassword?: boolean | null;
 }
 
 /**
@@ -19,6 +20,7 @@ export interface AuthState {
   isAuthenticated: boolean;
   hasHydrated: boolean;
   setAuth: (user: User, token: string, refreshToken: string) => void;
+  updateUser: (user: Partial<User>) => void;
   setHasHydrated: (hasHydrated: boolean) => void;
   updateToken: (token: string) => void;
   logout: () => void;

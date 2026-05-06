@@ -59,6 +59,28 @@ export const login = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const completePasswordChange = async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await authService.completePasswordChange(req.user!.id, req.body);
+
+    res.status(200).json({
+      status: "berhasil",
+      data: { user },
+      message: "Kata sandi berhasil diperbarui",
+    });
+  } catch (error: unknown) {
+    const err = error as { status?: number; message?: string; code?: string };
+    const status = err.status || 500;
+    const isInternalError = status === 500;
+
+    res.status(status).json({
+      status: "gagal",
+      message: isInternalError ? "Terjadi kesalahan pada server" : (err.message || "Terjadi kesalahan"),
+      ...(err.code && { error_code: err.code }),
+    });
+  }
+};
+
 /**
  * POST /api/auth/refresh
  * Perbarui access token menggunakan refresh token yang valid.
