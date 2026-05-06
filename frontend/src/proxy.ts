@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { updateSession } from './lib/supabase/middleware';
 
-function createContentSecurityPolicy(nonce: string) {
+function createContentSecurityPolicy() {
   const isDev = process.env.NODE_ENV === 'development';
   const directives = [
     "default-src 'self'",
@@ -10,8 +10,10 @@ function createContentSecurityPolicy(nonce: string) {
     "form-action 'self'",
     "frame-ancestors 'none'",
     "object-src 'none'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ''}`,
-    `style-src 'self' 'nonce-${nonce}'${isDev ? " 'unsafe-inline'" : ''}`,
+    `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
+    "script-src-elem 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline'",
+    "style-src-attr 'unsafe-inline'",
     "img-src 'self' data: blob: https://images.unsplash.com",
     "font-src 'self' data:",
     "connect-src 'self' https://*.supabase.co https://*.supabase.in https://api.jivara.web.id https://jivara-production.up.railway.app http://localhost:3001 ws://localhost:3000 ws://127.0.0.1:3000",
@@ -32,10 +34,8 @@ const authRoutes = ['/login', '/register'];
 export async function proxy(request: NextRequest) {
   await updateSession(request);
 
-  const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
-  const contentSecurityPolicy = createContentSecurityPolicy(nonce);
+  const contentSecurityPolicy = createContentSecurityPolicy();
   const requestHeaders = new Headers(request.headers);
-  requestHeaders.set('x-nonce', nonce);
   requestHeaders.set('Content-Security-Policy', contentSecurityPolicy);
 
   const token = request.cookies.get('jivara-token')?.value;
