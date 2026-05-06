@@ -40,6 +40,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       // Bersihkan state lokal
       logout();
       Cookies.remove("jivara-token");
+      window.localStorage.removeItem("jivara-auth-storage");
 
       // 1. Lakukan navigasi client-side DULU agar transisi mulus tanpa layar putih
       router.replace("/login");
