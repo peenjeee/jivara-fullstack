@@ -7,6 +7,7 @@ import crypto from "crypto";
 import {
   RegisterDTO,
   LoginDTO,
+  CompletePasswordChangeDTO,
   TokenPayload,
   AUTH_CONSTANTS,
 } from "../types/auth.types";
@@ -63,6 +64,7 @@ export const registerUser = async (dto: RegisterDTO) => {
       gender: dto.gender || null,
       address: dto.address || null,
       age: dto.age || 0,
+      mustChangePassword: false,
     })
     .returning({
       id: users.id,
@@ -123,8 +125,48 @@ export const loginUser = async (dto: LoginDTO) => {
       email: foundUser.email,
       phone: foundUser.phone,
       role: foundUser.role,
+      age: foundUser.age,
+      gender: foundUser.gender,
+      address: foundUser.address,
+      mustChangePassword: foundUser.mustChangePassword,
     },
   };
+};
+
+export const completePasswordChange = async (userId: string, dto: CompletePasswordChangeDTO) => {
+  const user = await db
+    .select({ id: users.id, mustChangePassword: users.mustChangePassword })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  if (user.length === 0) {
+    throw { status: 404, message: "Pengguna tidak ditemukan", code: "NOT_FOUND" };
+  }
+
+  if (!user[0].mustChangePassword) {
+    throw { status: 400, message: "Akun ini tidak wajib mengganti kata sandi", code: "PASSWORD_CHANGE_NOT_REQUIRED" };
+  }
+
+  const hashedPassword = await bcrypt.hash(dto.newPassword, AUTH_CONSTANTS.BCRYPT_SALT_ROUNDS);
+
+  const [updatedUser] = await db
+    .update(users)
+    .set({ password: hashedPassword, mustChangePassword: false, updatedAt: new Date() })
+    .where(eq(users.id, userId))
+    .returning({
+      id: users.id,
+      fullName: users.fullName,
+      email: users.email,
+      phone: users.phone,
+      role: users.role,
+      age: users.age,
+      gender: users.gender,
+      address: users.address,
+      mustChangePassword: users.mustChangePassword,
+    });
+
+  return updatedUser;
 };
 
 /**
@@ -187,6 +229,7 @@ export const getUserProfile = async (userId: string) => {
       gender: users.gender,
       address: users.address,
       isActive: users.isActive,
+      mustChangePassword: users.mustChangePassword,
       createdAt: users.createdAt,
     })
     .from(users)
@@ -199,4 +242,3 @@ export const getUserProfile = async (userId: string) => {
 
   return user[0];
 };
-

@@ -5,6 +5,7 @@ import {
   validateRegister,
   validateLogin,
   validateRefreshToken,
+  validateCompletePasswordChange,
 } from "../validators/auth.validator";
 
 const router = Router();
@@ -89,6 +90,13 @@ router.post("/register", validateRegister, authController.register);
  *         description: Kredensial tidak valid
  */
 router.post("/login", validateLogin, authController.login);
+
+router.post(
+  "/complete-password-change",
+  authenticateToken,
+  validateCompletePasswordChange,
+  authController.completePasswordChange
+);
 
 /**
  * @swagger
