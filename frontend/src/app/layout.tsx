@@ -126,8 +126,10 @@ export const metadata: Metadata = {
     startupImage: "/images/logo/splash.png",
   },
   manifest: "/manifest.json",
+  verification: {
+    google: "cA4OyhUu359dNPpjiHWaSN2-ELXIsjC1qdBmu-dDsKM",
+  },
 };
-
 // JSON-LD Structured Data — menggunakan tipe yang didukung Google Rich Results
 const jsonLdGraph = {
   "@context": "https://schema.org",
