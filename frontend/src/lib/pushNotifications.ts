@@ -1,0 +1,81 @@
+import api from "@/lib/axios";
+
+interface PatientResponse {
+  id: string;
+}
+
+interface PublicKeyResponse {
+  publicKey: string;
+}
+
+const urlBase64ToUint8Array = (base64String: string) => {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = `${base64String}${padding}`.replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+
+  for (let index = 0; index < rawData.length; index += 1) {
+    outputArray[index] = rawData.charCodeAt(index);
+  }
+
+  return outputArray;
+};
+
+const getPatientId = async () => {
+  const response = await api.get<{ data: PatientResponse[] }>("/patients", { params: { limit: 1 } });
+  const patient = response.data.data[0];
+
+  if (!patient?.id) {
+    throw new Error("Data pasien tidak ditemukan untuk mengaktifkan notifikasi.");
+  }
+
+  return patient.id;
+};
+
+const getServiceWorkerRegistration = async () => {
+  if (!("serviceWorker" in navigator)) {
+    throw new Error("Browser belum mendukung Service Worker.");
+  }
+
+  const existingRegistration = await navigator.serviceWorker.getRegistration("/");
+  return existingRegistration ?? navigator.serviceWorker.register("/sw.js", { scope: "/" });
+};
+
+export const enableMedicationPushNotifications = async () => {
+  if (!("Notification" in window) || !("PushManager" in window)) {
+    throw new Error("Browser belum mendukung push notification.");
+  }
+
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") {
+    throw new Error("Izin notifikasi belum diberikan.");
+  }
+
+  const [patientId, keyResponse, registration] = await Promise.all([
+    getPatientId(),
+    api.get<{ data: PublicKeyResponse }>("/notifications/public-key"),
+    getServiceWorkerRegistration(),
+  ]);
+
+  const existingSubscription = await registration.pushManager.getSubscription();
+  const subscription = existingSubscription ?? await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(keyResponse.data.data.publicKey),
+  });
+
+  await api.post("/notifications/subscribe", {
+    patient_id: patientId,
+    subscription: subscription.toJSON(),
+  });
+
+  return patientId;
+};
+
+export const setMedicationPushPreference = async (enabled: boolean) => {
+  const patientId = await getPatientId();
+
+  await api.patch("/notifications/preferences", {
+    patient_id: patientId,
+    enabled,
+  });
+};
