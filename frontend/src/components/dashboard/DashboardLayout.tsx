@@ -37,21 +37,19 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         // Logout backend gagal, lanjutkan logout lokal.
       }
 
-      // Bersihkan state lokal dulu sebelum Clear-Site-Data
+      // Bersihkan state lokal
       logout();
       Cookies.remove("jivara-token");
       window.localStorage.removeItem("jivara-auth-storage");
 
-      // Panggil API route lokal untuk mengirim Clear-Site-Data header ke browser.
-      // Header ini menginstruksikan browser membersihkan cache & storage saat logout.
-      try {
-        await fetch("/api/auth/logout", { method: "POST" });
-      } catch {
-        // Jika gagal, lanjutkan logout lokal.
-      }
+      // 1. Lakukan navigasi client-side DULU agar transisi mulus tanpa layar putih
+      router.replace("/login");
 
-      // Gunakan hard redirect agar Next.js tidak crash karena cache/storage-nya baru saja dihapus
-      window.location.href = "/login";
+      // 2. SETELAH pindah halaman (atau sedang transisi), eksekusi Clear-Site-Data di background
+      window.setTimeout(() => {
+        fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+        showToast("Berhasil keluar dari akun.", "success");
+      }, 800);
     }
   };
 
