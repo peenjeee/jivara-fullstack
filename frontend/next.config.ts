@@ -34,6 +34,18 @@ const securityHeaders = [
     key: "Access-Control-Allow-Origin",
     value: "https://www.jivara.web.id",
   },
+  {
+    key: "Clear-Site-Data",
+    value: '"cache"',
+  },
+  {
+    key: "X-Permitted-Cross-Domain-Policies",
+    value: "none",
+  },
+  {
+    key: "Cache-Control",
+    value: "private, no-cache, no-store, max-age=0, must-revalidate",
+  },
 ];
 
 const nextConfig: NextConfig = {
