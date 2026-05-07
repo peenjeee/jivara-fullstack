@@ -15,6 +15,10 @@ const securityHeaders = [
     value: "nosniff",
   },
   {
+    key: "X-Permitted-Cross-Domain-Policies",
+    value: "none",
+  },
+  {
     key: "Referrer-Policy",
     value: "strict-origin-when-cross-origin",
   },
@@ -37,10 +41,6 @@ const securityHeaders = [
   {
     key: "Access-Control-Allow-Origin",
     value: "https://www.jivara.web.id",
-  },
-  {
-    key: "X-Permitted-Cross-Domain-Policies",
-    value: "none",
   },
   {
     key: "Cache-Control",

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import * as medicationLogController from "../controllers/medication-log.controller";
 import { authenticateToken, authorizeRoles } from "../middleware/auth.middleware";
-import { validateMedicationLogCreate } from "../validators/medication-log.validator";
+import { validateMedicationLogCreate, validateMedicationSnooze } from "../validators/medication-log.validator";
 
 const router = Router();
 
@@ -42,6 +42,7 @@ router.use(authenticateToken);
  *         description: Riwayat intake berhasil diambil
  */
 router.get("/", authorizeRoles("patient", "nurse", "admin"), medicationLogController.listMedicationLogs);
+router.post("/snooze", authorizeRoles("patient"), validateMedicationSnooze, medicationLogController.snoozeMedicationReminder);
 
 /**
  * @swagger

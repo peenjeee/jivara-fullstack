@@ -34,3 +34,12 @@ export const listMedicationLogs = async (req: AuthRequest, res: Response) => {
     sendError(res, error);
   }
 };
+
+export const snoozeMedicationReminder = async (req: AuthRequest, res: Response) => {
+  try {
+    const data = await medicationLogService.snoozeMedicationReminder(req.body, req.user);
+    res.status(201).json({ status: "berhasil", data, message: "Reminder berhasil ditunda" });
+  } catch (error) {
+    sendError(res, error);
+  }
+};
