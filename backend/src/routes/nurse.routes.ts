@@ -1,0 +1,206 @@
+import { Router } from "express";
+import * as nurseController from "../controllers/nurse.controller";
+import { authenticateToken, authorizeRoles } from "../middleware/auth.middleware";
+import { validateNurseCreate, validateNurseId, validateNurseUpdate } from "../validators/nurse.validator";
+
+const router = Router();
+
+router.use(authenticateToken);
+
+/**
+ * @swagger
+ * tags:
+ *   name: Nurses
+ *   description: Manajemen akun perawat untuk admin
+ */
+
+/**
+ * @swagger
+ * /api/nurses:
+ *   get:
+ *     summary: Ambil daftar perawat
+ *     tags: [Nurses]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [active, inactive]
+ *       - in: query
+ *         name: department
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *           maximum: 100
+ *     responses:
+ *       200:
+ *         description: Daftar perawat berhasil diambil
+ *       403:
+ *         description: Hanya admin yang dapat mengakses endpoint ini
+ */
+router.get("/", authorizeRoles("admin"), nurseController.listNurses);
+
+/**
+ * @swagger
+ * /api/nurses/{id}:
+ *   get:
+ *     summary: Ambil detail perawat
+ *     tags: [Nurses]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Detail perawat berhasil diambil
+ *       404:
+ *         description: Perawat tidak ditemukan
+ */
+router.get("/:id", authorizeRoles("admin"), validateNurseId, nurseController.getNurse);
+
+/**
+ * @swagger
+ * /api/nurses:
+ *   post:
+ *     summary: Buat akun perawat
+ *     tags: [Nurses]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - fullName
+ *               - email
+ *               - password
+ *             properties:
+ *               fullName:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               password:
+ *                 type: string
+ *                 minLength: 8
+ *               phone:
+ *                 type: string
+ *               age:
+ *                 type: integer
+ *               gender:
+ *                 type: string
+ *                 enum: [male, female]
+ *               address:
+ *                 type: string
+ *               employeeId:
+ *                 type: string
+ *               department:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Akun perawat berhasil dibuat
+ *       400:
+ *         description: Payload tidak valid
+ *       409:
+ *         description: Email atau nomor telepon sudah terdaftar
+ */
+router.post("/", authorizeRoles("admin"), validateNurseCreate, nurseController.createNurse);
+
+/**
+ * @swagger
+ * /api/nurses/{id}:
+ *   put:
+ *     summary: Perbarui data perawat
+ *     tags: [Nurses]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               fullName:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               phone:
+ *                 type: string
+ *               age:
+ *                 type: integer
+ *               gender:
+ *                 type: string
+ *                 enum: [male, female]
+ *               address:
+ *                 type: string
+ *               employeeId:
+ *                 type: string
+ *               department:
+ *                 type: string
+ *               isActive:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Data perawat berhasil diperbarui
+ *       400:
+ *         description: Payload tidak valid
+ *       404:
+ *         description: Perawat tidak ditemukan
+ */
+router.put("/:id", authorizeRoles("admin"), validateNurseId, validateNurseUpdate, nurseController.updateNurse);
+
+/**
+ * @swagger
+ * /api/nurses/{id}:
+ *   delete:
+ *     summary: Nonaktifkan perawat
+ *     tags: [Nurses]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Perawat berhasil dinonaktifkan
+ *       404:
+ *         description: Perawat tidak ditemukan
+ */
+router.delete("/:id", authorizeRoles("admin"), validateNurseId, nurseController.deactivateNurse);
+
+export default router;

@@ -2,6 +2,9 @@ import bcrypt from "bcryptjs";
 import { and, count, desc, eq, ilike, or } from "drizzle-orm";
 import { db } from "../db";
 import {
+  foodScans,
+  interactionResults,
+  medicationSchedules,
   nurses,
   patientNurseAssignments,
   patients,
@@ -9,11 +12,13 @@ import {
 } from "../db/schema";
 import { AUTH_CONSTANTS } from "../types/auth.types";
 import { AccessUser, assertCanAccessPatient, scopedPatientFilter } from "./access-control.service";
+import { writeAuditLog } from "./audit-log.service";
 import {
   PatientCreateDTO,
   PatientListQuery,
   PatientUpdateDTO,
 } from "../types/patient.types";
+import { getAdherenceStats } from "./adherence.service";
 
 const parsePagination = (query: PatientListQuery) => {
   const page = Math.max(Number(query.page || 1), 1);
@@ -117,18 +122,64 @@ export const getPatientById = async (patientId: string, user?: AccessUser) => {
     throw { status: 404, message: "Pasien tidak ditemukan", code: "PATIENT_NOT_FOUND" };
   }
 
-  const assignment = await db
-    .select({ nurseId: patientNurseAssignments.nurseId })
-    .from(patientNurseAssignments)
-    .where(and(
-      eq(patientNurseAssignments.patientId, patientId),
-      eq(patientNurseAssignments.isActive, true),
-    ))
-    .limit(1);
+  const [assignment, activeMedications, foodScanCount, interactionWarningCount, adherence7d, adherence30d] = await Promise.all([
+    db
+      .select({
+        nurseId: patientNurseAssignments.nurseId,
+        nurseName: users.fullName,
+      })
+      .from(patientNurseAssignments)
+      .innerJoin(nurses, eq(patientNurseAssignments.nurseId, nurses.id))
+      .innerJoin(users, eq(nurses.userId, users.id))
+      .where(and(
+        eq(patientNurseAssignments.patientId, patientId),
+        eq(patientNurseAssignments.isActive, true),
+      ))
+      .limit(1),
+    db
+      .select({
+        id: medicationSchedules.id,
+        prescriptionId: medicationSchedules.prescriptionId,
+        drugName: medicationSchedules.drugName,
+        dosage: medicationSchedules.dosage,
+        frequency: medicationSchedules.frequency,
+        scheduledTimes: medicationSchedules.scheduledTimes,
+        instructions: medicationSchedules.instructions,
+        createdAt: medicationSchedules.createdAt,
+      })
+      .from(medicationSchedules)
+      .where(and(
+        eq(medicationSchedules.patientId, patientId),
+        eq(medicationSchedules.isActive, true),
+      ))
+      .orderBy(desc(medicationSchedules.createdAt)),
+    db
+      .select({ total: count() })
+      .from(foodScans)
+      .where(eq(foodScans.patientId, patientId)),
+    db
+      .select({ total: count() })
+      .from(interactionResults)
+      .innerJoin(foodScans, eq(interactionResults.scanId, foodScans.id))
+      .where(eq(foodScans.patientId, patientId)),
+    getAdherenceStats({ patientId, period: "7d" }),
+    getAdherenceStats({ patientId, period: "30d" }),
+  ]);
+
+  const assignedNurse = assignment[0]
+    ? { id: assignment[0].nurseId, name: assignment[0].nurseName }
+    : null;
 
   return {
     ...row[0],
-    assignedNurseId: assignment[0]?.nurseId || null,
+    assignedNurseId: assignedNurse?.id || null,
+    assignedNurse,
+    activeMedications,
+    activeMedicationsCount: activeMedications.length,
+    adherenceRate7d: adherence7d.adherenceRate,
+    adherenceRate30d: adherence30d.adherenceRate,
+    totalFoodScans: foodScanCount[0]?.total || 0,
+    totalInteractionWarnings: interactionWarningCount[0]?.total || 0,
   };
 };
 
@@ -192,6 +243,16 @@ export const createPatient = async (dto: PatientCreateDTO, createdBy?: string) =
       user: newUser,
       assignedNurseId: dto.assignedNurseId || null,
     };
+  }).then(async (patient) => {
+    await writeAuditLog({
+      userId: createdBy || null,
+      action: "patient.created",
+      resourceType: "patient",
+      resourceId: patient.id,
+      changes: { after: { id: patient.id, userId: patient.userId, assignedNurseId: patient.assignedNurseId } },
+    });
+
+    return patient;
   });
 };
 
@@ -224,6 +285,14 @@ export const updatePatient = async (patientId: string, dto: PatientUpdateDTO, us
     }
   });
 
+  await writeAuditLog({
+    userId: user?.id || null,
+    action: "patient.updated",
+    resourceType: "patient",
+    resourceId: patientId,
+    changes: { before: existing, requested: dto },
+  });
+
   return getPatientById(patientId);
 };
 
@@ -251,6 +320,14 @@ export const assignPatient = async (patientId: string, nurseId: string, assigned
     });
   });
 
+  await writeAuditLog({
+    userId: assignedBy || null,
+    action: "patient.assigned",
+    resourceType: "patient",
+    resourceId: patientId,
+    changes: { nurseId },
+  });
+
   return getPatientById(patientId);
 };
 
@@ -260,5 +337,13 @@ export const deactivatePatient = async (patientId: string) => {
   await db.transaction(async (tx) => {
     await tx.update(patients).set({ isActive: false }).where(eq(patients.id, patientId));
     await tx.update(users).set({ isActive: false, updatedAt: new Date() }).where(eq(users.id, existing.userId));
+  });
+
+  await writeAuditLog({
+    userId: null,
+    action: "patient.deactivated",
+    resourceType: "patient",
+    resourceId: patientId,
+    changes: { isActive: { from: existing.isActive, to: false } },
   });
 };

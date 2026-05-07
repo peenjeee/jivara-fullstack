@@ -1,8 +1,12 @@
-import { and, eq, gte, inArray } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray } from "drizzle-orm";
 import { db } from "../db";
 import {
+  foodScans,
+  interactionResults,
   medicationLogs,
   medicationSchedules,
+  nurses,
+  patientNurseAssignments,
   patients,
   users,
 } from "../db/schema";
@@ -200,5 +204,118 @@ export const getAdherenceStats = async (query: AdherenceQuery, user?: AccessUser
     dailyBreakdown,
     trend,
     reminderResponseRate,
+  };
+};
+
+export const getAggregateAdherenceStats = async (query: AdherenceQuery = {}) => {
+  const period = query.period || "30d";
+  const days = getPeriodDays(period);
+  const startDate = getStartDate(days);
+
+  const [activePatientRows, schedules, logs, foodScanRows, interactionRows, nurseRows] = await Promise.all([
+    db
+      .select({ total: count() })
+      .from(patients)
+      .where(eq(patients.isActive, true)),
+    db
+      .select({
+        id: medicationSchedules.id,
+        patientId: medicationSchedules.patientId,
+        createdAt: medicationSchedules.createdAt,
+        scheduledTimes: medicationSchedules.scheduledTimes,
+      })
+      .from(medicationSchedules)
+      .where(eq(medicationSchedules.isActive, true)),
+    db
+      .select({
+        scheduleId: medicationLogs.scheduleId,
+        patientId: medicationLogs.patientId,
+        status: medicationLogs.status,
+        scheduledTime: medicationLogs.scheduledTime,
+      })
+      .from(medicationLogs)
+      .where(gte(medicationLogs.scheduledTime, startDate)),
+    db
+      .select({ total: count() })
+      .from(foodScans)
+      .where(gte(foodScans.createdAt, startDate)),
+    db
+      .select({ total: count() })
+      .from(interactionResults)
+      .where(gte(interactionResults.createdAt, startDate)),
+    db
+      .select({
+        nurseId: nurses.id,
+        nurseName: users.fullName,
+        patientId: patientNurseAssignments.patientId,
+      })
+      .from(nurses)
+      .innerJoin(users, eq(nurses.userId, users.id))
+      .leftJoin(patientNurseAssignments, and(
+        eq(patientNurseAssignments.nurseId, nurses.id),
+        eq(patientNurseAssignments.isActive, true),
+      ))
+      .where(eq(nurses.isActive, true))
+      .orderBy(desc(nurses.createdAt)),
+  ]);
+
+  const occurrences = buildScheduledOccurrences(days, schedules, logs);
+  const totalScheduled = occurrences.length;
+  const totalConfirmed = occurrences.filter((occurrence) => occurrence.status === "confirmed").length;
+  const totalMissed = occurrences.filter((occurrence) => occurrence.status === "missed").length;
+  const totalSnoozed = occurrences.filter((occurrence) => occurrence.status === "snoozed").length;
+  const averageAdherenceRate = totalScheduled > 0 ? Number(((totalConfirmed / totalScheduled) * 100).toFixed(1)) : 0;
+  const reminderResponseRate = totalScheduled > 0 ? Number((((totalConfirmed + totalSnoozed) / totalScheduled) * 100).toFixed(1)) : 0;
+
+  const schedulesByPatient = new Map<string, typeof schedules>();
+  const logsByPatient = new Map<string, typeof logs>();
+
+  for (const schedule of schedules) {
+    const existing = schedulesByPatient.get(schedule.patientId) || [];
+    existing.push(schedule);
+    schedulesByPatient.set(schedule.patientId, existing);
+  }
+
+  for (const log of logs) {
+    const existing = logsByPatient.get(log.patientId) || [];
+    existing.push(log);
+    logsByPatient.set(log.patientId, existing);
+  }
+
+  const nurseMap = new Map<string, { nurseId: string; nurseName: string; patientIds: Set<string> }>();
+  for (const row of nurseRows) {
+    const nurse = nurseMap.get(row.nurseId) || { nurseId: row.nurseId, nurseName: row.nurseName, patientIds: new Set<string>() };
+    if (row.patientId) nurse.patientIds.add(row.patientId);
+    nurseMap.set(row.nurseId, nurse);
+  }
+
+  const nurseMetrics = Array.from(nurseMap.values()).map((nurse) => {
+    const patientIds = Array.from(nurse.patientIds);
+    const nurseSchedules = patientIds.flatMap((patientId) => schedulesByPatient.get(patientId) || []);
+    const nurseLogs = patientIds.flatMap((patientId) => logsByPatient.get(patientId) || []);
+    const nurseOccurrences = buildScheduledOccurrences(days, nurseSchedules, nurseLogs);
+    const nurseScheduled = nurseOccurrences.length;
+    const nurseConfirmed = nurseOccurrences.filter((occurrence) => occurrence.status === "confirmed").length;
+
+    return {
+      nurseId: nurse.nurseId,
+      nurseName: nurse.nurseName,
+      assignedPatients: patientIds.length,
+      averagePatientAdherence: nurseScheduled > 0 ? Number(((nurseConfirmed / nurseScheduled) * 100).toFixed(1)) : 0,
+    };
+  });
+
+  return {
+    period,
+    totalActivePatients: activePatientRows[0]?.total || 0,
+    averageAdherenceRate,
+    totalScheduled,
+    totalConfirmed,
+    totalMissed,
+    totalSnoozed,
+    reminderResponseRate,
+    totalFoodScans: foodScanRows[0]?.total || 0,
+    totalInteractionWarnings: interactionRows[0]?.total || 0,
+    nurseMetrics,
   };
 };

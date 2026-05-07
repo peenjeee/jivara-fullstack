@@ -4,7 +4,7 @@ import * as authService from "../services/auth.service";
 
 /**
  * POST /api/auth/register
- * Mendaftarkan akun perawat baru (registrasi publik).
+ * Mendaftarkan akun perawat baru oleh admin.
  */
 export const register = async (req: AuthRequest, res: Response) => {
   try {

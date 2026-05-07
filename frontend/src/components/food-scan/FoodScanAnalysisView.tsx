@@ -5,13 +5,14 @@ import { motion } from "motion/react";
 import type { ReactNode } from "react";
 import { BrainCircuit, Clock, Pill, ShieldAlert } from "lucide-react";
 import DetailItem from "@/components/ui/DetailItem";
-import { getFoodScanAnalysis } from "@/helpers/foodScans";
+import { getFoodScanAnalysis, type FoodScanAnalysis } from "@/helpers/foodScans";
 import type { FoodScanRisk } from "@/lib/mocks/foodScans";
 import { patients } from "@/lib/mocks/patients";
 
 interface FoodScanAnalysisViewProps {
   readonly scanId: string;
   readonly imageSizes?: string;
+  readonly analysisData?: FoodScanAnalysis;
 }
 
 const riskTextClass: Record<FoodScanRisk, string> = {
@@ -19,8 +20,8 @@ const riskTextClass: Record<FoodScanRisk, string> = {
   "High Risk": "text-danger",
 };
 
-export default function FoodScanAnalysisView({ scanId, imageSizes = "(max-width: 1280px) 100vw, 620px" }: FoodScanAnalysisViewProps) {
-  const analysis = getFoodScanAnalysis(scanId);
+export default function FoodScanAnalysisView({ scanId, imageSizes = "(max-width: 1280px) 100vw, 620px", analysisData }: FoodScanAnalysisViewProps) {
+  const analysis = analysisData ?? getFoodScanAnalysis(scanId);
   const patient = analysis ? patients.find((currentPatient) => currentPatient.id === analysis.scan.patientId) : null;
 
   if (!analysis) return null;
@@ -48,7 +49,7 @@ function FoodScanHero({ scan, risk, imageSizes }: { readonly scan: NonNullable<R
   return (
     <motion.section className="overflow-hidden rounded-3xl bg-surface" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}>
       <div className="relative aspect-video overflow-hidden rounded-3xl bg-line">
-        <Image src={scan.image} alt={scan.foodName} fill sizes={imageSizes} className="object-cover" />
+        <Image src={scan.image} alt={scan.foodName} fill sizes={imageSizes} className="object-cover" unoptimized={scan.image.startsWith("http")} />
       </div>
 
       <div className="p-5">

@@ -66,6 +66,20 @@ export const validateLogin = validate([
   { field: "password", label: "Kata sandi", required: true },
 ]);
 
+export const validateLoginIdentifier = (req: Request, res: Response, next: NextFunction) => {
+  const identifier = req.body.identifier || req.body.email;
+
+  if (!identifier || (typeof identifier === "string" && !identifier.trim())) {
+    return res.status(400).json({
+      status: "gagal",
+      message: "Email/nomor telepon wajib diisi",
+      error_code: "VALIDATION_ERROR",
+    });
+  }
+
+  next();
+};
+
 export const validateRefreshToken = validate([
   { field: "refresh_token", label: "Token refresh", required: true },
 ]);

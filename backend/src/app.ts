@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import express, { Request, Response, NextFunction } from 'express';
+import path from 'path';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -15,6 +16,9 @@ import adherenceRoutes from './routes/adherence.routes';
 import foodAiRoutes from './routes/food-ai.routes';
 import prescriptionRoutes from './routes/prescription.routes';
 import notificationRoutes from './routes/notification.routes';
+import auditLogRoutes from './routes/audit-log.routes';
+import nurseRoutes from './routes/nurse.routes';
+import alertRoutes from './routes/alert.routes';
 import { startMedicationReminderScheduler } from './services/medication-reminder-scheduler.service';
 
 const app = express();
@@ -54,6 +58,13 @@ app.use('/api/', limiter);
 // Body parser dengan limit untuk mencegah payload attack
 app.use(express.json({ limit: '1mb' }));
 
+// Public access for locally stored uploaded files.
+app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads'), {
+  setHeaders: (res) => {
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  },
+}));
+
 // Routes
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
   swaggerOptions: {
@@ -79,11 +90,14 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/patients', patientRoutes);
+app.use('/api/nurses', nurseRoutes);
 app.use('/api/prescriptions', prescriptionRoutes);
 app.use('/api/medication-schedules', medicationScheduleRoutes);
 app.use('/api/medication-logs', medicationLogRoutes);
 app.use('/api/adherence', adherenceRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/audit-logs', auditLogRoutes);
+app.use('/api/alerts', alertRoutes);
 app.use('/api', foodAiRoutes);
 
 // Custom JS untuk Smooth Scroll Swagger (Lenis)

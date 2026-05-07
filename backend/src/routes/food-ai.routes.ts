@@ -1,6 +1,7 @@
 import { Router } from "express";
 import * as foodAiController from "../controllers/food-ai.controller";
 import { authenticateToken, authorizeRoles } from "../middleware/auth.middleware";
+import { uploadSingleFoodImage } from "../middleware/upload.middleware";
 import {
   validateFoodDetect,
   validateFoodUpload,
@@ -23,15 +24,47 @@ router.use(authenticateToken);
  * @swagger
  * /api/food/upload:
  *   post:
- *     summary: Upload foto makanan mock
+ *     summary: Upload foto makanan
  *     tags: [Food AI]
  *     security:
  *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - patientId
+ *               - image
+ *             properties:
+ *               patientId:
+ *                 type: string
+ *                 format: uuid
+ *               image:
+ *                 type: string
+ *                 format: binary
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - patientId
+ *               - imageUrl
+ *             properties:
+ *               patientId:
+ *                 type: string
+ *                 format: uuid
+ *               imageUrl:
+ *                 type: string
+ *               imageSizeKb:
+ *                 type: integer
  *     responses:
  *       200:
  *         description: Foto makanan berhasil direkam
+ *       400:
+ *         description: Payload atau file gambar tidak valid
  */
-router.post("/food/upload", authorizeRoles("patient", "nurse", "admin"), validateFoodUpload, foodAiController.uploadFoodImage);
+router.post("/food/upload", authorizeRoles("patient", "nurse", "admin"), uploadSingleFoodImage, validateFoodUpload, foodAiController.uploadFoodImage);
 
 /**
  * @swagger

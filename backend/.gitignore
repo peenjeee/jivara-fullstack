@@ -19,6 +19,13 @@ logs/
 *.log
 !.env.example
 
+# Runtime uploads
+uploads/*
+!uploads/.gitkeep
+!uploads/food-scans/
+uploads/food-scans/*
+!uploads/food-scans/.gitkeep
+
 # Local progress notes
 progress/
 

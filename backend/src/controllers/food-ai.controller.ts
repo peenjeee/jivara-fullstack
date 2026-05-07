@@ -1,5 +1,6 @@
 import { Response } from "express";
 import { AuthRequest } from "../middleware/auth.middleware";
+import { getFoodScanPublicPath } from "../middleware/upload.middleware";
 import * as foodAiService from "../services/food-ai.service";
 
 const sendError = (res: Response, error: unknown) => {
@@ -15,7 +16,14 @@ const sendError = (res: Response, error: unknown) => {
 
 export const uploadFoodImage = async (req: AuthRequest, res: Response) => {
   try {
-    const data = await foodAiService.uploadFoodImage(req.body, req.user);
+    const file = req.file;
+    const data = await foodAiService.uploadFoodImage({
+      ...req.body,
+      imageUrl: file ? getFoodScanPublicPath(file.filename) : req.body.imageUrl,
+      imageSizeKb: file ? Math.max(Math.ceil(file.size / 1024), 1) : req.body.imageSizeKb,
+      originalFilename: file?.originalname,
+      mimeType: file?.mimetype,
+    }, req.user);
     res.status(200).json({ status: "berhasil", data });
   } catch (error) {
     sendError(res, error);

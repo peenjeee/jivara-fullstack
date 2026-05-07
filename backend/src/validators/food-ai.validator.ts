@@ -14,6 +14,10 @@ export const validateFoodUpload = (req: Request, res: Response, next: NextFuncti
     return res.status(400).json({ status: "gagal", message: "patientId wajib berupa UUID valid", error_code: "VALIDATION_ERROR" });
   }
 
+  if (!req.file && isMissing(req.body.imageUrl)) {
+    return res.status(400).json({ status: "gagal", message: "File gambar atau imageUrl wajib diisi", error_code: "VALIDATION_ERROR" });
+  }
+
   req.body.patientId = resolvedPatientId;
   next();
 };

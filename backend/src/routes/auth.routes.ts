@@ -1,14 +1,29 @@
 import { Router } from "express";
+import rateLimit from "express-rate-limit";
 import * as authController from "../controllers/auth.controller";
-import { authenticateToken } from "../middleware/auth.middleware";
+import { authenticateToken, authorizeRoles } from "../middleware/auth.middleware";
 import {
   validateRegister,
   validateLogin,
+  validateLoginIdentifier,
   validateRefreshToken,
   validateCompletePasswordChange,
 } from "../validators/auth.validator";
 
 const router = Router();
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: {
+    status: "gagal",
+    message: "Terlalu banyak percobaan login, silakan coba lagi nanti.",
+    error_code: "LOGIN_RATE_LIMITED",
+  },
+});
 
 /**
  * @swagger
@@ -21,9 +36,10 @@ const router = Router();
  * @swagger
  * /api/auth/register:
  *   post:
- *     summary: Daftarkan pengguna baru
+ *     summary: Daftarkan pengguna baru (admin only)
  *     tags: [Auth]
- *     security: []
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -43,14 +59,9 @@ const router = Router();
  *                 type: string
  *               phone:
  *                 type: string
- *               role:
- *                 type: string
- *                 enum: [patient, nurse, admin]
- *               dateOfBirth:
- *                 type: string
- *                 format: date
  *               gender:
  *                 type: string
+ *                 enum: [male, female]
  *               address:
  *                 type: string
  *     responses:
@@ -58,10 +69,20 @@ const router = Router();
  *         description: Pengguna berhasil terdaftar
  *       400:
  *         description: Permintaan tidak valid
+ *       401:
+ *         description: Token akses diperlukan
+ *       403:
+ *         description: Hanya admin yang dapat mendaftarkan pengguna
  *       409:
  *         description: Pengguna sudah terdaftar
  */
-router.post("/register", validateRegister, authController.register);
+router.post(
+  "/register",
+  authenticateToken,
+  authorizeRoles("admin"),
+  validateRegister,
+  authController.register
+);
 
 /**
  * @swagger
@@ -89,10 +110,74 @@ router.post("/register", validateRegister, authController.register);
  *       400:
  *         description: Kredensial tidak valid
  */
-router.post("/login", validateLogin, authController.login);
+router.post("/login", loginLimiter, validateLoginIdentifier, validateLogin, authController.login);
 
+/**
+ * @swagger
+ * /api/auth/complete-password-change:
+ *   post:
+ *     summary: Selesaikan penggantian kata sandi wajib
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - newPassword
+ *             properties:
+ *               newPassword:
+ *                 type: string
+ *                 minLength: 8
+ *     responses:
+ *       200:
+ *         description: Kata sandi berhasil diperbarui
+ *       400:
+ *         description: Kata sandi tidak valid atau perubahan tidak diperlukan
+ *       401:
+ *         description: Tidak terautentikasi
+ */
 router.post(
   "/complete-password-change",
+  authenticateToken,
+  validateCompletePasswordChange,
+  authController.completePasswordChange
+);
+
+/**
+ * @swagger
+ * /api/auth/change-password:
+ *   put:
+ *     summary: Ganti kata sandi akun saat ini
+ *     description: Alias standar untuk flow penggantian kata sandi wajib.
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - newPassword
+ *             properties:
+ *               newPassword:
+ *                 type: string
+ *                 minLength: 8
+ *     responses:
+ *       200:
+ *         description: Kata sandi berhasil diperbarui
+ *       400:
+ *         description: Kata sandi tidak valid atau perubahan tidak diperlukan
+ *       401:
+ *         description: Tidak terautentikasi
+ */
+router.put(
+  "/change-password",
   authenticateToken,
   validateCompletePasswordChange,
   authController.completePasswordChange

@@ -32,7 +32,7 @@ export const generateRefreshToken = async (userId: string): Promise<string> => {
 };
 
 /**
- * Mendaftarkan akun perawat baru (registrasi publik).
+ * Mendaftarkan akun perawat baru oleh admin.
  */
 export const registerUser = async (dto: RegisterDTO) => {
   // Cek pengguna yang sudah ada
@@ -64,7 +64,7 @@ export const registerUser = async (dto: RegisterDTO) => {
       gender: dto.gender || null,
       address: dto.address || null,
       age: dto.age || 0,
-      mustChangePassword: false,
+      mustChangePassword: true,
     })
     .returning({
       id: users.id,
@@ -196,6 +196,11 @@ export const refreshAccessToken = async (token: string) => {
 
   if (user.length === 0) {
     throw { status: 401, message: "Pengguna tidak ditemukan", code: "INVALID_TOKEN" };
+  }
+
+  if (!user[0].isActive) {
+    await db.delete(refreshTokens).where(eq(refreshTokens.id, storedToken[0].id));
+    throw { status: 403, message: "Akun telah dinonaktifkan", code: "ACCOUNT_DEACTIVATED" };
   }
 
   const accessToken = generateAccessToken({

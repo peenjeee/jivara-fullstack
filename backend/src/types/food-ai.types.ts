@@ -2,6 +2,8 @@ export interface FoodUploadDTO {
   patientId: string;
   imageUrl?: string;
   imageSizeKb?: number;
+  originalFilename?: string;
+  mimeType?: string;
 }
 
 export interface FoodDetectDTO {

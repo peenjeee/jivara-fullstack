@@ -7,6 +7,7 @@ import {
   MedicationScheduleUpdateDTO,
 } from "../types/medication-schedule.types";
 import { AccessUser, assertCanAccessPatient, scopedPatientFilter } from "./access-control.service";
+import { diffChanges, writeAuditLog } from "./audit-log.service";
 
 const getBooleanFilter = (value?: string) => {
   if (value === undefined || value === "all") return undefined;
@@ -78,11 +79,19 @@ export const createMedicationSchedule = async (dto: MedicationScheduleCreateDTO,
     })
     .returning();
 
+  await writeAuditLog({
+    userId: createdBy || user?.id || null,
+    action: "medication_schedule.created",
+    resourceType: "medication_schedule",
+    resourceId: schedule.id,
+    changes: { after: schedule },
+  });
+
   return schedule;
 };
 
 export const updateMedicationSchedule = async (id: string, dto: MedicationScheduleUpdateDTO, user?: AccessUser) => {
-  await getMedicationScheduleById(id, user);
+  const existing = await getMedicationScheduleById(id, user);
 
   if (dto.prescriptionId) await ensurePrescriptionExists(dto.prescriptionId);
 
@@ -104,14 +113,33 @@ export const updateMedicationSchedule = async (id: string, dto: MedicationSchedu
     .where(eq(medicationSchedules.id, id))
     .returning();
 
+  const changes = diffChanges(existing, schedule, ["prescriptionId", "drugName", "dosage", "frequency", "scheduledTimes", "instructions", "isActive"]);
+  if (Object.keys(changes).length > 0) {
+    await writeAuditLog({
+      userId: user?.id || null,
+      action: "medication_schedule.updated",
+      resourceType: "medication_schedule",
+      resourceId: id,
+      changes,
+    });
+  }
+
   return schedule;
 };
 
 export const deactivateMedicationSchedule = async (id: string, user?: AccessUser) => {
-  await getMedicationScheduleById(id, user);
+  const existing = await getMedicationScheduleById(id, user);
 
   await db
     .update(medicationSchedules)
     .set({ isActive: false, updatedAt: new Date() })
     .where(eq(medicationSchedules.id, id));
+
+  await writeAuditLog({
+    userId: user?.id || null,
+    action: "medication_schedule.deactivated",
+    resourceType: "medication_schedule",
+    resourceId: id,
+    changes: { isActive: { from: existing.isActive, to: false } },
+  });
 };
