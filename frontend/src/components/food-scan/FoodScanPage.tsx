@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState, type ChangeEvent, type RefObject } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Camera, Loader2, ScanLine } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import Button from "@/components/ui/Button";
+import type { FoodScanAnalysis } from "@/helpers/foodScans";
+import { scanFoodImage } from "@/lib/foodScanApi";
 import { foodScans, type FoodScanRecord } from "@/lib/mocks/foodScans";
 import { patients } from "@/lib/mocks/patients";
 import { showToast } from "@/lib/swal";
@@ -18,18 +20,37 @@ const patientScanResults = foodScans.filter((scan) => scan.patientId === mockPat
 export default function FoodScanPage() {
   const [isScanning, setIsScanning] = useState(false);
   const [scanResult, setScanResult] = useState<FoodScanRecord | null>(null);
+  const [scanAnalysis, setScanAnalysis] = useState<FoodScanAnalysis | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const setLastScan = usePatientDashboardStore((state) => state.setLastScan);
 
-  const runMockScan = () => {
+  const runScan = () => {
+    if (!isScanning) fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) return;
+
     setIsScanning(true);
 
-    window.setTimeout(() => {
+    try {
+      const analysis = await scanFoodImage(file);
+      setScanAnalysis(analysis);
+      setScanResult(analysis.scan);
+      setLastScan(analysis.scan);
+      showToast("Scan makanan selesai.", "success");
+    } catch {
       const result = patientScanResults[0] ?? foodScans[0];
+      setScanAnalysis(null);
       setScanResult(result);
       setLastScan(result);
+      showToast("Scan makanan gagal terhubung ke API, menampilkan data contoh.", "error");
+    } finally {
       setIsScanning(false);
-      showToast("Scan makanan selesai.", "success");
-    }, 850);
+    }
   };
 
   return (
@@ -39,14 +60,14 @@ export default function FoodScanPage() {
       />
 
       <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <ScanInputCard isScanning={isScanning} onScan={runMockScan} />
-        <ScanResultPanel isScanning={isScanning} result={scanResult} />
+        <ScanInputCard isScanning={isScanning} onScan={runScan} fileInputRef={fileInputRef} onFileChange={handleFileChange} />
+        <ScanResultPanel isScanning={isScanning} result={scanResult} analysis={scanAnalysis} />
       </div>
     </DashboardPageShell>
   );
 }
 
-function ScanInputCard({ isScanning, onScan }: { readonly isScanning: boolean; readonly onScan: () => void }) {
+function ScanInputCard({ isScanning, onScan, fileInputRef, onFileChange }: { readonly isScanning: boolean; readonly onScan: () => void; readonly fileInputRef: RefObject<HTMLInputElement | null>; readonly onFileChange: (event: ChangeEvent<HTMLInputElement>) => void }) {
   return (
     <motion.section
       className="overflow-hidden rounded-[32px] bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.08)] sm:p-8"
@@ -68,6 +89,7 @@ function ScanInputCard({ isScanning, onScan }: { readonly isScanning: boolean; r
       </div>
 
       <div className="mt-6 flex justify-center">
+        <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={onFileChange} />
         <Button size="sm" className="min-w-44" icon={<ScanLine size={16} />} loading={isScanning} onClick={onScan}>
           Mulai Scan
         </Button>
@@ -76,7 +98,7 @@ function ScanInputCard({ isScanning, onScan }: { readonly isScanning: boolean; r
   );
 }
 
-function ScanResultPanel({ isScanning, result }: { readonly isScanning: boolean; readonly result: FoodScanRecord | null }) {
+function ScanResultPanel({ isScanning, result, analysis }: { readonly isScanning: boolean; readonly result: FoodScanRecord | null; readonly analysis: FoodScanAnalysis | null }) {
   return (
     <motion.section
       className="min-h-[460px] rounded-[32px] bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.08)] sm:p-8"
@@ -93,7 +115,7 @@ function ScanResultPanel({ isScanning, result }: { readonly isScanning: boolean;
           </motion.div>
         ) : result ? (
           <motion.div key="result" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.35 }}>
-            <FoodScanAnalysisView scanId={result.id} />
+            <FoodScanAnalysisView scanId={result.id} analysisData={analysis ?? undefined} />
           </motion.div>
         ) : (
           <motion.div key="empty" className="flex h-full min-h-[420px] flex-col items-center justify-center gap-6 text-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
