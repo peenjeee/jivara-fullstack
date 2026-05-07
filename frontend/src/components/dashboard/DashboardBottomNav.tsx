@@ -1,27 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { motion } from "motion/react";
-import { useMemo } from "react";
 import { getUnreadActivityCount } from "@/helpers/activityLogs";
 import { patients } from "@/lib/mocks/patients";
 import { useActivityLogStore } from "@/store/activityLog";
 import { useAuthStore } from "@/store/auth";
-import { useIdleRoutePrefetch } from "@/hooks";
 import { getDashboardBottomNavItems, getDashboardRole } from "./navigation";
 
 export default function DashboardBottomNav() {
   const pathname = usePathname();
-  const router = useRouter();
   const userRole = useAuthStore((state) => state.user?.role);
   const hasAuthHydrated = useAuthStore((state) => state.hasHydrated);
   const dashboardRole = getDashboardRole(userRole);
   const unreadActivityCount = useActivityLogStore((state) => getUnreadActivityCount(state.activities, dashboardRole === "patient" ? patients[0].id : undefined));
   const bottomNavItems = getDashboardBottomNavItems(dashboardRole);
-  const prefetchRoutes = useMemo(() => bottomNavItems.map((item) => item.href), [bottomNavItems]);
-
-  useIdleRoutePrefetch(router, prefetchRoutes);
 
   if (!hasAuthHydrated) return null;
 

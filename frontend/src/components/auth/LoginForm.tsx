@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Cookies from "js-cookie";
 import { Lock, LogIn, Mail } from "lucide-react";
 import api from "@/lib/axios";
@@ -11,18 +11,16 @@ import { useAuthStore } from "@/store/auth";
 import AuthCard from "@/components/ui/AuthCard";
 import AuthInput from "@/components/ui/AuthInput";
 import Button from "@/components/ui/Button";
-import { useIdleRoutePrefetch } from "@/hooks";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const loginPrefetchRoutes = ["/register", "/dashboard"] as const;
 
 export default function LoginForm() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const setAuth = useAuthStore((state) => state.setAuth);
-  useIdleRoutePrefetch(router, loginPrefetchRoutes);
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -62,7 +60,8 @@ export default function LoginForm() {
       });
 
       showToast("Anda berhasil masuk.", "success");
-      router.push("/dashboard");
+      const callbackUrl = searchParams.get("callbackUrl");
+      router.push(callbackUrl?.startsWith("/") ? callbackUrl : "/dashboard");
     } catch {
       closeAlert();
       showError("Login gagal. Periksa kembali email dan kata sandi Anda.");

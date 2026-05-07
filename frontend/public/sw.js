@@ -58,8 +58,7 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
-  const actionUrl = event.notification.data?.action_url || "/dashboard";
-  const targetUrl = new URL(actionUrl, self.location.origin).href;
+  const targetUrl = getSafeActionUrl(event.notification.data?.action_url);
 
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
@@ -74,3 +73,16 @@ self.addEventListener("notificationclick", (event) => {
     }),
   );
 });
+
+function getSafeActionUrl(actionUrl) {
+  if (typeof actionUrl !== "string" || !actionUrl.startsWith("/")) {
+    return `${self.location.origin}/dashboard`;
+  }
+
+  const targetUrl = new URL(actionUrl, self.location.origin);
+  if (targetUrl.origin !== self.location.origin) {
+    return `${self.location.origin}/dashboard`;
+  }
+
+  return targetUrl.href;
+}

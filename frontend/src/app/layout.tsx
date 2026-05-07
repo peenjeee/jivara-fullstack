@@ -183,11 +183,6 @@ const jsonLdGraph = {
         price: "0",
         priceCurrency: "IDR",
       },
-      aggregateRating: {
-        "@type": "AggregateRating",
-        ratingValue: "4.9",
-        ratingCount: "128",
-      },
       image: `${BASE_URL}/images/og-image.png`,
       screenshot: `${BASE_URL}/images/og-image.png`,
       featureList: [

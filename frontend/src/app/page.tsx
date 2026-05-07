@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import Navbar from "@/components/landing/Navbar";
 import Hero from "@/components/landing/Hero";
 import LandingBottomNav from "@/components/landing/LandingBottomNav";
@@ -13,16 +12,11 @@ import Features from "@/components/landing/Features";
 import Workflow from "@/components/landing/Workflow";
 import SecurityLevels from "@/components/landing/SecurityLevels";
 import Footer from "@/components/landing/Footer";
-import { useIdleRoutePrefetch, useIsStandalonePwa } from "@/hooks";
+import { useIsStandalonePwa } from "@/hooks";
 import { initScrollAnimations } from "@/lib/animations";
 
-const landingPrefetchRoutes = ["/login", "/register", "/team", "/dashboard"] as const;
-
 export default function HomePage() {
-  const router = useRouter();
   const isStandalonePwa = useIsStandalonePwa();
-
-  useIdleRoutePrefetch(router, landingPrefetchRoutes);
 
   useEffect(() => {
     const cleanup = initScrollAnimations();

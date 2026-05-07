@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { LogIn } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -18,10 +18,29 @@ const NAV_LINKS = [
 
 export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const drawerRef = useRef<HTMLDivElement | null>(null);
   const isStandalonePwa = useIsStandalonePwa();
   const isScrolled = useScrollThreshold(20);
 
   useLockBodyScroll(isMenuOpen);
+
+  useEffect(() => {
+    if (!isMenuOpen) return;
+
+    const closeButton = drawerRef.current?.querySelector<HTMLAnchorElement | HTMLButtonElement>("a, button");
+    closeButton?.focus({ preventScroll: true });
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setIsMenuOpen(false);
+      menuButtonRef.current?.focus({ preventScroll: true });
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isMenuOpen]);
 
   return (
     <>
@@ -38,14 +57,15 @@ export default function Navbar() {
             href="/"
             aria-label="Jivara home"
           >
-            <Image
-              src="/images/logo/notext.png"
-              alt="Jiva - maskot Jivara"
-              width={100}
-              height={100}
-              sizes="100px"
-              className="w-full h-auto drop-shadow-2xl"
-            />
+              <Image
+                src="/images/logo/notext.png"
+                alt="Jiva - maskot Jivara"
+                width={100}
+                height={100}
+                priority
+                sizes="100px"
+                className="w-full h-auto drop-shadow-2xl"
+              />
           </Link>
 
           <div className="flex items-center gap-6">
@@ -75,6 +95,7 @@ export default function Navbar() {
             </Link>
 
             <button
+              ref={menuButtonRef}
               className={`flex lg:hidden flex-col gap-[5px] w-11 h-11 justify-center items-center z-[40000] rounded-xl cursor-pointer transition-all duration-300 shrink-0`}
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               aria-label={isMenuOpen ? "Tutup menu" : "Buka menu"}
@@ -109,6 +130,10 @@ export default function Navbar() {
 
             {/* Drawer Panel */}
             <motion.div
+              ref={drawerRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Menu navigasi utama"
               className="absolute top-0 right-0 w-4/5 max-w-[340px] h-full bg-bg pt-5 px-8 pb-10 flex flex-col shadow-[-10px_0_50px_rgba(0,0,0,0.1)]"
               initial={{ x: "100%" }}
               animate={{ x: 0 }}

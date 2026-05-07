@@ -1,14 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { Menu } from "lucide-react";
-import { useIdleRoutePrefetch, useIsStandalonePwa, useLockBodyScroll } from "@/hooks";
+import { useIsStandalonePwa, useLockBodyScroll } from "@/hooks";
 import { useAuthStore } from "@/store/auth";
 import DashboardSidebar from "./DashboardSidebar";
-import { getDashboardBottomNavItems, getDashboardNavItems, getDashboardRole, type DashboardNavLabel, type DashboardRole } from "./navigation";
+import { getDashboardNavItems, getDashboardRole, type DashboardNavLabel, type DashboardRole } from "./navigation";
 
 interface NurseDashboardNavbarProps {
   readonly onLogout: () => void;
@@ -16,24 +16,41 @@ interface NurseDashboardNavbarProps {
 
 export default function NurseDashboardNavbar({ onLogout }: NurseDashboardNavbarProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const router = useRouter();
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const drawerRef = useRef<HTMLElement | null>(null);
   const isStandalonePwa = useIsStandalonePwa();
   const pathname = usePathname();
   const userRole = useAuthStore((state) => state.user?.role);
   const hasAuthHydrated = useAuthStore((state) => state.hasHydrated);
   const dashboardRole = getDashboardRole(userRole);
   const activeItem = getActiveNavLabel(pathname, dashboardRole);
-  const prefetchRoutes = useMemo(() => getDashboardBottomNavItems(dashboardRole).map((item) => item.href), [dashboardRole]);
 
   useLockBodyScroll(isMenuOpen);
-  useIdleRoutePrefetch(router, prefetchRoutes);
+
+  useEffect(() => {
+    if (!isMenuOpen) return;
+
+    const firstFocusable = drawerRef.current?.querySelector<HTMLAnchorElement | HTMLButtonElement>("a, button");
+    firstFocusable?.focus({ preventScroll: true });
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setIsMenuOpen(false);
+      menuButtonRef.current?.focus({ preventScroll: true });
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isMenuOpen]);
 
   return (
     <>
       {!isStandalonePwa && <header className="sticky top-0 z-[35000] bg-surface lg:hidden">
         <div className="flex h-[76px] items-center justify-between px-4">
-          <Image src="/images/logo/notext.png" alt="Jivara" width={132} height={42} sizes="118px" className="h-auto w-[118px]" />
+          <Image src="/images/logo/notext.png" alt="Jivara" width={132} height={42} sizes="118px" priority className="h-auto w-[118px]" />
           <button
+            ref={menuButtonRef}
             className="flex h-11 w-11 items-center justify-center rounded-xl text-text-main transition-colors"
             onClick={() => setIsMenuOpen(true)}
             aria-label="Buka menu"
@@ -61,6 +78,10 @@ export default function NurseDashboardNavbar({ onLogout }: NurseDashboardNavbarP
               onClick={() => setIsMenuOpen(false)}
             />
             <motion.aside
+              ref={drawerRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Menu dashboard"
               className="absolute left-0 top-0 flex h-full w-[82%] max-w-[330px] flex-col bg-bg px-5 pb-5 pt-5 shadow-[10px_0_50px_rgba(15,23,42,0.1)]"
               initial={{ x: "-100%" }}
               animate={{ x: 0 }}

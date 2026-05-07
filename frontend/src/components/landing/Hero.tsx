@@ -120,21 +120,29 @@ export default function Hero() {
     let animId: number;
     let modelElement: Element | null = null;
     let lastCameraOrbit = "";
+    let lastOrbitUpdate = 0;
+    const minOrbitFrameMs = 1000 / 30;
 
     const updateViewportCenter = () => {
       viewportCenterRef.current = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
     };
 
-    const lerpOrbit = () => {
+    const lerpOrbit = (time: number) => {
+      if (document.visibilityState === "hidden") {
+        animId = requestAnimationFrame(lerpOrbit);
+        return;
+      }
+
       const s = orbitState.current;
       const lerpFactor = 0.08;
       s.theta += (s.targetTheta - s.theta) * lerpFactor;
       s.phi += (s.targetPhi - s.phi) * lerpFactor;
 
-      modelElement ??= mascotRef.current?.querySelector("model-viewer") ?? null;
-      if (modelElement) {
+      if (time - lastOrbitUpdate >= minOrbitFrameMs) {
+        lastOrbitUpdate = time;
+        modelElement ??= mascotRef.current?.querySelector("model-viewer") ?? null;
         const nextCameraOrbit = `${s.theta.toFixed(2)}deg ${s.phi.toFixed(2)}deg 105%`;
-        if (nextCameraOrbit !== lastCameraOrbit) {
+        if (modelElement && nextCameraOrbit !== lastCameraOrbit) {
           modelElement.setAttribute("camera-orbit", nextCameraOrbit);
           lastCameraOrbit = nextCameraOrbit;
         }

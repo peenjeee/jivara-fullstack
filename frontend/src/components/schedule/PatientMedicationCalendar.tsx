@@ -57,6 +57,13 @@ export default function PatientMedicationCalendar({ month, selectedDate, schedul
 }
 
 function CalendarDayButton({ day, onSelect }: { readonly day: PatientCalendarDay; readonly onSelect: (date: Date) => void }) {
+  const statusLabelByStatus: Record<PatientCalendarDay["status"], string> = {
+    empty: "tidak ada jadwal",
+    done: "jadwal selesai",
+    active: "jadwal hari ini belum selesai",
+    missed: "jadwal terlewat",
+    upcoming: "jadwal akan datang",
+  };
   const statusDotClass = day.status === "missed" ? "bg-danger" : day.status === "active" ? "bg-warning" : day.status === "done" ? "bg-primary" : day.status === "upcoming" ? "bg-[var(--blue)]" : "bg-transparent";
   const isDone = day.status === "done";
   const hasSoftGreenBackground = day.isToday || isDone;
@@ -68,10 +75,10 @@ function CalendarDayButton({ day, onSelect }: { readonly day: PatientCalendarDay
       type="button"
       className={`group relative mx-auto flex aspect-square min-h-10 w-full max-w-14 flex-col items-center justify-center rounded-full text-sm font-extrabold transition-colors ${dayStateClass} ${day.isCurrentMonth ? "" : "opacity-45"}`}
       onClick={() => onSelect(day.date)}
-      aria-label={day.date.toLocaleDateString("id-ID")}
+      aria-label={`${day.date.toLocaleDateString("id-ID")}, ${statusLabelByStatus[day.status]}`}
     >
       <span className={isDone ? "relative inline-flex min-w-5 justify-center after:absolute after:left-0 after:right-0 after:top-1/2 after:h-0.5 after:-translate-y-1/2 after:rounded-full after:bg-current" : ""}>{day.date.getDate()}</span>
-      <span className={`mt-1 h-1.5 w-1.5 rounded-full ${dotClass}`} />
+      <span className={`mt-1 h-1.5 w-1.5 rounded-full ${dotClass}`} aria-hidden="true" />
     </button>
   );
 }

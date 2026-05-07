@@ -121,7 +121,7 @@ function CalendarDayCell({ day, index, isOverflowOpen, onToggleOverflow, onViewD
         <span className={`inline-flex h-7 min-w-7 items-center justify-center rounded-full text-sm font-extrabold ${day.isToday ? "bg-text-main text-white" : day.isCurrentMonth ? "text-text-main" : "text-muted/70"}`}>
           {day.date.getDate()}
         </span>
-        {day.activities.some((activity) => !activity.read) && <span className="h-2 w-2 rounded-full bg-primary" aria-label="Ada aktivitas belum dibaca" />}
+        {day.activities.some((activity) => !activity.read) && <span className="h-2 w-2 rounded-full bg-primary" aria-label={`${day.date.toLocaleDateString("id-ID")}: ada aktivitas belum dibaca`} />}
       </div>
 
       <div className="space-y-1">

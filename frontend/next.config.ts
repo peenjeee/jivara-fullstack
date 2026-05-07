@@ -31,13 +31,19 @@ const baseSecurityHeaders = [
     value: "https://www.jivara.web.id",
   },
   {
-    key: "Cache-Control",
-    value: "private, no-cache, no-store, max-age=0, must-revalidate",
-  },
-  {
     key: "Strict-Transport-Security",
     value: "max-age=63072000; includeSubDomains; preload",
   },
+];
+
+const privateCacheHeaders = [
+  {
+    key: "Cache-Control",
+    value: "private, no-cache, no-store, max-age=0, must-revalidate",
+  },
+];
+
+const crossOriginIsolationHeaders = [
   {
     key: "Cross-Origin-Opener-Policy",
     value: "same-origin",
@@ -73,8 +79,32 @@ const nextConfig: NextConfig = {
         headers: baseSecurityHeaders,
       },
       {
-        source: "/((?!$).*)",
-        headers: baseSecurityHeaders,
+        source: "/((?!dashboard|patients|schedule|activity-log|settings|food-scan).*)",
+        headers: [...baseSecurityHeaders, ...crossOriginIsolationHeaders],
+      },
+      {
+        source: "/dashboard/:path*",
+        headers: [...baseSecurityHeaders, ...crossOriginIsolationHeaders, ...privateCacheHeaders],
+      },
+      {
+        source: "/patients/:path*",
+        headers: [...baseSecurityHeaders, ...crossOriginIsolationHeaders, ...privateCacheHeaders],
+      },
+      {
+        source: "/schedule/:path*",
+        headers: [...baseSecurityHeaders, ...crossOriginIsolationHeaders, ...privateCacheHeaders],
+      },
+      {
+        source: "/activity-log/:path*",
+        headers: [...baseSecurityHeaders, ...crossOriginIsolationHeaders, ...privateCacheHeaders],
+      },
+      {
+        source: "/settings/:path*",
+        headers: [...baseSecurityHeaders, ...crossOriginIsolationHeaders, ...privateCacheHeaders],
+      },
+      {
+        source: "/food-scan/:path*",
+        headers: [...baseSecurityHeaders, ...crossOriginIsolationHeaders, ...privateCacheHeaders],
       },
     ];
   },

@@ -7,6 +7,16 @@ function createContentSecurityPolicy(nonce: string, pathname: string) {
   const isLandingPage = pathname === '/';
   const allowInlineStyles = isDev || isLandingPage;
   const allowEval = isDev || isLandingPage;
+  const connectSources = [
+    "'self'",
+    'blob:',
+    'https://*.supabase.co',
+    'https://*.supabase.in',
+    'https://api.jivara.web.id',
+    'https://jivara-production.up.railway.app',
+    ...(isDev ? ['http://localhost:3001', 'ws://localhost:3000', 'ws://127.0.0.1:3000'] : []),
+  ].join(' ');
+
   const directives = [
     "default-src 'self'",
     "base-uri 'self'",
@@ -20,7 +30,7 @@ function createContentSecurityPolicy(nonce: string, pathname: string) {
     `style-src-attr 'self'${allowInlineStyles ? " 'unsafe-inline'" : ""}`,
     "img-src 'self' data: blob: https://images.unsplash.com",
     "font-src 'self' data:",
-    "connect-src 'self' blob: https://*.supabase.co https://*.supabase.in https://api.jivara.web.id https://jivara-production.up.railway.app http://localhost:3001 ws://localhost:3000 ws://127.0.0.1:3000",
+    `connect-src ${connectSources}`,
     "manifest-src 'self'",
     "worker-src 'self' blob:",
     "upgrade-insecure-requests",
@@ -29,8 +39,7 @@ function createContentSecurityPolicy(nonce: string, pathname: string) {
   return directives.join('; ');
 }
 
-// Route yang memerlukan axutentikasi.
-// const protectedRoutes = ['/dashboard', '/patients', '/schedule', '/activity-log', '/settings', '/food-scan'];
+const protectedRoutes = ['/dashboard', '/patients', '/schedule', '/activity-log', '/settings', '/food-scan'];
 
 // Route yang TIDAK boleh diakses jika sudah login
 const authRoutes = ['/login', '/register'];
@@ -48,16 +57,16 @@ export async function proxy(request: NextRequest) {
   const contentSecurityPolicy = createContentSecurityPolicy(nonce, pathname);
   requestHeaders.set('Content-Security-Policy', contentSecurityPolicy);
 
-  // const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
+  const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
   const isAuthRoute = authRoutes.some(route => pathname.startsWith(route));
 
-  // if (isProtectedRoute && !hasValidToken) {
-  //   const url = new URL('/login', request.url);
-  //   url.searchParams.set('callbackUrl', pathname);
-  //   const response = NextResponse.redirect(url);
-  //   response.headers.set('Content-Security-Policy', contentSecurityPolicy);
-  //   return response;
-  // }
+  if (isProtectedRoute && !hasValidToken) {
+    const url = new URL('/login', request.url);
+    url.searchParams.set('callbackUrl', pathname);
+    const response = NextResponse.redirect(url);
+    response.headers.set('Content-Security-Policy', contentSecurityPolicy);
+    return response;
+  }
 
   if (isAuthRoute && hasValidToken) {
     const response = NextResponse.redirect(new URL('/dashboard', request.url));

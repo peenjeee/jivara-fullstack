@@ -57,27 +57,3 @@ export const useIsStandalonePwa = () => {
 
   return isStandalone;
 };
-
-type IdleWindow = Window & {
-  requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
-  cancelIdleCallback?: (handle: number) => void;
-};
-
-export const useIdleRoutePrefetch = (router: { prefetch: (href: string) => void }, routes: readonly string[]) => {
-  useEffect(() => {
-    if (routes.length === 0) return;
-
-    const prefetchRoutes = () => {
-      routes.forEach((route) => router.prefetch(route));
-    };
-
-    const idleWindow = window as IdleWindow;
-    if (idleWindow.requestIdleCallback && idleWindow.cancelIdleCallback) {
-      const idleId = idleWindow.requestIdleCallback(prefetchRoutes, { timeout: 1800 });
-      return () => idleWindow.cancelIdleCallback?.(idleId);
-    }
-
-    const timer = setTimeout(prefetchRoutes, 500);
-    return () => clearTimeout(timer);
-  }, [router, routes]);
-};
