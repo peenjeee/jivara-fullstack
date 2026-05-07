@@ -106,7 +106,7 @@ export default function Hero() {
   const mascotRotate = useTransform(scrollY, [0, innerHeight], [0, -15]);
   const contentY = useTransform(scrollY, [0, innerHeight], ["0%", "20%"]);
 
-  // Mouse-follow orbit: character rotates to face cursor direction
+  // Mouse-follow orbit: character rotates to face cursor direction.
   const orbitState = useRef({ theta: 20, phi: 75, targetTheta: 20, targetPhi: 75 });
 
   useEffect(() => {
@@ -127,11 +127,11 @@ export default function Hero() {
 
     animId = requestAnimationFrame(lerpOrbit);
 
-    const handleMouseMove = (e: MouseEvent) => {
+    const handleMouseMove = (event: MouseEvent) => {
       const centerX = window.innerWidth / 2;
       const centerY = window.innerHeight / 2;
-      orbitState.current.targetTheta = ((e.clientX - centerX) / centerX) * -50;
-      orbitState.current.targetPhi = 75 + ((e.clientY - centerY) / centerY) * -25;
+      orbitState.current.targetTheta = ((event.clientX - centerX) / centerX) * -50;
+      orbitState.current.targetPhi = 75 + ((event.clientY - centerY) / centerY) * -25;
     };
 
     window.addEventListener("mousemove", handleMouseMove);
@@ -167,7 +167,7 @@ export default function Hero() {
           cameraOrbit="20deg 75deg 105%"
           fieldOfView="30deg"
           shadowIntensity="0"
-          exposure="0.5"
+          exposure="0.6"
           environmentImage=""
           className="w-full h-full"
         />
