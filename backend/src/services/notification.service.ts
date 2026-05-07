@@ -4,6 +4,7 @@ import { db } from "../db";
 import { notifications, pushSubscriptions } from "../db/schema";
 import { NotificationPreferenceDTO, PushSubscriptionDTO, SendNotificationDTO } from "../types/notification.types";
 import { AccessUser, assertCanAccessPatient, scopedPatientFilter } from "./access-control.service";
+import { writeAuditLog } from "./audit-log.service";
 
 const configureWebPush = () => {
   const publicKey = process.env.VAPID_PUBLIC_KEY;
@@ -166,6 +167,13 @@ export const sendPushNotification = async (dto: SendNotificationDTO, user?: Acce
 
   if (subscriptions.length === 0) {
     await db.update(notifications).set({ status: "skipped" }).where(eq(notifications.id, notification.id));
+    await writeAuditLog({
+      userId: user?.id || null,
+      action: "notification.skipped",
+      resourceType: "notification",
+      resourceId: notification.id,
+      changes: { patientId: dto.patientId, type: dto.type, reason: "no_active_subscription" },
+    });
     return { notificationId: notification.id, sent: 0, failed: 0, skipped: true };
   }
 
@@ -191,6 +199,14 @@ export const sendPushNotification = async (dto: SendNotificationDTO, user?: Acce
     .update(notifications)
     .set({ status: sent > 0 ? "delivered" : "failed", deliveredAt: sent > 0 ? new Date() : null })
     .where(eq(notifications.id, notification.id));
+
+  await writeAuditLog({
+    userId: user?.id || null,
+    action: sent > 0 ? "notification.delivered" : "notification.failed",
+    resourceType: "notification",
+    resourceId: notification.id,
+    changes: { patientId: dto.patientId, type: dto.type, sent, failed },
+  });
 
   if (failed > 0) {
     const failedEndpoints = subscriptions

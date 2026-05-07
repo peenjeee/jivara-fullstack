@@ -9,6 +9,7 @@ import {
 } from "../db/schema";
 import { AUTH_CONSTANTS } from "../types/auth.types";
 import { AccessUser, assertCanAccessPatient, scopedPatientFilter } from "./access-control.service";
+import { writeAuditLog } from "./audit-log.service";
 import {
   PatientCreateDTO,
   PatientListQuery,
@@ -192,6 +193,16 @@ export const createPatient = async (dto: PatientCreateDTO, createdBy?: string) =
       user: newUser,
       assignedNurseId: dto.assignedNurseId || null,
     };
+  }).then(async (patient) => {
+    await writeAuditLog({
+      userId: createdBy || null,
+      action: "patient.created",
+      resourceType: "patient",
+      resourceId: patient.id,
+      changes: { after: { id: patient.id, userId: patient.userId, assignedNurseId: patient.assignedNurseId } },
+    });
+
+    return patient;
   });
 };
 
@@ -224,6 +235,14 @@ export const updatePatient = async (patientId: string, dto: PatientUpdateDTO, us
     }
   });
 
+  await writeAuditLog({
+    userId: user?.id || null,
+    action: "patient.updated",
+    resourceType: "patient",
+    resourceId: patientId,
+    changes: { before: existing, requested: dto },
+  });
+
   return getPatientById(patientId);
 };
 
@@ -251,6 +270,14 @@ export const assignPatient = async (patientId: string, nurseId: string, assigned
     });
   });
 
+  await writeAuditLog({
+    userId: assignedBy || null,
+    action: "patient.assigned",
+    resourceType: "patient",
+    resourceId: patientId,
+    changes: { nurseId },
+  });
+
   return getPatientById(patientId);
 };
 
@@ -260,5 +287,13 @@ export const deactivatePatient = async (patientId: string) => {
   await db.transaction(async (tx) => {
     await tx.update(patients).set({ isActive: false }).where(eq(patients.id, patientId));
     await tx.update(users).set({ isActive: false, updatedAt: new Date() }).where(eq(users.id, existing.userId));
+  });
+
+  await writeAuditLog({
+    userId: null,
+    action: "patient.deactivated",
+    resourceType: "patient",
+    resourceId: patientId,
+    changes: { isActive: { from: existing.isActive, to: false } },
   });
 };
