@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import Image from "next/image";
+import { useState, useEffect, useRef } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { motion, useScroll, useTransform } from "motion/react";
 import { TypeAnimation } from 'react-type-animation';
@@ -9,11 +9,16 @@ import { Download } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { showConfirm, showToast, showWarning } from "@/lib/swal";
 
+const ModelViewer = dynamic(() => import("@/components/ui/ModelViewer"), {
+  ssr: false,
+});
+
 export default function Hero() {
   const router = useRouter();
   const [innerHeight, setInnerHeight] = useState(800);
   const [isInstalled, setIsInstalled] = useState(false);
   const [canPromptInstall, setCanPromptInstall] = useState(false);
+  const mascotRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(display-mode: standalone)");
@@ -81,30 +86,60 @@ export default function Hero() {
 
   useEffect(() => {
     const handleResize = () => {
-      // Hanya update jika nilai berubah untuk efisiensi
       const currentHeight = window.innerHeight;
       setInnerHeight((prev) => (prev !== currentHeight ? currentHeight : prev));
     };
-
-    // Jalankan sekali saat mount
     handleResize();
-
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   const { scrollY } = useScroll();
-
-  // section untuk efek mengecil
-  const sectionScale = useTransform(scrollY, [0, innerHeight], [1, 0.75]);
-  const sectionOpacity = useTransform(scrollY, [0, innerHeight * 0.8], [1, 0]);
-
-  // Efek paralaks untuk maskot
-  const mascotScale = useTransform(scrollY, [0, innerHeight * 0.8], [1, 0.6]);
+  const sectionScale = useTransform(scrollY, [0, innerHeight], [1, 0.92]);
+  const sectionOpacity = useTransform(
+    scrollY,
+    [0, innerHeight * 0.5, innerHeight],
+    [1, 0.85, 0]
+  );
+  const mascotScale = useTransform(scrollY, [0, innerHeight * 0.5], [1, 0.8]);
   const mascotOpacity = useTransform(scrollY, [0, innerHeight * 0.7], [1, 0]);
   const mascotRotate = useTransform(scrollY, [0, innerHeight], [0, -15]);
-
   const contentY = useTransform(scrollY, [0, innerHeight], ["0%", "20%"]);
+
+  // Mouse-follow orbit: character rotates to face cursor direction
+  const orbitState = useRef({ theta: 20, phi: 75, targetTheta: 20, targetPhi: 75 });
+
+  useEffect(() => {
+    let animId: number;
+
+    const lerpOrbit = () => {
+      const s = orbitState.current;
+      const lerpFactor = 0.08;
+      s.theta += (s.targetTheta - s.theta) * lerpFactor;
+      s.phi += (s.targetPhi - s.phi) * lerpFactor;
+
+      const mv = mascotRef.current?.querySelector("model-viewer");
+      if (mv) {
+        mv.setAttribute("camera-orbit", `${s.theta.toFixed(2)}deg ${s.phi.toFixed(2)}deg 105%`);
+      }
+      animId = requestAnimationFrame(lerpOrbit);
+    };
+
+    animId = requestAnimationFrame(lerpOrbit);
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const centerX = window.innerWidth / 2;
+      const centerY = window.innerHeight / 2;
+      orbitState.current.targetTheta = ((e.clientX - centerX) / centerX) * -50;
+      orbitState.current.targetPhi = 75 + ((e.clientY - centerY) / centerY) * -25;
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      cancelAnimationFrame(animId);
+    };
+  }, []);
 
   return (
     <motion.section
@@ -113,36 +148,29 @@ export default function Hero() {
       aria-labelledby="hero-title"
     >
       <motion.div
-        className="relative lg:absolute lg:top-[20vh] lg:right-[4.5vw] w-[min(280px,70vw)] lg:w-[min(460px,40vw)] h-auto lg:h-[min(580px,60vh)] flex items-center justify-center z-50 mx-auto lg:mx-0 pointer-events-none lg:pointer-events-auto"
-        aria-label="Maskot Jiva"
+        ref={mascotRef}
+        className="relative lg:absolute lg:top-[20vh] lg:right-[4.5vw] w-[min(280px,70vw)] lg:w-[min(460px,40vw)] h-[min(280px,70vw)] lg:h-[min(580px,60vh)] flex items-center justify-center z-50 mx-auto lg:mx-0 pointer-events-auto"
+        aria-label="Maskot Jiva 3D"
         style={{
           scale: mascotScale,
           opacity: mascotOpacity,
           rotate: mascotRotate,
         }}
       >
-        <motion.div
-          className="w-full h-auto"
-          whileHover={{
-            scale: 1.08,
-            rotate: 3,
-          }}
-          transition={{
-            type: "spring",
-            stiffness: 250,
-            damping: 18,
-          }}
-        >
-          <Image
-            src="/images/maskot/maskot.png"
-            alt="Jiva - maskot Jivara"
-            width={420}
-            height={420}
-            priority
-            sizes="(max-width: 1024px) 70vw, 40vw"
-            className="w-full h-auto drop-shadow-2xl"
-          />
-        </motion.div>
+        <ModelViewer
+          src="/models/maskot.glb"
+          alt="Jiva - maskot Jivara 3D"
+          autoRotate={false}
+          cameraControls
+          disableZoom
+          disablePan
+          cameraOrbit="20deg 75deg 105%"
+          fieldOfView="30deg"
+          shadowIntensity="0"
+          exposure="0.5"
+          environmentImage=""
+          className="w-full h-full"
+        />
       </motion.div>
 
       <motion.div

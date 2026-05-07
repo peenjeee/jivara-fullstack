@@ -272,3 +272,18 @@ html.lenis body {
 .lenis.lenis-scrolling iframe {
   pointer-events: none;
 }
+
+/* Hide model-viewer default loading UI (spinner + progress bar) */
+model-viewer::part(default-poster) {
+  display: none !important;
+}
+
+model-viewer::part(default-progress-bar) {
+  display: none !important;
+}
+
+model-viewer {
+  --poster-color: transparent !important;
+  --progress-bar-color: transparent !important;
+  --progress-bar-height: 0 !important;
+}

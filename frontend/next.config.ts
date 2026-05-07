@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 import path from "node:path";
 
-const securityHeaders = [
+const baseSecurityHeaders = [
   {
     key: "X-DNS-Prefetch-Control",
     value: "on",
@@ -27,18 +27,6 @@ const securityHeaders = [
     value: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), accelerometer=(), gyroscope=(), magnetometer=()",
   },
   {
-    key: "Cross-Origin-Opener-Policy",
-    value: "same-origin",
-  },
-  {
-    key: "Cross-Origin-Embedder-Policy",
-    value: "require-corp",
-  },
-  {
-    key: "Cross-Origin-Resource-Policy",
-    value: "same-origin",
-  },
-  {
     key: "Access-Control-Allow-Origin",
     value: "https://www.jivara.web.id",
   },
@@ -49,6 +37,22 @@ const securityHeaders = [
   {
     key: "Strict-Transport-Security",
     value: "max-age=63072000; includeSubDomains; preload",
+  },
+];
+
+// Strict cross-origin isolation headers — breaks model-viewer blob texture loading
+const crossOriginIsolationHeaders = [
+  {
+    key: "Cross-Origin-Opener-Policy",
+    value: "same-origin",
+  },
+  {
+    key: "Cross-Origin-Embedder-Policy",
+    value: "require-corp",
+  },
+  {
+    key: "Cross-Origin-Resource-Policy",
+    value: "same-origin",
   },
 ];
 
@@ -67,12 +71,19 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     return [
+      // Landing page — relaxed COEP for model-viewer 3D rendering
       {
-        source: "/(.*)",
-        headers: securityHeaders,
+        source: "/",
+        headers: baseSecurityHeaders,
+      },
+      // All other routes — full cross-origin isolation
+      {
+        source: "/((?!$).*)",
+        headers: [...baseSecurityHeaders, ...crossOriginIsolationHeaders],
       },
     ];
   },
 };
 
 export default nextConfig;
+
