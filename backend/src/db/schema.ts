@@ -155,6 +155,7 @@ export const medicationLogs = pgTable("medication_logs", {
   patientId: uuid("patient_id")
     .notNull()
     .references(() => patients.id, { onDelete: "cascade" }),
+  reminderJobId: uuid("reminder_job_id"),
   scheduledTime: timestamp("scheduled_time").notNull(),
   status: varchar("status", { length: 20 }).notNull(),
   confirmedAt: timestamp("confirmed_at"),
@@ -164,6 +165,7 @@ export const medicationLogs = pgTable("medication_logs", {
   patientIdx: index("idx_med_logs_patient").on(table.patientId),
   statusIdx: index("idx_med_logs_status").on(table.status),
   dateIdx: index("idx_med_logs_date").on(table.scheduledTime),
+  reminderJobIdx: index("idx_med_logs_reminder_job").on(table.reminderJobId),
 }));
 
 // ─────────────────────────────────────────────

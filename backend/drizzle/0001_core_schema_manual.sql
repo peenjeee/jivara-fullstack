@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS "medication_logs" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
   "schedule_id" uuid NOT NULL REFERENCES "public"."medication_schedules"("id") ON DELETE cascade,
   "patient_id" uuid NOT NULL REFERENCES "public"."patients"("id") ON DELETE cascade,
+  "reminder_job_id" uuid,
   "scheduled_time" timestamp NOT NULL,
   "status" varchar(20) NOT NULL,
   "confirmed_at" timestamp,
@@ -116,6 +117,8 @@ CREATE TABLE IF NOT EXISTS "notifications" (
   "created_at" timestamp DEFAULT now()
 );
 
+ALTER TABLE "medication_logs" ADD COLUMN IF NOT EXISTS "reminder_job_id" uuid;
+
 CREATE TABLE IF NOT EXISTS "medication_reminder_jobs" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
   "schedule_id" uuid NOT NULL REFERENCES "public"."medication_schedules"("id") ON DELETE cascade,
@@ -171,6 +174,7 @@ CREATE INDEX IF NOT EXISTS "idx_med_sched_active" ON "medication_schedules" USIN
 CREATE INDEX IF NOT EXISTS "idx_med_logs_patient" ON "medication_logs" USING btree ("patient_id");
 CREATE INDEX IF NOT EXISTS "idx_med_logs_status" ON "medication_logs" USING btree ("status");
 CREATE INDEX IF NOT EXISTS "idx_med_logs_date" ON "medication_logs" USING btree ("scheduled_time");
+CREATE INDEX IF NOT EXISTS "idx_med_logs_reminder_job" ON "medication_logs" USING btree ("reminder_job_id");
 CREATE INDEX IF NOT EXISTS "idx_food_scans_patient" ON "food_scans" USING btree ("patient_id");
 CREATE INDEX IF NOT EXISTS "idx_food_scans_date" ON "food_scans" USING btree ("created_at");
 CREATE INDEX IF NOT EXISTS "idx_detected_items_scan" ON "detected_items" USING btree ("scan_id");
