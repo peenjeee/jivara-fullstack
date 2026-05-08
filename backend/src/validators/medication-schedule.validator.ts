@@ -4,7 +4,7 @@ const isMissing = (value: unknown) =>
   value === undefined || value === null || (typeof value === "string" && !value.trim());
 
 const isValidUuid = (value: string) =>
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
 const isValidTime = (value: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
 

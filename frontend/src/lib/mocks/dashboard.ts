@@ -16,7 +16,7 @@ export interface DashboardStat {
 export const dashboardStats: DashboardStat[] = [
   {
     label: "Total Pasien",
-    value: "6767",
+    value: "0",
     helper: "",
     tone: "safe",
     color: "pine",
@@ -24,7 +24,7 @@ export const dashboardStats: DashboardStat[] = [
   },
   {
     label: "Peringatan Kritis",
-    value: "67",
+    value: "0",
     helper: "",
     tone: "critical",
     color: "lime",
@@ -32,11 +32,11 @@ export const dashboardStats: DashboardStat[] = [
   },
   {
     label: "Kepatuhan Keseluruhan",
-    value: "67%",
-    helper: "Target bulanan 90%",
+    value: "0%",
+    helper: "",
     tone: "safe",
     color: "leaf",
     icon: CheckCircle2,
-    progress: 86,
+    progress: 0,
   }
 ];
