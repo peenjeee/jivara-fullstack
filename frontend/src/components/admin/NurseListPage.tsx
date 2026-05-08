@@ -16,6 +16,7 @@ import { getNurseInitials, getPatientsForNurse } from "@/helpers/nurses";
 import { getDashboardRole } from "@/components/dashboard/navigation";
 import { patients } from "@/lib/mocks/patients";
 import type { NurseRecord, NurseStatus } from "@/lib/mocks/nurses";
+import { fallbackNurses, getNursesFromApi } from "@/lib/nurseApi";
 import { showConfirm, showToast, showWarning } from "@/lib/swal";
 import { useNurseStore, type NurseFormValues } from "@/store/nurses";
 import { useAuthStore } from "@/store/auth";
@@ -39,6 +40,7 @@ export default function NurseListPage() {
   const dashboardRole = getDashboardRole(userRole);
   const nurses = useNurseStore((state) => state.nurses);
   const assignments = useNurseStore((state) => state.assignments);
+  const setNurses = useNurseStore((state) => state.setNurses);
   const addNurse = useNurseStore((state) => state.addNurse);
   const updateNurse = useNurseStore((state) => state.updateNurse);
   const toggleNurseStatus = useNurseStore((state) => state.toggleNurseStatus);
@@ -54,6 +56,24 @@ export default function NurseListPage() {
     if (!hasAuthHydrated || dashboardRole === "admin" || dashboardRole === "nurse") return;
     router.replace("/dashboard");
   }, [dashboardRole, hasAuthHydrated, router]);
+
+  useEffect(() => {
+    if (!hasAuthHydrated || (dashboardRole !== "admin" && dashboardRole !== "nurse")) return;
+
+    let isMounted = true;
+
+    getNursesFromApi()
+      .then((apiNurses) => {
+        if (isMounted) setNurses(apiNurses);
+      })
+      .catch(() => {
+        if (isMounted && nurses.length === 0) setNurses(fallbackNurses);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [dashboardRole, hasAuthHydrated, nurses.length, setNurses]);
 
   const filteredNurses = useMemo(() => {
     const query = deferredSearch.trim().toLowerCase();

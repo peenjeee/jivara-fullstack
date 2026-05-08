@@ -14,6 +14,7 @@ export interface NurseFormValues {
 interface NurseStoreState {
   readonly nurses: NurseRecord[];
   readonly assignments: PatientNurseAssignment;
+  readonly setNurses: (nurses: NurseRecord[]) => void;
   readonly addNurse: (values: NurseFormValues) => NurseRecord;
   readonly updateNurse: (nurseId: string, values: NurseFormValues) => void;
   readonly toggleNurseStatus: (nurseId: string) => void;
@@ -26,6 +27,7 @@ const formatJoinedAt = () => new Date().toLocaleDateString("id-ID", { day: "2-di
 export const useNurseStore = create<NurseStoreState>()((set, get) => ({
   nurses: initialNurses,
   assignments: patientNurseAssignments,
+  setNurses: (nurses) => set({ nurses }),
   addNurse: (values) => {
     const nurse: NurseRecord = {
       id: getNextNurseId(get().nurses),
