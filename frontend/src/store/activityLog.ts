@@ -3,6 +3,7 @@ import { activityLogs as initialActivityLogs, type ActivityLogRecord } from "@/l
 
 interface ActivityLogState {
   readonly activities: ActivityLogRecord[];
+  readonly setActivities: (activities: ActivityLogRecord[]) => void;
   readonly addActivity: (activity: ActivityLogRecord) => void;
   readonly markAsRead: (activityId: string) => void;
   readonly markAllAsRead: () => void;
@@ -10,6 +11,7 @@ interface ActivityLogState {
 
 export const useActivityLogStore = create<ActivityLogState>()((set) => ({
   activities: initialActivityLogs,
+  setActivities: (activities) => set({ activities }),
   addActivity: (activity) => set((state) => ({
     activities: [activity, ...state.activities],
   })),

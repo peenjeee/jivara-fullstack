@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import axios from "axios";
 import { motion } from "motion/react";
 import { AlertTriangle, Check, CheckCheck, Shuffle, Trash2, UserRound } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
@@ -17,7 +18,8 @@ import { activityMatchesNurse, getAverageAdherence, getNurseByPatientId, getNurs
 import { getDashboardRole } from "@/components/dashboard/navigation";
 import { patients } from "@/lib/mocks/patients";
 import type { ActivityLogRecord } from "@/lib/mocks/activityLogs";
-import { showConfirm, showToast, showWarning } from "@/lib/swal";
+import { deactivateNurseViaApi } from "@/lib/nurseApi";
+import { showConfirm, showError, showToast, showWarning } from "@/lib/swal";
 import { useActivityLogStore } from "@/store/activityLog";
 import { useNurseStore } from "@/store/nurses";
 import { useAuthStore } from "@/store/auth";
@@ -27,6 +29,11 @@ import NurseStatusBadge from "./NurseStatusBadge";
 interface NurseDetailPageProps {
   readonly nurseId: string;
 }
+
+const getApiErrorMessage = (error: unknown) => {
+  if (!axios.isAxiosError(error)) return null;
+  return error.response?.data?.message || null;
+};
 
 export default function NurseDetailPage({ nurseId }: NurseDetailPageProps) {
   const router = useRouter();
@@ -111,7 +118,20 @@ export default function NurseDetailPage({ nurseId }: NurseDetailPageProps) {
 
     const result = await showConfirm("Hapus perawat?", `Data ${nurse.fullName} akan dihapus dari daftar perawat.`, "Ya, Hapus");
     if (!result.isConfirmed) return;
-    deleteNurse(nurse.id);
+
+    try {
+      await deactivateNurseViaApi(nurse.id);
+    } catch (error) {
+      const message = getApiErrorMessage(error);
+      if (message) {
+        showError(message);
+        return;
+      }
+
+      deleteNurse(nurse.id);
+      showWarning("API perawat tidak tersedia. Data sementara dihapus secara lokal.", "Mode Fallback");
+    }
+
     showToast("Perawat berhasil dihapus.");
     router.replace("/nurses");
   };

@@ -2,6 +2,7 @@
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import axios from "axios";
 import { motion } from "motion/react";
 import { Edit3, Eye, Power, Plus, Trash2 } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
@@ -16,8 +17,8 @@ import { getNurseInitials, getPatientsForNurse } from "@/helpers/nurses";
 import { getDashboardRole } from "@/components/dashboard/navigation";
 import { patients } from "@/lib/mocks/patients";
 import type { NurseRecord, NurseStatus } from "@/lib/mocks/nurses";
-import { fallbackNurses, getNursesFromApi } from "@/lib/nurseApi";
-import { showConfirm, showToast, showWarning } from "@/lib/swal";
+import { createNurseViaApi, deactivateNurseViaApi, fallbackNurses, getNursesFromApi, updateNurseViaApi } from "@/lib/nurseApi";
+import { showConfirm, showError, showToast, showWarning } from "@/lib/swal";
 import { useNurseStore, type NurseFormValues } from "@/store/nurses";
 import { useAuthStore } from "@/store/auth";
 import NurseModal from "./NurseModal";
@@ -32,6 +33,11 @@ const filters: { readonly label: string; readonly value: NurseFilter }[] = [
 ];
 
 const pageSize = 10;
+
+const getApiErrorMessage = (error: unknown) => {
+  if (!axios.isAxiosError(error)) return null;
+  return error.response?.data?.message || null;
+};
 
 export default function NurseListPage() {
   const router = useRouter();
@@ -88,15 +94,42 @@ export default function NurseListPage() {
 
   if (!hasAuthHydrated || dashboardRole === "patient") return null;
 
-  const handleAddNurse = (values: NurseFormValues) => {
-    addNurse(values);
+  const handleAddNurse = async (values: NurseFormValues) => {
+    try {
+      const createdNurse = await createNurseViaApi(values);
+      setNurses([createdNurse, ...nurses]);
+    } catch (error) {
+      const message = getApiErrorMessage(error);
+      if (message) {
+        showError(message);
+        return;
+      }
+
+      addNurse(values);
+      showWarning("API perawat tidak tersedia. Data sementara ditambahkan secara lokal.", "Mode Fallback");
+    }
+
     setIsModalOpen(false);
     showToast("Perawat berhasil ditambahkan.", "success");
   };
 
-  const handleEditNurse = (values: NurseFormValues) => {
+  const handleEditNurse = async (values: NurseFormValues) => {
     if (!editingNurse) return;
-    updateNurse(editingNurse.id, values);
+
+    try {
+      const updatedNurse = await updateNurseViaApi(editingNurse.id, values);
+      setNurses(nurses.map((nurse) => nurse.id === editingNurse.id ? { ...updatedNurse, temporaryPassword: values.password ? true : nurse.temporaryPassword } : nurse));
+    } catch (error) {
+      const message = getApiErrorMessage(error);
+      if (message) {
+        showError(message);
+        return;
+      }
+
+      updateNurse(editingNurse.id, values);
+      showWarning("API perawat tidak tersedia. Perubahan sementara disimpan secara lokal.", "Mode Fallback");
+    }
+
     setEditingNurse(null);
     showToast("Data perawat berhasil diperbarui.");
   };
@@ -105,7 +138,28 @@ export default function NurseListPage() {
     const nextStatus = nurse.status === "Aktif" ? "Nonaktif" : "Aktif";
     const result = await showConfirm(`${nextStatus}kan perawat?`, `${nurse.fullName} akan berubah status menjadi ${nextStatus}.`, `Ya, ${nextStatus}kan`);
     if (!result.isConfirmed) return;
-    toggleNurseStatus(nurse.id);
+
+    try {
+      const updatedNurse = await updateNurseViaApi(nurse.id, {
+        fullName: nurse.fullName,
+        email: nurse.email,
+        phone: nurse.phone,
+        gender: nurse.gender,
+        status: nextStatus,
+        password: "",
+      });
+      setNurses(nurses.map((item) => item.id === nurse.id ? { ...updatedNurse, temporaryPassword: item.temporaryPassword } : item));
+    } catch (error) {
+      const message = getApiErrorMessage(error);
+      if (message) {
+        showError(message);
+        return;
+      }
+
+      toggleNurseStatus(nurse.id);
+      showWarning("API perawat tidak tersedia. Status sementara diubah secara lokal.", "Mode Fallback");
+    }
+
     showToast(`Status perawat menjadi ${nextStatus}.`);
   };
 
@@ -118,7 +172,21 @@ export default function NurseListPage() {
 
     const result = await showConfirm("Hapus perawat?", `Data ${nurse.fullName} akan dihapus dari daftar perawat.`, "Ya, Hapus");
     if (!result.isConfirmed) return;
-    deleteNurse(nurse.id);
+
+    try {
+      await deactivateNurseViaApi(nurse.id);
+      setNurses(nurses.map((item) => item.id === nurse.id ? { ...item, status: "Nonaktif" } : item));
+    } catch (error) {
+      const message = getApiErrorMessage(error);
+      if (message) {
+        showError(message);
+        return;
+      }
+
+      deleteNurse(nurse.id);
+      showWarning("API perawat tidak tersedia. Data sementara dihapus secara lokal.", "Mode Fallback");
+    }
+
     showToast("Perawat berhasil dihapus.");
   };
 
