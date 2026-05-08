@@ -1,24 +1,42 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import { PatientTable } from "@/components/patients";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
-import { dashboardStats, recentPatients } from "@/lib/mocks/dashboard";
+import { fallbackNurseDashboardData, getNurseDashboardData, type NurseDashboardData } from "@/lib/dashboardApi";
 import { useSplashScreen } from "@/components/ui/AppSplashScreen";
 
 export default function NurseDashboardPage() {
   const router = useRouter();
   const { isSplashFinished } = useSplashScreen();
+  const [dashboardData, setDashboardData] = useState<NurseDashboardData>(fallbackNurseDashboardData);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    getNurseDashboardData()
+      .then((data) => {
+        if (isMounted) setDashboardData(data);
+      })
+      .catch(() => {
+        if (isMounted) setDashboardData(fallbackNurseDashboardData);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   if (!isSplashFinished) return null;
 
   return (
     <DashboardPageShell>
       <DashboardPageHeader id="overview" title="Ringkasan Pasien" />
-      <SummaryCardGrid stats={dashboardStats} />
+      <SummaryCardGrid stats={dashboardData.stats} />
 
       <motion.div
         className="mt-6"
@@ -27,7 +45,7 @@ export default function NurseDashboardPage() {
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.4 }}
       >
         <PatientTable
-          patients={recentPatients.slice(0, 5)}
+          patients={dashboardData.patients}
           title="Pasien Terbaru"
           showViewAll
           actions={["view"]}

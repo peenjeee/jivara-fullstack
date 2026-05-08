@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { motion } from "motion/react";
 import { CalendarClock, UserRound, UsersRound } from "lucide-react";
@@ -9,7 +10,9 @@ import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import PatientStatusBadge from "@/components/patients/PatientStatusBadge";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
+import type { SummaryCardItem } from "@/components/ui/SummaryCard";
 import { getPatientsForNurse } from "@/helpers/nurses";
+import { getAdminDashboardStats } from "@/lib/dashboardApi";
 import { medicationSchedules } from "@/lib/mocks/schedules";
 import { patients } from "@/lib/mocks/patients";
 import { useActivityLogStore } from "@/store/activityLog";
@@ -35,11 +38,28 @@ export default function AdminDashboardPage() {
   const riskyPatients = patients.filter((patient) => patient.status !== "On Ideal Schedule");
   const priorityActivities = activities.filter((activity) => activity.severity === "Kritis" || activity.severity === "Peringatan" || activity.category === "Administrasi");
 
-  const stats = [
+  const fallbackStats = useMemo<SummaryCardItem[]>(() => [
     { label: "Total Perawat", value: String(nurses.length), tone: "neutral" as const, color: "pine" as const, icon: UsersRound },
     { label: "Total Pasien", value: String(patients.length), tone: "safe" as const, color: "leaf" as const, icon: UserRound },
     { label: "Jadwal Aktif", value: String(activeSchedules), tone: "neutral" as const, color: "lime" as const, icon: CalendarClock },
-  ];
+  ], [activeSchedules, nurses.length]);
+  const [stats, setStats] = useState(fallbackStats);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    getAdminDashboardStats()
+      .then((data) => {
+        if (isMounted) setStats(data.stats.map((item) => item.label === "Total Perawat" ? { ...item, value: String(nurses.length) } : item));
+      })
+      .catch(() => {
+        if (isMounted) setStats(fallbackStats);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [fallbackStats, nurses.length]);
 
   return (
     <DashboardPageShell>
