@@ -27,6 +27,7 @@ interface SinglePatientResponse {
 
 interface PatientDetailResponse extends PatientListResponse {
   registeredAt?: string | null;
+  assignedNurseId?: string | null;
   assignedNurse?: { id: string; name: string } | null;
   activeMedications?: Array<{
     id: string;
@@ -164,6 +165,27 @@ export const getPatientDetailFromApi = async (patientId: string): Promise<Patien
     activities: [],
     scans: [],
   };
+};
+
+export const getPatientsAssignedToNurseFromApi = async (nurseId: string) => {
+  const patients = await getPatientsFromApi();
+  const details = await Promise.all(patients.map(async (patient) => {
+    try {
+      const response = await api.get<{ data: PatientDetailResponse }>(`/patients/${patient.id}`);
+      return { patient, detail: response.data.data };
+    } catch {
+      return null;
+    }
+  }));
+
+  return details
+    .filter((entry): entry is { patient: PatientRecord; detail: PatientDetailResponse } => Boolean(entry))
+    .filter((entry) => entry.detail.assignedNurseId === nurseId || entry.detail.assignedNurse?.id === nurseId)
+    .map((entry) => entry.patient);
+};
+
+export const assignPatientToNurseViaApi = async (patientId: string, nurseId: string) => {
+  await api.put(`/patients/${encodeURIComponent(patientId)}/assign`, { nurseId });
 };
 
 export const getInitialPatientDetail = (patientId: string): PatientDetailData => {

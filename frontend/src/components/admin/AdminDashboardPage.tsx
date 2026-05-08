@@ -8,11 +8,14 @@ import { ActivityCategoryBadge, ActivitySeverityBadge } from "@/components/activ
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import PatientStatusBadge from "@/components/patients/PatientStatusBadge";
+import Button from "@/components/ui/Button";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import type { SummaryCardItem } from "@/components/ui/SummaryCard";
 import { getPatientsForNurse } from "@/helpers/nurses";
+import { approveRegistrationViaApi, getPendingRegistrationsFromApi, rejectRegistrationViaApi, type PendingRegistrationRecord } from "@/lib/adminApprovalApi";
 import { getAdminDashboardStats } from "@/lib/dashboardApi";
 import type { PatientRecord } from "@/lib/mocks/patients";
+import { showConfirm, showError, showToast } from "@/lib/swal";
 import { useActivityLogStore } from "@/store/activityLog";
 import { useNurseStore } from "@/store/nurses";
 import NurseStatusBadge from "./NurseStatusBadge";
@@ -37,22 +40,53 @@ export default function AdminDashboardPage() {
   const priorityActivities = activities.filter((activity) => activity.severity === "Kritis" || activity.severity === "Peringatan" || activity.category === "Administrasi");
 
   const [stats, setStats] = useState<SummaryCardItem[]>([]);
+  const [pendingRegistrations, setPendingRegistrations] = useState<PendingRegistrationRecord[]>([]);
 
   useEffect(() => {
     let isMounted = true;
 
-    getAdminDashboardStats()
-      .then((data) => {
+    Promise.all([getAdminDashboardStats(), getPendingRegistrationsFromApi()])
+      .then(([data, registrations]) => {
+        if (!isMounted) return;
         if (isMounted) setStats(data.stats.map((item) => item.label === "Total Perawat" ? { ...item, value: String(nurses.length) } : item));
+        setPendingRegistrations(registrations);
       })
       .catch(() => {
-        if (isMounted) setStats([]);
+        if (!isMounted) return;
+        setStats([]);
+        setPendingRegistrations([]);
       });
 
     return () => {
       isMounted = false;
     };
   }, [nurses.length]);
+
+  const handleApproveRegistration = async (registration: PendingRegistrationRecord) => {
+    const result = await showConfirm("Setujui pendaftaran?", `${registration.fullName} akan dapat masuk ke Jivara.`, "Ya, Setujui");
+    if (!result.isConfirmed) return;
+
+    try {
+      await approveRegistrationViaApi(registration.id);
+      setPendingRegistrations((current) => current.filter((item) => item.id !== registration.id));
+      showToast("Pendaftaran berhasil disetujui.", "success");
+    } catch {
+      showError("Gagal menyetujui pendaftaran dari API.");
+    }
+  };
+
+  const handleRejectRegistration = async (registration: PendingRegistrationRecord) => {
+    const result = await showConfirm("Tolak pendaftaran?", `${registration.fullName} tidak akan dapat masuk ke Jivara.`, "Ya, Tolak");
+    if (!result.isConfirmed) return;
+
+    try {
+      await rejectRegistrationViaApi(registration.id);
+      setPendingRegistrations((current) => current.filter((item) => item.id !== registration.id));
+      showToast("Pendaftaran berhasil ditolak.");
+    } catch {
+      showError("Gagal menolak pendaftaran dari API.");
+    }
+  };
 
   return (
     <DashboardPageShell>
@@ -68,6 +102,20 @@ export default function AdminDashboardPage() {
       )}
 
       <div className="mt-6 grid gap-6 xl:grid-cols-3">
+        <AdminPanel title="Pendaftaran Menunggu" href="/dashboard">
+          {pendingRegistrations.slice(0, 4).map((registration) => (
+            <div key={registration.id} className="rounded-2xl bg-surface px-4 py-3">
+              <p className="truncate text-sm font-extrabold text-text-main">{registration.fullName}</p>
+              <p className="mt-1 truncate text-xs font-bold text-muted">{registration.email}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button type="button" size="sm" onClick={() => handleApproveRegistration(registration)}>Setujui</Button>
+                <Button type="button" size="sm" variant="outline" onClick={() => handleRejectRegistration(registration)}>Tolak</Button>
+              </div>
+            </div>
+          ))}
+          {pendingRegistrations.length === 0 && <EmptyInsight message="Tidak ada pendaftaran menunggu persetujuan." />}
+        </AdminPanel>
+
         <AdminPanel title="Perawat Perlu Tindak Lanjut" href="/nurses">
           {nurseFollowUps.slice(0, 4).map(({ nurse, assignedPatients, riskyPatients }) => (
             <Link key={nurse.id} href={`/nurses/${encodeURIComponent(nurse.id)}`} className="flex items-center justify-between gap-4 rounded-2xl bg-surface px-4 py-3 transition-colors hover:bg-primary/5">
