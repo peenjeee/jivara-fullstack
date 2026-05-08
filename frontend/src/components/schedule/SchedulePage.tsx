@@ -11,6 +11,7 @@ import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import { getNextScheduleOrder, groupSchedulesByPatient } from "@/helpers/schedules";
 import { patients } from "@/lib/mocks/patients";
 import { medicationSchedules as initialSchedules, type MedicationScheduleRecord } from "@/lib/mocks/schedules";
+import { getSchedulesFromApi } from "@/lib/scheduleApi";
 import { showConfirm, showToast } from "@/lib/swal";
 import ScheduleDetailModal from "./ScheduleDetailModal";
 import ScheduleModal from "./ScheduleModal";
@@ -37,6 +38,22 @@ export default function SchedulePage({ initialPatientName = "", readOnly = false
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [returnToDetailPatientId, setReturnToDetailPatientId] = useState<string | null>(null);
   const deferredSearch = useDeferredValue(search);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    getSchedulesFromApi()
+      .then((apiSchedules) => {
+        if (isMounted) setSchedules(apiSchedules);
+      })
+      .catch(() => {
+        if (isMounted) setSchedules(initialSchedules);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const summaryStats = useMemo(() => {
     const active = schedules.filter((schedule) => schedule.status === "Aktif").length;
@@ -77,12 +94,12 @@ export default function SchedulePage({ initialPatientName = "", readOnly = false
   useEffect(() => {
     if (!linkedPatientName) return;
 
-    const linkedPatientId = initialSchedules.find((schedule) => schedule.patientName.toLowerCase() === linkedPatientName)?.patientId;
+    const linkedPatientId = schedules.find((schedule) => schedule.patientName.toLowerCase() === linkedPatientName)?.patientId;
     if (!linkedPatientId) return;
 
     const openTimer = window.setTimeout(() => setSelectedPatientId(linkedPatientId), 420);
     return () => window.clearTimeout(openTimer);
-  }, [linkedPatientName]);
+  }, [linkedPatientName, schedules]);
 
   const handleSearchChange = (value: string) => {
     setSearch(value);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlarmClock, CalendarClock, CheckCircle2 } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
@@ -8,7 +8,8 @@ import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import type { SummaryCardItem } from "@/components/ui/SummaryCard";
 import { getDateKey, getMonthStart, getSchedulesForDate, isSameDate } from "@/helpers/patientSchedule";
 import { patients } from "@/lib/mocks/patients";
-import { medicationSchedules } from "@/lib/mocks/schedules";
+import { medicationSchedules, type MedicationScheduleRecord } from "@/lib/mocks/schedules";
+import { getSchedulesFromApi } from "@/lib/scheduleApi";
 import { showConfirm, showToast } from "@/lib/swal";
 import { usePatientDashboardStore } from "@/store/patientDashboard";
 import PatientDailyMedicineList from "./PatientDailyMedicineList";
@@ -24,7 +25,28 @@ export default function PatientSchedulePage() {
   const lastScan = usePatientDashboardStore((state) => state.lastScan);
   const confirmedScheduleDates = usePatientDashboardStore((state) => state.confirmedScheduleDates);
   const confirmScheduleForDate = usePatientDashboardStore((state) => state.confirmScheduleForDate);
-  const patientSchedules = useMemo(() => medicationSchedules.filter((schedule) => schedule.patientId === mockPatient.id), []);
+  const [allSchedules, setAllSchedules] = useState<MedicationScheduleRecord[]>(medicationSchedules);
+  const patientSchedules = useMemo(() => {
+    const apiPatientSchedules = allSchedules.filter((schedule) => schedule.patientName === mockPatient.name);
+    if (apiPatientSchedules.length > 0) return apiPatientSchedules;
+    return allSchedules.filter((schedule) => schedule.patientId === mockPatient.id);
+  }, [allSchedules]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    getSchedulesFromApi()
+      .then((apiSchedules) => {
+        if (isMounted) setAllSchedules(apiSchedules);
+      })
+      .catch(() => {
+        if (isMounted) setAllSchedules(medicationSchedules);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
   const schedulesForSelectedDate = useMemo(() => getSchedulesForDate(patientSchedules, selectedDate), [patientSchedules, selectedDate]);
   const selectedDateKey = getDateKey(selectedDate);
   const confirmedScheduleIds = confirmedScheduleDates[selectedDateKey] ?? [];
