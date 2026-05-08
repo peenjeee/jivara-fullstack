@@ -8,6 +8,7 @@ import {
   validateLoginIdentifier,
   validateRefreshToken,
   validateCompletePasswordChange,
+  validateUserId,
 } from "../validators/auth.validator";
 
 const router = Router();
@@ -36,10 +37,9 @@ const loginLimiter = rateLimit({
  * @swagger
  * /api/auth/register:
  *   post:
- *     summary: Daftarkan pengguna baru (admin only)
+ *     summary: Daftarkan pengguna baru untuk menunggu persetujuan admin
  *     tags: [Auth]
- *     security:
- *       - bearerAuth: []
+ *     security: []
  *     requestBody:
  *       required: true
  *       content:
@@ -69,19 +69,38 @@ const loginLimiter = rateLimit({
  *         description: Pengguna berhasil terdaftar
  *       400:
  *         description: Permintaan tidak valid
- *       401:
- *         description: Token akses diperlukan
  *       403:
- *         description: Hanya admin yang dapat mendaftarkan pengguna
+ *         description: Akun belum disetujui saat login
  *       409:
  *         description: Pengguna sudah terdaftar
  */
 router.post(
   "/register",
-  authenticateToken,
-  authorizeRoles("admin"),
   validateRegister,
   authController.register
+);
+
+router.get(
+  "/registrations/pending",
+  authenticateToken,
+  authorizeRoles("admin"),
+  authController.listPendingRegistrations
+);
+
+router.patch(
+  "/registrations/:id/approve",
+  authenticateToken,
+  authorizeRoles("admin"),
+  validateUserId,
+  authController.approveRegistration
+);
+
+router.patch(
+  "/registrations/:id/reject",
+  authenticateToken,
+  authorizeRoles("admin"),
+  validateUserId,
+  authController.rejectRegistration
 );
 
 /**

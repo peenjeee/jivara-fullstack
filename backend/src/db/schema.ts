@@ -28,12 +28,14 @@ export const users = pgTable("users", {
   gender: varchar("gender", { length: 10 }),
   address: text("address"),
   isActive: boolean("is_active").default(true),
+  approvalStatus: varchar("approval_status", { length: 20 }).notNull().default("approved"),
   mustChangePassword: boolean("must_change_password").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
   roleIdx: index("idx_users_role").on(table.role),
   phoneIdx: index("idx_users_phone").on(table.phone),
+  approvalStatusIdx: index("idx_users_approval_status").on(table.approvalStatus),
 }));
 
 // ─────────────────────────────────────────────

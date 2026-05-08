@@ -45,6 +45,7 @@ export interface UserProfile {
   gender?: string | null;
   address?: string | null;
   isActive?: boolean;
+  approvalStatus?: string;
   mustChangePassword?: boolean | null;
   createdAt?: Date | null;
 }

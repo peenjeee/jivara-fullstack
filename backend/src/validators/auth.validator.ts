@@ -80,6 +80,20 @@ export const validateLoginIdentifier = (req: Request, res: Response, next: NextF
   next();
 };
 
+export const validateUserId = (req: Request, res: Response, next: NextFunction) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(id)) {
+    return res.status(400).json({
+      status: "gagal",
+      message: "ID pengguna tidak valid",
+      error_code: "VALIDATION_ERROR",
+    });
+  }
+
+  next();
+};
+
 export const validateRefreshToken = validate([
   { field: "refresh_token", label: "Token refresh", required: true },
 ]);

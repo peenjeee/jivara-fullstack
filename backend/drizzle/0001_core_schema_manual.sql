@@ -1,4 +1,6 @@
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "must_change_password" boolean DEFAULT true;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "approval_status" varchar(20) DEFAULT 'approved' NOT NULL;
+UPDATE "users" SET "approval_status" = 'approved' WHERE "approval_status" IS NULL;
 
 CREATE TABLE IF NOT EXISTS "patients" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -164,6 +166,7 @@ CREATE TABLE IF NOT EXISTS "audit_logs" (
 
 CREATE INDEX IF NOT EXISTS "idx_users_role" ON "users" USING btree ("role");
 CREATE INDEX IF NOT EXISTS "idx_users_phone" ON "users" USING btree ("phone");
+CREATE INDEX IF NOT EXISTS "idx_users_approval_status" ON "users" USING btree ("approval_status");
 CREATE INDEX IF NOT EXISTS "idx_patients_user" ON "patients" USING btree ("user_id");
 CREATE INDEX IF NOT EXISTS "idx_nurses_user" ON "nurses" USING btree ("user_id");
 CREATE INDEX IF NOT EXISTS "idx_assignments_patient" ON "patient_nurse_assignments" USING btree ("patient_id");
