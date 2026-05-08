@@ -21,6 +21,10 @@ export default function RegisterForm() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  const updatePhone = (value: string) => {
+    setPhone(value.replace(/\D/g, ""));
+  };
+
   const handleRegister = async (event: React.FormEvent) => {
     event.preventDefault();
     setLoading(true);
@@ -102,10 +106,12 @@ export default function RegisterForm() {
         <AuthInput
           id="phone"
           label="Nomor Telepon"
-          type="text"
-          placeholder="+628..."
+          type="tel"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          placeholder="628..."
           value={phone}
-          onChange={(event) => setPhone(event.target.value)}
+          onChange={(event) => updatePhone(event.target.value)}
           autoComplete="tel"
           icon={<Phone size={20} />}
         />

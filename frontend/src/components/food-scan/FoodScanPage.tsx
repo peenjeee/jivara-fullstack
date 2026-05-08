@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ChangeEvent, type RefObject } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type RefObject } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Camera, Loader2, ScanLine } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
@@ -12,17 +12,31 @@ import { foodScans, type FoodScanRecord } from "@/lib/mocks/foodScans";
 import { patients } from "@/lib/mocks/patients";
 import { showToast } from "@/lib/swal";
 import { usePatientDashboardStore } from "@/store/patientDashboard";
+import { getDashboardRole } from "@/components/dashboard/navigation";
+import { useAuthStore } from "@/store/auth";
+import { useRouter } from "next/navigation";
 import FoodScanAnalysisView from "./FoodScanAnalysisView";
 
 const mockPatient = patients[0];
 const patientScanResults = foodScans.filter((scan) => scan.patientId === mockPatient.id);
 
 export default function FoodScanPage() {
+  const router = useRouter();
+  const userRole = useAuthStore((state) => state.user?.role);
+  const hasAuthHydrated = useAuthStore((state) => state.hasHydrated);
+  const dashboardRole = getDashboardRole(userRole);
   const [isScanning, setIsScanning] = useState(false);
   const [scanResult, setScanResult] = useState<FoodScanRecord | null>(null);
   const [scanAnalysis, setScanAnalysis] = useState<FoodScanAnalysis | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const setLastScan = usePatientDashboardStore((state) => state.setLastScan);
+
+  useEffect(() => {
+    if (!hasAuthHydrated || dashboardRole !== "admin") return;
+    router.replace("/dashboard");
+  }, [dashboardRole, hasAuthHydrated, router]);
+
+  if (!hasAuthHydrated || dashboardRole === "admin") return null;
 
   const runScan = () => {
     if (!isScanning) fileInputRef.current?.click();

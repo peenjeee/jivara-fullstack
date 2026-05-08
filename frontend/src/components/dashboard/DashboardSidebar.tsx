@@ -14,7 +14,7 @@ interface DashboardSidebarProps {
 }
 
 export default function DashboardSidebar({ activeItem, role, onLogout, onNavigate }: DashboardSidebarProps) {
-  const unreadActivityCount = useActivityLogStore((state) => getUnreadActivityCount(state.activities, role === "patient" ? patients[0].id : undefined));
+  const unreadActivityCount = useActivityLogStore((state) => role === "admin" ? 0 : getUnreadActivityCount(state.activities, role === "patient" ? patients[0].id : undefined));
   const navItems = getDashboardNavItems(role);
 
   return (

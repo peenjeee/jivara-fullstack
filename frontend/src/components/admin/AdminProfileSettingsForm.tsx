@@ -7,19 +7,19 @@ import Button from "@/components/ui/Button";
 import { showToast, showWarning } from "@/lib/swal";
 import { useAuthStore } from "@/store/auth";
 
-const previewUser = {
-  fullName: "Nurse Jivara",
-  email: "nurse@jivara.id",
-  phone: "6281234567890",
+const fallbackAdmin = {
+  fullName: "Admin Jivara",
+  email: "admin@jivara.id",
+  phone: "6281200000000",
 };
 
 const numericPhone = (value: string | null | undefined) => (value ?? "").replace(/\D/g, "");
 
-export default function ProfileSettingsForm() {
+export default function AdminProfileSettingsForm() {
   const { user, token, refreshToken, setAuth } = useAuthStore();
-  const [fullName, setFullName] = useState(user?.fullName ?? previewUser.fullName);
-  const [email, setEmail] = useState(user?.email ?? previewUser.email);
-  const [phone, setPhone] = useState(numericPhone(user?.phone ?? previewUser.phone));
+  const [fullName, setFullName] = useState(user?.fullName ?? fallbackAdmin.fullName);
+  const [email, setEmail] = useState(user?.email ?? fallbackAdmin.email);
+  const [phone, setPhone] = useState(numericPhone(user?.phone ?? fallbackAdmin.phone));
 
   const updatePhone = (value: string) => {
     setPhone(value.replace(/\D/g, ""));
@@ -27,8 +27,6 @@ export default function ProfileSettingsForm() {
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
-
-    //  if (!user) return;
 
     const trimmedName = fullName.trim();
     const trimmedEmail = email.trim();
@@ -43,13 +41,13 @@ export default function ProfileSettingsForm() {
       setAuth({ ...user, fullName: trimmedName, email: trimmedEmail, phone: trimmedPhone }, token, refreshToken);
     }
 
-    showToast("Profil berhasil diperbarui.");
+    showToast("Profil admin berhasil diperbarui.");
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5" noValidate>
       <AuthInput
-        id="settingsName"
+        id="adminSettingsName"
         label="Nama Lengkap"
         value={fullName}
         onChange={(event) => setFullName(event.target.value)}
@@ -58,7 +56,7 @@ export default function ProfileSettingsForm() {
       />
       <div className="grid gap-5 sm:grid-cols-2">
         <AuthInput
-          id="settingsEmail"
+          id="adminSettingsEmail"
           label="Email"
           type="email"
           value={email}
@@ -67,7 +65,7 @@ export default function ProfileSettingsForm() {
           autoComplete="email"
         />
         <AuthInput
-          id="settingsPhone"
+          id="adminSettingsPhone"
           label="Nomor Telepon"
           type="tel"
           inputMode="numeric"

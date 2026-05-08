@@ -39,7 +39,7 @@ function createContentSecurityPolicy(nonce: string, pathname: string) {
   return directives.join('; ');
 }
 
-const protectedRoutes = ['/dashboard', '/patients', '/schedule', '/activity-log', '/settings', '/food-scan'];
+const protectedRoutes = ['/dashboard', '/patients', '/schedule', '/activity-log', '/settings', '/food-scan', '/nurses'];
 
 // Route yang TIDAK boleh diakses jika sudah login
 const authRoutes = ['/login', '/register'];

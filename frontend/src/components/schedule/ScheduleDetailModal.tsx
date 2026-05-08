@@ -10,11 +10,12 @@ import ScheduleStatusBadge from "./ScheduleStatusBadge";
 
 interface ScheduleDetailModalProps {
   readonly group: PatientScheduleGroup | null;
+  readonly readOnly?: boolean;
   readonly onClose: () => void;
   readonly onAction: (action: ScheduleAction, schedule: MedicationScheduleRecord) => void;
 }
 
-export default function ScheduleDetailModal({ group, onClose, onAction }: ScheduleDetailModalProps) {
+export default function ScheduleDetailModal({ group, readOnly = false, onClose, onAction }: ScheduleDetailModalProps) {
   return (
     <Modal isOpen={Boolean(group)} title="Detail Jadwal Obat" onClose={onClose}>
       {group && (
@@ -34,7 +35,7 @@ export default function ScheduleDetailModal({ group, onClose, onAction }: Schedu
 
           <div className="space-y-4">
             {group.schedules.map((schedule, index) => (
-              <MedicineDetail key={schedule.id} schedule={schedule} index={index} onAction={onAction} />
+              <MedicineDetail key={schedule.id} schedule={schedule} index={index} readOnly={readOnly} onAction={onAction} />
             ))}
           </div>
         </div>
@@ -43,7 +44,7 @@ export default function ScheduleDetailModal({ group, onClose, onAction }: Schedu
   );
 }
 
-function MedicineDetail({ schedule, index, onAction }: { readonly schedule: MedicationScheduleRecord; readonly index: number; readonly onAction: (action: ScheduleAction, schedule: MedicationScheduleRecord) => void }) {
+function MedicineDetail({ schedule, index, readOnly, onAction }: { readonly schedule: MedicationScheduleRecord; readonly index: number; readonly readOnly: boolean; readonly onAction: (action: ScheduleAction, schedule: MedicationScheduleRecord) => void }) {
   return (
     <motion.article
       className="rounded-3xl bg-surface p-5"
@@ -59,7 +60,7 @@ function MedicineDetail({ schedule, index, onAction }: { readonly schedule: Medi
           </div>
           <p className="mt-1 text-sm font-bold text-muted">{schedule.dose} - {schedule.medicineForm}</p>
         </div>
-        <ScheduleActions schedule={schedule} actions={["edit", "toggle", "delete"]} onAction={onAction} />
+        {!readOnly && <ScheduleActions schedule={schedule} actions={["edit", "toggle", "delete"]} onAction={onAction} />}
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">

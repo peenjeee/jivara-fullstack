@@ -37,7 +37,7 @@ export default function PatientActivityToolbar({ search, quickFilter, category, 
         <SelectField
           id="patientActivityCategory"
           value={category}
-          options={[{ label: "Semua kategori", value: "all" }, ...activityCategories.map((currentCategory) => ({ label: currentCategory, value: currentCategory }))]}
+          options={[{ label: "Semua kategori", value: "all" }, ...activityCategories.filter((currentCategory) => currentCategory !== "Administrasi").map((currentCategory) => ({ label: currentCategory, value: currentCategory }))]}
           className={FORM_PILL_INPUT_CLASS}
           onChange={onCategoryChange}
         />

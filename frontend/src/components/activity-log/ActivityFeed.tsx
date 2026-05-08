@@ -11,9 +11,10 @@ interface ActivityFeedProps {
   readonly onLoadMore: () => void;
   readonly onMarkRead: (activityId: string) => void;
   readonly onViewDetail: (activity: ActivityLogRecord) => void;
+  readonly readOnly?: boolean;
 }
 
-export default function ActivityFeed({ activities, visibleCount, onLoadMore, onMarkRead, onViewDetail }: ActivityFeedProps) {
+export default function ActivityFeed({ activities, visibleCount, onLoadMore, onMarkRead, onViewDetail, readOnly = false }: ActivityFeedProps) {
   const visibleActivities = activities.slice(0, visibleCount);
   const groups = groupActivityLogsByDate(visibleActivities);
   const hasMore = visibleCount < activities.length;
@@ -36,7 +37,7 @@ export default function ActivityFeed({ activities, visibleCount, onLoadMore, onM
           </div>
           <div className="space-y-4 border-l-2 border-line pl-4 sm:pl-6">
             {group.items.map((activity, index) => (
-              <ActivityFeedItem key={activity.id} activity={activity} index={index} onMarkRead={onMarkRead} onViewDetail={onViewDetail} />
+              <ActivityFeedItem key={activity.id} activity={activity} index={index} readOnly={readOnly} onMarkRead={onMarkRead} onViewDetail={onViewDetail} />
             ))}
           </div>
         </div>

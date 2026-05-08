@@ -20,8 +20,8 @@ export default function ActivityLogRouteClient({ initialPatientName, initialCate
 
   if (!hasAuthHydrated) return null;
 
-  return dashboardRole === "nurse" ? (
-    <ActivityLogPage initialPatientName={initialPatientName} initialCategory={initialCategory} />
+  return dashboardRole === "nurse" || dashboardRole === "admin" ? (
+    <ActivityLogPage initialPatientName={initialPatientName} initialCategory={initialCategory} readOnly={dashboardRole === "admin"} />
   ) : (
     <PatientActivityLogPage initialCategory={initialCategory} />
   );

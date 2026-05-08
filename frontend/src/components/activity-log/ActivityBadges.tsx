@@ -13,12 +13,14 @@ export const activityCategoryTextStyles: Record<ActivityCategory, string> = {
   Reminder: "text-primary",
   Kepatuhan: "text-leaf",
   "Scan Makanan": "text-leaf",
+  Administrasi: "text-warning",
 };
 
 export const activityCategoryIcons: Record<ActivityCategory, LucideIcon> = {
   Reminder: BellRing,
   Kepatuhan: CheckCircle2,
   "Scan Makanan": ScanLine,
+  Administrasi: ClipboardList,
 };
 
 export const activitySeverityIcons: Record<ActivitySeverity, LucideIcon> = {

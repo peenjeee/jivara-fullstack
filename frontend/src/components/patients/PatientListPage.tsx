@@ -8,8 +8,10 @@ import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import Button from "@/components/ui/Button";
 import { getNextPatientOrder } from "@/helpers/patients";
+import { getNurseByPatientId } from "@/helpers/nurses";
 import { patients as initialPatients, type PatientRecord } from "@/lib/mocks/patients";
 import { showConfirm, showToast } from "@/lib/swal";
+import { useNurseStore } from "@/store/nurses";
 import AddPatientModal from "./AddPatientModal";
 import { createPatientRecord, type AddPatientValues } from "./AddPatientForm";
 import type { PatientAction } from "./PatientActions";
@@ -19,8 +21,14 @@ import PatientToolbar, { type PatientFilter } from "./PatientToolbar";
 
 const pageSize = 10;
 
-export default function PatientListPage() {
+interface PatientListPageProps {
+  readonly mode?: "manage" | "readonly";
+}
+
+export default function PatientListPage({ mode = "manage" }: PatientListPageProps) {
   const router = useRouter();
+  const nurses = useNurseStore((state) => state.nurses);
+  const assignments = useNurseStore((state) => state.assignments);
   const [patientRecords, setPatientRecords] = useState(initialPatients);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<PatientFilter>("all");
@@ -41,6 +49,7 @@ export default function PatientListPage() {
 
   const totalPages = Math.max(1, Math.ceil(filteredPatients.length / pageSize));
   const paginatedPatients = filteredPatients.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const assignedNurseByPatientId = useMemo(() => Object.fromEntries(patientRecords.map((patient) => [patient.id, getNurseByPatientId(nurses, assignments, patient.id)?.fullName ?? "Belum ditugaskan"])), [assignments, nurses, patientRecords]);
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
@@ -112,7 +121,7 @@ export default function PatientListPage() {
     <DashboardPageShell>
       <DashboardPageHeader
         title="Daftar Pasien"
-        action={(
+        action={mode === "manage" && (
           <Button size="sm" icon={<Plus size={16} />} onClick={() => setIsAddModalOpen(true)}>
             Tambah Pasien Baru
           </Button>
@@ -141,7 +150,7 @@ export default function PatientListPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.18 }}
       >
-        <PatientTable patients={paginatedPatients} actions={["view", "edit", "delete"]} onAction={handlePatientAction} embedded emptyMessage="Tidak ada data pasien." />
+        <PatientTable patients={paginatedPatients} actions={mode === "readonly" ? ["view"] : ["view", "edit", "delete"]} onAction={handlePatientAction} embedded emptyMessage="Tidak ada data pasien." assignedNurseByPatientId={mode === "readonly" ? assignedNurseByPatientId : undefined} />
         <PatientPagination
           currentPage={currentPage}
           totalPages={totalPages}
@@ -150,9 +159,9 @@ export default function PatientListPage() {
           onPageChange={(page) => setCurrentPage(Math.min(Math.max(page, 1), totalPages))}
         />
       </motion.div>
-      <AddPatientModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} onSubmit={handleAddPatient} />
+      {mode === "manage" && <AddPatientModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} onSubmit={handleAddPatient} />}
       <AddPatientModal
-        isOpen={Boolean(editingPatient)}
+        isOpen={mode === "manage" && Boolean(editingPatient)}
         initialValues={
           editingPatient
             ? {

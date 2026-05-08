@@ -22,9 +22,10 @@ import type { ScheduleAction } from "./ScheduleActions";
 const pageSize = 10;
 interface SchedulePageProps {
   readonly initialPatientName?: string;
+  readonly readOnly?: boolean;
 }
 
-export default function SchedulePage({ initialPatientName = "" }: SchedulePageProps) {
+export default function SchedulePage({ initialPatientName = "", readOnly = false }: SchedulePageProps) {
   const linkedPatientName = initialPatientName.trim().toLowerCase();
   const [schedules, setSchedules] = useState(initialSchedules);
   const [search, setSearch] = useState("");
@@ -173,7 +174,7 @@ export default function SchedulePage({ initialPatientName = "" }: SchedulePagePr
     <DashboardPageShell>
       <DashboardPageHeader
         title="Jadwal Obat"
-        action={(
+        action={!readOnly && (
           <Button size="sm" icon={<Plus size={16} />} onClick={() => setIsAddModalOpen(true)}>
             Tambah Jadwal
           </Button>
@@ -201,6 +202,7 @@ export default function SchedulePage({ initialPatientName = "" }: SchedulePagePr
           groups={paginatedGroups}
           onViewDetail={(group) => setSelectedPatientId(group.patientId)}
           onAddMedicine={(group) => setAddMedicinePatientId(group.patientId)}
+          readOnly={readOnly}
           emptyMessage="Tidak ada data jadwal."
         />
         <PatientPagination
@@ -213,7 +215,7 @@ export default function SchedulePage({ initialPatientName = "" }: SchedulePagePr
         />
       </motion.div>
 
-      <ScheduleModal isOpen={isAddModalOpen} patients={patients} medicineIndexOffsetByPatient={medicineCountByPatient} onClose={() => setIsAddModalOpen(false)} onSubmit={handleAddSchedule} />
+      {!readOnly && <ScheduleModal isOpen={isAddModalOpen} patients={patients} medicineIndexOffsetByPatient={medicineCountByPatient} onClose={() => setIsAddModalOpen(false)} onSubmit={handleAddSchedule} />}
       <ScheduleModal
         isOpen={Boolean(addMedicinePatientId)}
         patients={patients}
@@ -236,7 +238,7 @@ export default function SchedulePage({ initialPatientName = "" }: SchedulePagePr
         }}
         onSubmit={handleEditSchedule}
       />
-      <ScheduleDetailModal group={selectedGroup} onClose={() => setSelectedPatientId(null)} onAction={handleScheduleAction} />
+      <ScheduleDetailModal group={selectedGroup} readOnly={readOnly} onClose={() => setSelectedPatientId(null)} onAction={handleScheduleAction} />
     </DashboardPageShell>
   );
 }

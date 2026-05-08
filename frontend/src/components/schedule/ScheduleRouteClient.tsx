@@ -19,5 +19,6 @@ export default function ScheduleRouteClient({ initialPatientName }: ScheduleRout
 
   if (!hasAuthHydrated) return null;
 
+  if (dashboardRole === "admin") return <SchedulePage initialPatientName={initialPatientName} readOnly />;
   return dashboardRole === "nurse" ? <SchedulePage initialPatientName={initialPatientName} /> : <PatientSchedulePage />;
 }

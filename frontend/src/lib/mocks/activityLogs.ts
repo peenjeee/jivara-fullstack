@@ -2,7 +2,7 @@ import { medicationSchedules } from "./schedules";
 import { patients } from "./patients";
 import { foodScans } from "./foodScans";
 
-export type ActivityCategory = "Reminder" | "Kepatuhan" | "Scan Makanan";
+export type ActivityCategory = "Reminder" | "Kepatuhan" | "Scan Makanan" | "Administrasi";
 export type ActivitySeverity = "Info" | "Sukses" | "Peringatan" | "Kritis";
 
 export interface ActivityLogRecord {
@@ -18,10 +18,12 @@ export interface ActivityLogRecord {
   readonly scheduleId?: string;
   readonly medicineName?: string;
   readonly scanId?: string;
+  readonly sourceNurseId?: string;
+  readonly targetNurseId?: string;
   readonly read: boolean;
 }
 
-export const activityCategories: readonly ActivityCategory[] = ["Reminder", "Kepatuhan", "Scan Makanan"];
+export const activityCategories: readonly ActivityCategory[] = ["Reminder", "Kepatuhan", "Scan Makanan", "Administrasi"];
 
 const today = new Date();
 const atTime = (dayOffset: number, hour: number, minute: number) => {

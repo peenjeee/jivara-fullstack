@@ -28,7 +28,7 @@ export default function PatientProfileHero({ patient }: PatientProfileHeroProps)
             {patient.image ? (
               <Image src={patient.image} alt="" width={96} height={96} sizes="(max-width: 640px) 80px, 96px" className="h-20 w-20 shrink-0 rounded-full object-cover sm:h-24 sm:w-24" />
             ) : (
-              <div className="grid h-20 w-20 shrink-0 place-items-center rounded-full bg-white font-display text-2xl font-extrabold text-primary sm:h-24 sm:w-24 sm:text-3xl">
+              <div className="grid h-20 w-20 shrink-0 place-items-center rounded-full bg-primary/10 font-display text-2xl font-extrabold text-primary sm:h-24 sm:w-24 sm:text-3xl">
                 {patient.avatar}
               </div>
             )}

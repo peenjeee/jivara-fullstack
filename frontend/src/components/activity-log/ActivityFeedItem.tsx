@@ -9,11 +9,12 @@ import { ActivityCategoryBadge, ActivityCategoryIcon, ActivitySeverityBadge } fr
 interface ActivityFeedItemProps {
   readonly activity: ActivityLogRecord;
   readonly index: number;
+  readonly readOnly?: boolean;
   readonly onMarkRead: (activityId: string) => void;
   readonly onViewDetail: (activity: ActivityLogRecord) => void;
 }
 
-export default function ActivityFeedItem({ activity, index, onMarkRead, onViewDetail }: ActivityFeedItemProps) {
+export default function ActivityFeedItem({ activity, index, readOnly = false, onMarkRead, onViewDetail }: ActivityFeedItemProps) {
   return (
     <motion.article
       className={`relative rounded-3xl border bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.06)] transition-colors sm:p-5 border-transparent`}
@@ -22,7 +23,7 @@ export default function ActivityFeedItem({ activity, index, onMarkRead, onViewDe
       whileHover={{ y: -2 }}
       transition={{ duration: 0.38, ease: [0.16, 1, 0.3, 1], delay: index * 0.035 }}
     >
-      {!activity.read && <span className="absolute right-5 top-5 h-2.5 w-2.5 rounded-full bg-primary" aria-label="Belum dibaca" />}
+      {!readOnly && !activity.read && <span className="absolute right-5 top-5 h-2.5 w-2.5 rounded-full bg-primary" aria-label="Belum dibaca" />}
 
       <div className="flex gap-4">
         <ActivityCategoryIcon category={activity.category} />
@@ -49,7 +50,7 @@ export default function ActivityFeedItem({ activity, index, onMarkRead, onViewDe
             <button type="button" onClick={() => onViewDetail(activity)} className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-2 text-sm font-extrabold text-primary transition-colors hover:bg-primary hover:text-white">
               <Eye size={15} /> Detail
             </button>
-            {!activity.read && (
+            {!readOnly && !activity.read && (
               <button type="button" onClick={() => onMarkRead(activity.id)} className="inline-flex items-center gap-2 rounded-full bg-surface px-4 py-2 text-sm font-extrabold text-muted transition-colors hover:bg-line/60 hover:text-text-main">
                 <CheckCheck size={15} /> Tandai dibaca
               </button>

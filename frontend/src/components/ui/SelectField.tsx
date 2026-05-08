@@ -19,10 +19,11 @@ interface SelectFieldProps<TValue extends string> {
   readonly disabled?: boolean;
   readonly required?: boolean;
   readonly className?: string;
+  readonly inlineOptions?: boolean;
   readonly onChange?: (value: TValue) => void;
 }
 
-export default function SelectField<TValue extends string>({ id, name, value, defaultValue, options, placeholder = "Pilih", disabled = false, required = false, className = "", onChange }: SelectFieldProps<TValue>) {
+export default function SelectField<TValue extends string>({ id, name, value, defaultValue, options, placeholder = "Pilih", disabled = false, required = false, className = "", inlineOptions = false, onChange }: SelectFieldProps<TValue>) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const isControlled = value !== undefined;
   const [isOpen, setIsOpen] = useState(false);
@@ -66,7 +67,7 @@ export default function SelectField<TValue extends string>({ id, name, value, de
       </button>
 
       {isOpen && !disabled && (
-        <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-40 overflow-hidden rounded-2xl border border-line bg-white p-1 shadow-[0_18px_45px_rgba(15,23,42,0.16)]">
+        <div className={`${inlineOptions ? "mt-2" : "absolute left-0 right-0 top-[calc(100%+8px)] z-40"} overflow-hidden rounded-2xl border border-line bg-white p-1 shadow-[0_18px_45px_rgba(15,23,42,0.16)]`}>
           <div role="listbox" aria-labelledby={`${id}-label`} className="max-h-64 overflow-y-auto py-1">
             {options.map((option) => {
               const isSelected = option.value === selectedValue;

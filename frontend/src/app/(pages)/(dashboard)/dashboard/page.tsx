@@ -7,6 +7,7 @@ import { useSplashScreen } from "@/components/ui/AppSplashScreen";
 import { getDashboardRole } from "@/components/dashboard/navigation";
 
 const NurseDashboardPage = dynamic(() => import("@/components/dashboard/NurseDashboardPage"), { ssr: false, loading: () => <DashboardRouteFallback /> });
+const AdminDashboardPage = dynamic(() => import("@/components/admin/AdminDashboardPage"), { ssr: false, loading: () => <DashboardRouteFallback /> });
 const PatientDashboardPage = dynamic(() => import("@/components/patient-dashboard/PatientDashboardPage"), { ssr: false, loading: () => <DashboardRouteFallback /> });
 
 export default function DashboardPage() {
@@ -17,5 +18,6 @@ export default function DashboardPage() {
 
   if (!hasAuthHydrated || !isSplashFinished) return null;
 
+  if (dashboardRole === "admin") return <AdminDashboardPage />;
   return dashboardRole === "nurse" ? <NurseDashboardPage /> : <PatientDashboardPage />;
 }

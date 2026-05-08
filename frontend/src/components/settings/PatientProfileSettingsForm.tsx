@@ -9,15 +9,20 @@ import { showToast, showWarning } from "@/lib/swal";
 import { useAuthStore } from "@/store/auth";
 
 const mockPatient = patients[0];
+const numericPhone = (value: string | null | undefined) => (value ?? "").replace(/\D/g, "");
 
 export default function PatientProfileSettingsForm() {
   const { user, token, refreshToken, setAuth } = useAuthStore();
   const [fullName, setFullName] = useState(user?.fullName ?? mockPatient.name);
-  const [phone, setPhone] = useState(user?.phone ?? mockPatient.phone ?? "");
+  const [phone, setPhone] = useState(numericPhone(user?.phone ?? mockPatient.phone));
   const [address, setAddress] = useState(user?.address ?? mockPatient.address ?? "");
   const email = user?.email ?? mockPatient.email ?? "Belum tersedia";
   const age = user?.age || mockPatient.age;
   const gender = user?.gender ?? mockPatient.gender;
+
+  const updatePhone = (value: string) => {
+    setPhone(value.replace(/\D/g, ""));
+  };
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -43,7 +48,7 @@ export default function PatientProfileSettingsForm() {
       <AuthInput id="patientSettingsName" label="Nama Lengkap" value={fullName} onChange={(event) => setFullName(event.target.value)} icon={<User size={20} />} autoComplete="name" />
 
       <div className="grid gap-5 sm:grid-cols-2">
-        <AuthInput id="patientSettingsPhone" label="Nomor Telepon" value={phone} onChange={(event) => setPhone(event.target.value)} icon={<Phone size={20} />} autoComplete="tel" />
+        <AuthInput id="patientSettingsPhone" label="Nomor Telepon" type="tel" inputMode="numeric" pattern="[0-9]*" placeholder="628..." value={phone} onChange={(event) => updatePhone(event.target.value)} icon={<Phone size={20} />} autoComplete="tel" />
         <AuthInput id="patientSettingsEmail" label="Email" type="email" value={email} onChange={() => undefined} icon={<Mail size={20} />} autoComplete="email" disabled />
       </div>
 

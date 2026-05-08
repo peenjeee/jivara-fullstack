@@ -1,4 +1,4 @@
-import { CalendarClock, Home, ListChecks, ScanLine, Settings, UserRound } from "lucide-react";
+import { CalendarClock, Home, ListChecks, ScanLine, Settings, UserRound, UsersRound } from "lucide-react";
 
 export const DASHBOARD_NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard", icon: Home },
@@ -24,19 +24,36 @@ export const PATIENT_BOTTOM_NAV_ITEMS = [
   { label: "Pengaturan", href: "/settings", icon: Settings },
 ] as const;
 
-export type DashboardRole = "nurse" | "patient";
+export const ADMIN_NAV_ITEMS = [
+  { label: "Dashboard", href: "/dashboard", icon: Home },
+  { label: "Perawat", href: "/nurses", icon: UsersRound },
+  { label: "Pasien", href: "/patients", icon: UserRound },
+  { label: "Jadwal", href: "/schedule", icon: CalendarClock },
+  { label: "Log Aktivitas", href: "/activity-log", icon: ListChecks },
+] as const;
 
-export type DashboardNavLabel = (typeof DASHBOARD_NAV_ITEMS)[number]["label"] | (typeof PATIENT_BOTTOM_NAV_ITEMS)[number]["label"];
-export type DashboardNavItemConfig = (typeof DASHBOARD_BOTTOM_NAV_ITEMS)[number] | (typeof PATIENT_BOTTOM_NAV_ITEMS)[number];
+export const ADMIN_BOTTOM_NAV_ITEMS = [
+  ...ADMIN_NAV_ITEMS,
+  { label: "Pengaturan", href: "/settings", icon: Settings },
+] as const;
+
+export type DashboardRole = "admin" | "nurse" | "patient";
+
+export type DashboardNavLabel = (typeof DASHBOARD_NAV_ITEMS)[number]["label"] | (typeof PATIENT_BOTTOM_NAV_ITEMS)[number]["label"] | (typeof ADMIN_BOTTOM_NAV_ITEMS)[number]["label"];
+export type DashboardNavItemConfig = (typeof DASHBOARD_BOTTOM_NAV_ITEMS)[number] | (typeof PATIENT_BOTTOM_NAV_ITEMS)[number] | (typeof ADMIN_BOTTOM_NAV_ITEMS)[number];
 
 export function getDashboardRole(role?: string | null): DashboardRole {
-  return role === "nurse" || role === "admin" ? "nurse" : "patient";
+  if (role === "admin") return "admin";
+  if (role === "nurse") return "nurse";
+  return "patient";
 }
 
 export function getDashboardNavItems(role: DashboardRole): readonly DashboardNavItemConfig[] {
+  if (role === "admin") return ADMIN_NAV_ITEMS;
   return role === "patient" ? PATIENT_NAV_ITEMS : DASHBOARD_NAV_ITEMS;
 }
 
 export function getDashboardBottomNavItems(role: DashboardRole): readonly DashboardNavItemConfig[] {
+  if (role === "admin") return ADMIN_BOTTOM_NAV_ITEMS;
   return role === "patient" ? PATIENT_BOTTOM_NAV_ITEMS : DASHBOARD_BOTTOM_NAV_ITEMS;
 }

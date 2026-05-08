@@ -30,6 +30,7 @@ interface AddPatientFormProps {
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PATIENT_INPUT_CLASS = FORM_INPUT_CLASS;
+const numericPhone = (value: string | undefined) => (value ?? "").replace(/\D/g, "");
 
 export function createPatientRecord(values: AddPatientValues, order: number): PatientRecord {
   const initials = values.fullName
@@ -62,10 +63,14 @@ export default function AddPatientForm({ initialValues, mode = "add", onSubmit }
   const [fullName, setFullName] = useState(initialValues?.fullName ?? "");
   const [age, setAge] = useState(initialValues?.age ? String(initialValues.age) : "");
   const [gender, setGender] = useState<"Pria" | "Wanita" | "">(initialValues?.gender ?? "");
-  const [phone, setPhone] = useState(initialValues?.phone ?? "");
+  const [phone, setPhone] = useState(numericPhone(initialValues?.phone));
   const [email, setEmail] = useState(initialValues?.email ?? "");
   const [password, setPassword] = useState(initialValues?.password ?? "");
   const [address, setAddress] = useState(initialValues?.address ?? "");
+
+  const updatePhone = (value: string) => {
+    setPhone(value.replace(/\D/g, ""));
+  };
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -151,7 +156,7 @@ export default function AddPatientForm({ initialValues, mode = "add", onSubmit }
             </div>
           </fieldset>
           <FormField label="Nomor Telepon" required>
-            <input id="patientPhone" name="patientPhone" type="text" placeholder="+628..." value={phone} onChange={(event) => setPhone(event.target.value)} className={PATIENT_INPUT_CLASS} />
+            <input id="patientPhone" name="patientPhone" type="tel" inputMode="numeric" pattern="[0-9]*" placeholder="628..." value={phone} onChange={(event) => updatePhone(event.target.value)} className={PATIENT_INPUT_CLASS} autoComplete="tel" />
           </FormField>
         </div>
 

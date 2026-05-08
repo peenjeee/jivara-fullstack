@@ -13,7 +13,7 @@ import { useAuthStore } from "@/store/auth";
 import { useIsStandalonePwa } from "@/hooks";
 import PwaTopLogoBar from "@/components/ui/PwaTopLogoBar";
 import DashboardBottomNav from "./DashboardBottomNav";
-import NurseDashboardNavbar from "./NurseDashboardNavbar";
+import DashboardNavbar from "./DashboardNavbar";
 
 interface DashboardLayoutProps {
   readonly children: ReactNode;
@@ -66,7 +66,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <div className="flex min-h-screen flex-col bg-surface">
-      <NurseDashboardNavbar onLogout={handleLogout} />
+      <DashboardNavbar onLogout={handleLogout} />
       {isStandalonePwa && (
         <PwaTopLogoBar
           rightAction={(

@@ -14,8 +14,9 @@ export default function DashboardBottomNav() {
   const userRole = useAuthStore((state) => state.user?.role);
   const hasAuthHydrated = useAuthStore((state) => state.hasHydrated);
   const dashboardRole = getDashboardRole(userRole);
-  const unreadActivityCount = useActivityLogStore((state) => getUnreadActivityCount(state.activities, dashboardRole === "patient" ? patients[0].id : undefined));
+  const unreadActivityCount = useActivityLogStore((state) => dashboardRole === "admin" ? 0 : getUnreadActivityCount(state.activities, dashboardRole === "patient" ? patients[0].id : undefined));
   const bottomNavItems = getDashboardBottomNavItems(dashboardRole);
+  const columnCount = bottomNavItems.length;
 
   if (!hasAuthHydrated) return null;
 
@@ -27,7 +28,7 @@ export default function DashboardBottomNav() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
     >
-      <div className={`grid gap-1 ${bottomNavItems.length === 5 ? "grid-cols-5" : "grid-cols-4"}`}>
+      <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}>
         {bottomNavItems.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);

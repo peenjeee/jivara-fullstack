@@ -14,11 +14,11 @@ export default function PatientsRouteClient() {
   const dashboardRole = getDashboardRole(userRole);
 
   useEffect(() => {
-    if (!hasAuthHydrated || dashboardRole === "nurse") return;
+    if (!hasAuthHydrated || dashboardRole === "nurse" || dashboardRole === "admin") return;
     router.replace("/dashboard");
   }, [dashboardRole, hasAuthHydrated, router]);
 
-  if (!hasAuthHydrated || dashboardRole !== "nurse") return <DashboardRouteFallback />;
+  if (!hasAuthHydrated || (dashboardRole !== "nurse" && dashboardRole !== "admin")) return <DashboardRouteFallback />;
 
-  return <PatientListPage />;
+  return <PatientListPage mode={dashboardRole === "admin" ? "readonly" : "manage"} />;
 }

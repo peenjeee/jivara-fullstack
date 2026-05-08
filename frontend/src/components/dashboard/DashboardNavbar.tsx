@@ -10,11 +10,11 @@ import { useAuthStore } from "@/store/auth";
 import DashboardSidebar from "./DashboardSidebar";
 import { getDashboardNavItems, getDashboardRole, type DashboardNavLabel, type DashboardRole } from "./navigation";
 
-interface NurseDashboardNavbarProps {
+interface DashboardNavbarProps {
   readonly onLogout: () => void;
 }
 
-export default function NurseDashboardNavbar({ onLogout }: NurseDashboardNavbarProps) {
+export default function DashboardNavbar({ onLogout }: DashboardNavbarProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const drawerRef = useRef<HTMLElement | null>(null);

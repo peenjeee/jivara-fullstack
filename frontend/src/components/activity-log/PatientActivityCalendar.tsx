@@ -28,6 +28,7 @@ const categoryChipClasses: Record<ActivityCategory, string> = {
   Reminder: "bg-warning/18 text-[#7a5a14]",
   Kepatuhan: "bg-primary/14 text-primary",
   "Scan Makanan": "bg-[var(--blue)]/14 text-[var(--blue)]",
+  Administrasi: "bg-surface text-muted",
 };
 
 const severityDotClasses: Record<ActivitySeverity, string> = {

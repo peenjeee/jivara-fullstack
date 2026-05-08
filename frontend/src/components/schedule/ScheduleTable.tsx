@@ -10,10 +10,11 @@ interface ScheduleTableProps {
   readonly groups: readonly PatientScheduleGroup[];
   readonly onViewDetail: (group: PatientScheduleGroup) => void;
   readonly onAddMedicine: (group: PatientScheduleGroup) => void;
+  readonly readOnly?: boolean;
   readonly emptyMessage?: string;
 }
 
-export default function ScheduleTable({ groups, onViewDetail, onAddMedicine, emptyMessage = "Tidak ada data yang tersedia." }: ScheduleTableProps) {
+export default function ScheduleTable({ groups, onViewDetail, onAddMedicine, readOnly = false, emptyMessage = "Tidak ada data yang tersedia." }: ScheduleTableProps) {
   const isEmpty = groups.length === 0;
 
   return (
@@ -56,7 +57,7 @@ export default function ScheduleTable({ groups, onViewDetail, onAddMedicine, emp
                   <td className="px-4 py-4 text-sm font-extrabold text-text-main">{group.schedules.length} obat</td>
                   <td className="px-4 py-4 text-sm font-extrabold text-text-main">{group.totalMedicineStock} item</td>
                   <td className="px-4 py-4 text-sm font-extrabold text-text-main">{group.activeReminders}</td>
-                  <td className="px-4 py-4"><GroupActions group={group} onViewDetail={onViewDetail} onAddMedicine={onAddMedicine} /></td>
+                  <td className="px-4 py-4"><GroupActions group={group} readOnly={readOnly} onViewDetail={onViewDetail} onAddMedicine={onAddMedicine} /></td>
                 </motion.tr>
               ))
             )}
@@ -87,7 +88,7 @@ export default function ScheduleTable({ groups, onViewDetail, onAddMedicine, emp
                 <InfoItem label="Reminder" value={`${group.activeReminders} aktif`} />
               </div>
               <div className="mt-4">
-                <GroupActions group={group} onViewDetail={onViewDetail} onAddMedicine={onAddMedicine} />
+                <GroupActions group={group} readOnly={readOnly} onViewDetail={onViewDetail} onAddMedicine={onAddMedicine} />
               </div>
             </motion.article>
           ))
@@ -110,8 +111,9 @@ function PatientCell({ group }: { readonly group: PatientScheduleGroup }) {
   );
 }
 
-function GroupActions({ group, onViewDetail, onAddMedicine }: {
+function GroupActions({ group, readOnly = false, onViewDetail, onAddMedicine }: {
   readonly group: PatientScheduleGroup;
+  readonly readOnly?: boolean;
   readonly onViewDetail: (group: PatientScheduleGroup) => void;
   readonly onAddMedicine: (group: PatientScheduleGroup) => void;
 }) {
@@ -120,9 +122,7 @@ function GroupActions({ group, onViewDetail, onAddMedicine }: {
       <IconActionButton label={`Lihat detail ${group.patientName}`} onClick={() => onViewDetail(group)}>
         <Eye size={16} />
       </IconActionButton>
-      <IconActionButton label={`Tambah obat ${group.patientName}`} onClick={() => onAddMedicine(group)}>
-        <Plus size={16} />
-      </IconActionButton>
+      {!readOnly && <IconActionButton label={`Tambah obat ${group.patientName}`} onClick={() => onAddMedicine(group)}><Plus size={16} /></IconActionButton>}
     </div>
   );
 }

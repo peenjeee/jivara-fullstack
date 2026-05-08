@@ -12,10 +12,12 @@ interface PatientTableProps {
   readonly onAction?: (action: PatientAction, patient: PatientRecord) => void;
   readonly embedded?: boolean;
   readonly emptyMessage?: string;
+  readonly assignedNurseByPatientId?: Readonly<Record<string, string>>;
 }
 
-export default function PatientTable({ patients, title, showViewAll = false, actions = ["view"], onAction, embedded = false, emptyMessage = "Tidak ada data yang tersedia." }: PatientTableProps) {
+export default function PatientTable({ patients, title, showViewAll = false, actions = ["view"], onAction, embedded = false, emptyMessage = "Tidak ada data yang tersedia.", assignedNurseByPatientId }: PatientTableProps) {
   const isEmpty = patients.length === 0;
+  const showAssignedNurse = Boolean(assignedNurseByPatientId);
 
   return (
     <section id="pasien" className={`overflow-hidden bg-white ${embedded ? "rounded-t-3xl" : "rounded-3xl shadow-[0_10px_30px_rgba(15,23,42,0.08)]"}`}>
@@ -29,12 +31,13 @@ export default function PatientTable({ patients, title, showViewAll = false, act
       <div className="hidden sm:block">
         <table className="w-full table-fixed text-left">
           <colgroup>
-            <col className="w-[25%]" />
+            <col className={showAssignedNurse ? "w-[20%]" : "w-[25%]"} />
             <col className="w-[8%]" />
-            <col className="w-[19%]" />
-            <col className="w-[16%]" />
-            <col className="w-[18%]" />
-            <col className="w-[14%]" />
+            <col className={showAssignedNurse ? "w-[20%]" : "w-[19%]"} />
+            <col className={showAssignedNurse ? "w-[14%]" : "w-[16%]"} />
+            <col className={showAssignedNurse ? "w-[13%]" : "w-[18%]"} />
+            {showAssignedNurse && <col className="w-[18%]" />}
+            <col className={showAssignedNurse ? "w-[7%]" : "w-[14%]"} />
           </colgroup>
           <thead className="bg-surface text-xs font-extrabold uppercase tracking-[0.08em] text-muted">
             <tr>
@@ -43,13 +46,14 @@ export default function PatientTable({ patients, title, showViewAll = false, act
               <th className="px-3 py-4 lg:px-5">Status</th>
               <th className="px-3 py-4 lg:px-5">Kunjungan Terakhir</th>
               <th className="px-3 py-4 lg:px-5">Kepatuhan</th>
+              {showAssignedNurse && <th className="px-3 py-4 lg:px-5">Perawat</th>}
               <th className="px-3 py-4 text-right lg:px-5">Aksi</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
             {isEmpty ? (
               <tr>
-                <td colSpan={6} className="px-5 py-12 text-center text-sm font-bold text-muted">
+                <td colSpan={showAssignedNurse ? 7 : 6} className="px-5 py-12 text-center text-sm font-bold text-muted">
                   {emptyMessage}
                 </td>
               </tr>
@@ -63,6 +67,7 @@ export default function PatientTable({ patients, title, showViewAll = false, act
                   <td className="px-3 py-4 lg:px-5"><PatientStatusBadge status={patient.status} /></td>
                   <td className="px-3 py-4 text-sm font-bold text-muted lg:px-5">{patient.lastVisit}</td>
                   <td className="px-3 py-4 lg:px-5"><PatientAdherence value={patient.adherence} /></td>
+                  {showAssignedNurse && <td className="px-3 py-4 text-sm font-bold text-muted lg:px-5">{assignedNurseByPatientId?.[patient.id] ?? "Belum ditugaskan"}</td>}
                   <td className="px-3 py-4 lg:px-5"><PatientActions patient={patient} actions={actions} onAction={onAction} /></td>
                 </tr>
               ))
@@ -86,6 +91,7 @@ export default function PatientTable({ patients, title, showViewAll = false, act
                 <span>{patient.lastVisit}</span>
                 <PatientStatusBadge status={patient.status} />
                 <PatientAdherence value={patient.adherence} />
+                {showAssignedNurse && <span className="col-span-2">Perawat: {assignedNurseByPatientId?.[patient.id] ?? "Belum ditugaskan"}</span>}
               </div>
             </article>
           ))
