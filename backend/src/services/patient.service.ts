@@ -11,7 +11,7 @@ import {
   users,
 } from "../db/schema";
 import { AUTH_CONSTANTS } from "../types/auth.types";
-import { AccessUser, assertCanAccessPatient, getOrganizationIdForUser, scopedPatientFilter } from "./access-control.service";
+import { AccessUser, assertCanAccessPatient, ensureOrganizationIdForUser, getOrganizationIdForUser, scopedPatientFilter } from "./access-control.service";
 import { writeAuditLog } from "./audit-log.service";
 import {
   PatientCreateDTO,
@@ -186,7 +186,7 @@ export const getPatientById = async (patientId: string, user?: AccessUser) => {
 };
 
 export const createPatient = async (dto: PatientCreateDTO, createdBy?: string) => {
-  const organizationId = createdBy ? await getOrganizationIdForUser(createdBy) : null;
+  const organizationId = createdBy ? await ensureOrganizationIdForUser(createdBy) : null;
 
   if (!organizationId) {
     throw { status: 403, message: "Pengguna belum terhubung ke organisasi", code: "ORGANIZATION_REQUIRED" };

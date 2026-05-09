@@ -14,12 +14,10 @@ import ActivityDetailModal from "@/components/activity-log/ActivityDetailModal";
 import Button from "@/components/ui/Button";
 import DetailItem from "@/components/ui/DetailItem";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
-import { activityMatchesNurse, getAverageAdherence, getNurseInitials, getPatientsForNurse } from "@/helpers/nurses";
+import { activityMatchesNurse, getAverageAdherence, getNurseInitials } from "@/helpers/nurses";
 import { getDashboardRole, isOperationalAdminRole } from "@/components/dashboard/navigation";
 import type { ActivityLogRecord } from "@/lib/mocks/activityLogs";
 import type { PatientRecord } from "@/lib/mocks/patients";
-import { patients as mockPatients } from "@/lib/mocks/patients";
-import { TEMP_ADMIN_TEST_MODE } from "@/lib/tempAdminTestMode";
 import { deactivateNurseViaApi } from "@/lib/nurseApi";
 import { assignPatientToNurseViaApi } from "@/lib/patientApi";
 import { showConfirm, showError, showToast, showWarning } from "@/lib/swal";
@@ -61,11 +59,6 @@ export default function NurseDetailPage({ nurseId }: NurseDetailPageProps) {
     if (!hasAuthHydrated || isOperationalAdminRole(dashboardRole) || dashboardRole === "nurse") return;
     router.replace("/dashboard");
   }, [dashboardRole, hasAuthHydrated, router]);
-
-  useEffect(() => {
-    if (!TEMP_ADMIN_TEST_MODE || !nurse) return;
-    setAssignedPatients(getPatientsForNurse(mockPatients, assignments, nurse.id));
-  }, [assignments, nurse]);
 
   if (!hasAuthHydrated || (dashboardRole !== "nurse" && !isOperationalAdminRole(dashboardRole))) return null;
 

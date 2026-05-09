@@ -34,6 +34,7 @@ export const ADMIN_NAV_ITEMS = [
 
 export const SUPER_ADMIN_NAV_ITEMS = [
   { label: "Persetujuan Admin", href: "/admin-approvals", icon: ShieldCheck },
+  { label: "Log Aktivitas", href: "/activity-log", icon: ListChecks },
 ] as const;
 
 export const ADMIN_BOTTOM_NAV_ITEMS = [

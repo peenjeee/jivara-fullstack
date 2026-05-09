@@ -1,8 +1,6 @@
 import { create } from "zustand";
 import { getNextNurseId } from "@/helpers/nurses";
-import { nurses as mockNurses, patientNurseAssignments } from "@/lib/mocks/nurses";
 import type { NurseGender, NurseRecord, NurseStatus, PatientNurseAssignment } from "@/lib/mocks/nurses";
-import { TEMP_ADMIN_TEST_MODE } from "@/lib/tempAdminTestMode";
 
 export interface NurseFormValues {
   readonly fullName: string;
@@ -27,8 +25,8 @@ interface NurseStoreState {
 const formatJoinedAt = () => new Date().toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
 
 export const useNurseStore = create<NurseStoreState>()((set, get) => ({
-  nurses: TEMP_ADMIN_TEST_MODE ? mockNurses : [],
-  assignments: TEMP_ADMIN_TEST_MODE ? patientNurseAssignments : {},
+  nurses: [],
+  assignments: {},
   setNurses: (nurses) => set({ nurses }),
   addNurse: (values) => {
     const nurse: NurseRecord = {

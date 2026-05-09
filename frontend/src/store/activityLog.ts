@@ -1,7 +1,5 @@
 import { create } from "zustand";
-import { activityLogs } from "@/lib/mocks/activityLogs";
 import type { ActivityLogRecord } from "@/lib/mocks/activityLogs";
-import { TEMP_ADMIN_TEST_MODE } from "@/lib/tempAdminTestMode";
 
 interface ActivityLogState {
   readonly activities: ActivityLogRecord[];
@@ -12,7 +10,7 @@ interface ActivityLogState {
 }
 
 export const useActivityLogStore = create<ActivityLogState>()((set) => ({
-  activities: TEMP_ADMIN_TEST_MODE ? activityLogs : [],
+  activities: [],
   setActivities: (activities) => set({ activities }),
   addActivity: (activity) => set((state) => ({
     activities: [activity, ...state.activities],

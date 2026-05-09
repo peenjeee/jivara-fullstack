@@ -311,10 +311,18 @@ export const approveAdminApproval = async (adminId: string, approverId: string |
     throw { status: 404, message: "Pengajuan admin tidak ditemukan atau sudah diproses", code: "APPROVAL_NOT_FOUND" };
   }
 
+  await writeAuditLog({
+    userId: approverId,
+    action: "admin.approved",
+    resourceType: "admin_approval",
+    resourceId: updatedUser.id,
+    changes: { after: { accountStatus: updatedUser.accountStatus, email: updatedUser.email, fullName: updatedUser.fullName } },
+  });
+
   return updatedUser;
 };
 
-export const rejectAdminApproval = async (adminId: string, dto: RejectAdminApprovalDTO) => {
+export const rejectAdminApproval = async (adminId: string, dto: RejectAdminApprovalDTO, rejectedBy: string | null = null) => {
   const [updatedUser] = await db
     .update(users)
     .set({
@@ -329,6 +337,14 @@ export const rejectAdminApproval = async (adminId: string, dto: RejectAdminAppro
   if (!updatedUser) {
     throw { status: 404, message: "Pengajuan admin tidak ditemukan atau sudah diproses", code: "APPROVAL_NOT_FOUND" };
   }
+
+  await writeAuditLog({
+    userId: rejectedBy,
+    action: "admin.rejected",
+    resourceType: "admin_approval",
+    resourceId: updatedUser.id,
+    changes: { after: { accountStatus: updatedUser.accountStatus, email: updatedUser.email, fullName: updatedUser.fullName, reason: updatedUser.rejectedReason } },
+  });
 
   return updatedUser;
 };
@@ -349,10 +365,18 @@ export const activateSuspendedAdmin = async (adminId: string, approverId: string
     throw { status: 404, message: "Admin suspend tidak ditemukan", code: "SUSPENDED_ADMIN_NOT_FOUND" };
   }
 
+  await writeAuditLog({
+    userId: approverId,
+    action: "admin.activated",
+    resourceType: "admin_approval",
+    resourceId: updatedUser.id,
+    changes: { after: { accountStatus: updatedUser.accountStatus, email: updatedUser.email, fullName: updatedUser.fullName } },
+  });
+
   return updatedUser;
 };
 
-export const restoreRejectedAdmin = async (adminId: string) => {
+export const restoreRejectedAdmin = async (adminId: string, restoredBy: string | null = null) => {
   const [updatedUser] = await db
     .update(users)
     .set({
@@ -368,10 +392,18 @@ export const restoreRejectedAdmin = async (adminId: string) => {
     throw { status: 404, message: "Admin ditolak tidak ditemukan", code: "REJECTED_ADMIN_NOT_FOUND" };
   }
 
+  await writeAuditLog({
+    userId: restoredBy,
+    action: "admin.restored",
+    resourceType: "admin_approval",
+    resourceId: updatedUser.id,
+    changes: { after: { accountStatus: updatedUser.accountStatus, email: updatedUser.email, fullName: updatedUser.fullName } },
+  });
+
   return updatedUser;
 };
 
-export const suspendActiveAdmin = async (adminId: string) => {
+export const suspendActiveAdmin = async (adminId: string, suspendedBy: string | null = null) => {
   const [updatedUser] = await db
     .update(users)
     .set({
@@ -384,6 +416,14 @@ export const suspendActiveAdmin = async (adminId: string) => {
   if (!updatedUser) {
     throw { status: 404, message: "Admin aktif tidak ditemukan", code: "ACTIVE_ADMIN_NOT_FOUND" };
   }
+
+  await writeAuditLog({
+    userId: suspendedBy,
+    action: "admin.suspended",
+    resourceType: "admin_approval",
+    resourceId: updatedUser.id,
+    changes: { after: { accountStatus: updatedUser.accountStatus, email: updatedUser.email, fullName: updatedUser.fullName } },
+  });
 
   return updatedUser;
 };

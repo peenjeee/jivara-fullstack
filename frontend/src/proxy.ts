@@ -58,8 +58,6 @@ function createContentSecurityPolicy(nonce: string, pathname: string) {
 }
 
 const protectedRoutes = ['/dashboard', '/patients', '/schedule', '/activity-log', '/settings', '/food-scan', '/nurses', '/admin-approvals', '/account-status'];
-const TEMP_ADMIN_TEST_MODE = true;
-const tempAdminRoutes = ['/dashboard', '/patients', '/schedule', '/activity-log', '/settings', '/nurses'];
 
 // Route yang TIDAK boleh diakses jika sudah login
 const authRoutes = ['/login', '/register'];
@@ -100,7 +98,7 @@ function isRouteAllowedForRole(pathname: string, role?: string) {
   if (pathname.startsWith('/nurses')) return role === 'admin' || role === 'nurse';
   if (pathname.startsWith('/patients')) return role === 'admin' || role === 'nurse';
   if (pathname.startsWith('/schedule')) return role === 'admin' || role === 'nurse' || role === 'patient';
-  if (pathname.startsWith('/activity-log')) return role === 'admin' || role === 'nurse' || role === 'patient';
+  if (pathname.startsWith('/activity-log')) return role === 'super_admin' || role === 'admin' || role === 'nurse' || role === 'patient';
   if (pathname.startsWith('/food-scan')) return role === 'patient';
   return true;
 }
@@ -130,18 +128,6 @@ export async function proxy(request: NextRequest) {
 
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
   const isAuthRoute = authRoutes.some(route => pathname.startsWith(route));
-  const isTempAdminRoute = tempAdminRoutes.some(route => pathname.startsWith(route));
-
-  if (TEMP_ADMIN_TEST_MODE && isTempAdminRoute) {
-    const response = NextResponse.next({
-      request: {
-        headers: requestHeaders,
-      },
-    });
-    response.headers.set('Content-Security-Policy', contentSecurityPolicy);
-    supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
-    return response;
-  }
 
   if (isProtectedRoute && !hasValidToken) {
     const url = new URL('/login', request.url);

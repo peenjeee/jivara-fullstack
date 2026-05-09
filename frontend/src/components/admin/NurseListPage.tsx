@@ -21,7 +21,6 @@ import { createNurseViaApi, deactivateNurseViaApi, getNursesFromApi, updateNurse
 import { showConfirm, showError, showToast, showWarning } from "@/lib/swal";
 import { useNurseStore, type NurseFormValues } from "@/store/nurses";
 import { useAuthStore } from "@/store/auth";
-import { TEMP_ADMIN_TEST_MODE } from "@/lib/tempAdminTestMode";
 import NurseModal from "./NurseModal";
 import NurseStatusBadge from "./NurseStatusBadge";
 
@@ -62,7 +61,6 @@ export default function NurseListPage() {
 
   useEffect(() => {
     if (!hasAuthHydrated || (dashboardRole !== "admin" && dashboardRole !== "nurse")) return;
-    if (TEMP_ADMIN_TEST_MODE) return;
 
     let isMounted = true;
 

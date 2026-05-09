@@ -4,7 +4,7 @@ import { db } from "../db";
 import { nurses, patientNurseAssignments, users } from "../db/schema";
 import { AUTH_CONSTANTS } from "../types/auth.types";
 import { NurseCreateDTO, NurseListQuery, NurseUpdateDTO } from "../types/nurse.types";
-import { AccessUser, getOrganizationIdForUser } from "./access-control.service";
+import { AccessUser, ensureOrganizationIdForUser, getOrganizationIdForUser } from "./access-control.service";
 import { writeAuditLog } from "./audit-log.service";
 
 const parsePagination = (query: NurseListQuery) => {
@@ -144,7 +144,7 @@ export const getNurseById = async (nurseId: string, user?: AccessUser) => {
 };
 
 export const createNurse = async (dto: NurseCreateDTO, createdBy?: string) => {
-  const organizationId = createdBy ? await getOrganizationIdForUser(createdBy) : null;
+  const organizationId = createdBy ? await ensureOrganizationIdForUser(createdBy) : null;
 
   if (!organizationId) {
     throw { status: 403, message: "Admin belum terhubung ke organisasi", code: "ORGANIZATION_REQUIRED" };

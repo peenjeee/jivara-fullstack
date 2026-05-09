@@ -1,10 +1,7 @@
 import { AlertTriangle, CalendarClock, CheckCircle2, UserRound, UsersRound } from "lucide-react";
 import type { SummaryCardItem } from "@/components/ui/SummaryCard";
 import api from "@/lib/axios";
-import { TEMP_ADMIN_TEST_MODE } from "@/lib/tempAdminTestMode";
 import type { PatientRecord, PatientStatus } from "@/lib/mocks/patients";
-import { patients as mockPatients } from "@/lib/mocks/patients";
-import { nurses as mockNurses } from "@/lib/mocks/nurses";
 
 interface PatientListResponse {
   id: string;
@@ -109,16 +106,6 @@ export const getNurseDashboardData = async (): Promise<NurseDashboardData> => {
 };
 
 export const getAdminDashboardStats = async (): Promise<AdminDashboardStatsData> => {
-  if (TEMP_ADMIN_TEST_MODE) {
-    return {
-      stats: [
-        { label: "Total Perawat", value: String(mockNurses.length), tone: "neutral", color: "pine", icon: UsersRound },
-        { label: "Total Pasien", value: String(mockPatients.length), tone: "safe", color: "leaf", icon: UserRound },
-        { label: "Jadwal Aktif", value: "8", tone: "neutral", color: "lime", icon: CalendarClock },
-      ],
-    };
-  }
-
   const response = await api.get<{ data: AggregateAdherenceResponse }>("/adherence/aggregate", { params: { period: "30d" } });
   const aggregate = response.data.data;
 

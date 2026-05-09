@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../db";
-import { nurses, patientNurseAssignments, patients, users } from "../db/schema";
+import { nurses, organizations, patientNurseAssignments, patients, users } from "../db/schema";
 
 export type AccessUser = {
   id: string;
@@ -42,6 +42,34 @@ export const getOrganizationIdForUser = async (userId: string) => {
     .limit(1);
 
   return row[0]?.organizationId || null;
+};
+
+export const ensureOrganizationIdForUser = async (userId: string) => {
+  const row = await db
+    .select({ id: users.id, fullName: users.fullName, role: users.role, organizationId: users.organizationId })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  const user = row[0];
+  if (!user) return null;
+  if (user.organizationId) return user.organizationId;
+  if (user.role !== "admin" && user.role !== "nurse") return null;
+
+  return db.transaction(async (tx) => {
+    const [organization] = await tx
+      .insert(organizations)
+      .values({ name: `${user.fullName} Organization` })
+      .returning({ id: organizations.id });
+
+    await tx.update(users).set({ organizationId: organization.id, updatedAt: new Date() }).where(eq(users.id, user.id));
+
+    if (user.role === "nurse") {
+      await tx.update(nurses).set({ organizationId: organization.id }).where(eq(nurses.userId, user.id));
+    }
+
+    return organization.id;
+  });
 };
 
 export const getAssignedPatientIdsForNurse = async (nurseId: string) => {

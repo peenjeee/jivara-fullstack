@@ -64,6 +64,6 @@ router.use(authenticateToken);
  *       403:
  *         description: Hanya admin yang dapat melihat audit log
  */
-router.get("/", authorizeRoles("admin"), auditLogController.listAuditLogs);
+router.get("/", authorizeRoles("admin", "super_admin"), auditLogController.listAuditLogs);
 
 export default router;

@@ -15,8 +15,6 @@ import { getPatientsForNurse } from "@/helpers/nurses";
 import { getAdminDashboardStats } from "@/lib/dashboardApi";
 import { getSchedulesFromApi } from "@/lib/scheduleApi";
 import type { PatientRecord } from "@/lib/mocks/patients";
-import { patients as mockPatients } from "@/lib/mocks/patients";
-import { TEMP_ADMIN_TEST_MODE } from "@/lib/tempAdminTestMode";
 import { useActivityLogStore } from "@/store/activityLog";
 import { useNurseStore } from "@/store/nurses";
 import NurseStatusBadge from "./NurseStatusBadge";
@@ -31,7 +29,7 @@ export default function AdminDashboardPage() {
   const nurses = useNurseStore((state) => state.nurses);
   const assignments = useNurseStore((state) => state.assignments);
   const activities = useActivityLogStore((state) => state.activities);
-  const patients: PatientRecord[] = TEMP_ADMIN_TEST_MODE ? mockPatients : [];
+  const patients: PatientRecord[] = [];
   const inactiveNursesWithPatients = nurses
     .map((nurse) => ({ nurse, patients: getPatientsForNurse(patients, assignments, nurse.id) }))
     .filter((item) => item.nurse.status === "Nonaktif" && item.patients.length > 0);

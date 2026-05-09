@@ -3,9 +3,6 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 
-// TEMP TEST BYPASS: set false/remove when admin auth guard testing is done.
-const TEMP_ADMIN_TEST_MODE = true;
-
 function isTokenUsable(token?: string) {
   if (!token || token === "undefined" || token === "null") return false;
 
@@ -26,7 +23,7 @@ export default async function ProtectedDashboardLayout({ children }: { readonly 
   const cookieStore = await cookies();
   const token = cookieStore.get("jivara-token")?.value;
 
-  if (!TEMP_ADMIN_TEST_MODE && !isTokenUsable(token)) {
+  if (!isTokenUsable(token)) {
     redirect("/login");
   }
 

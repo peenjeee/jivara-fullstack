@@ -1,7 +1,6 @@
 import axios from 'axios';
 import { useAuthStore } from '@/store/auth';
 import Cookies from 'js-cookie';
-import { TEMP_ADMIN_TEST_MODE } from '@/lib/tempAdminTestMode';
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api',
@@ -48,10 +47,6 @@ api.interceptors.response.use(
     const originalRequest = error.config;
 
     if (error.response?.status === 401 && !originalRequest._retry) {
-      if (TEMP_ADMIN_TEST_MODE) {
-        return Promise.reject(error);
-      }
-
       if (isRefreshing) {
         return new Promise(function (resolve, reject) {
           failedQueue.push({ resolve, reject });

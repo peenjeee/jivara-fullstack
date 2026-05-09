@@ -9,9 +9,7 @@ import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import Button from "@/components/ui/Button";
 import { getNurseByPatientId } from "@/helpers/nurses";
 import type { PatientRecord } from "@/lib/mocks/patients";
-import { patients as mockPatients } from "@/lib/mocks/patients";
 import { createPatientViaApi, deactivatePatientViaApi, getPatientsFromApi, updatePatientViaApi } from "@/lib/patientApi";
-import { TEMP_ADMIN_TEST_MODE } from "@/lib/tempAdminTestMode";
 import { showConfirm, showError, showToast } from "@/lib/swal";
 import { useNurseStore } from "@/store/nurses";
 import AddPatientModal from "./AddPatientModal";
@@ -31,7 +29,7 @@ export default function PatientListPage({ mode = "manage" }: PatientListPageProp
   const router = useRouter();
   const nurses = useNurseStore((state) => state.nurses);
   const assignments = useNurseStore((state) => state.assignments);
-  const [patientRecords, setPatientRecords] = useState<PatientRecord[]>(() => TEMP_ADMIN_TEST_MODE ? mockPatients : []);
+  const [patientRecords, setPatientRecords] = useState<PatientRecord[]>([]);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<PatientFilter>("all");
   const [currentPage, setCurrentPage] = useState(1);
@@ -41,7 +39,6 @@ export default function PatientListPage({ mode = "manage" }: PatientListPageProp
 
   useEffect(() => {
     let isMounted = true;
-    if (TEMP_ADMIN_TEST_MODE) return;
 
     getPatientsFromApi()
       .then((patients) => {

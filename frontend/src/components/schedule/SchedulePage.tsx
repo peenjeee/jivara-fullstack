@@ -11,10 +11,7 @@ import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import { groupSchedulesByPatient } from "@/helpers/schedules";
 import { getPatientsFromApi } from "@/lib/patientApi";
 import type { PatientRecord } from "@/lib/mocks/patients";
-import { patients as mockPatients } from "@/lib/mocks/patients";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
-import { medicationSchedules } from "@/lib/mocks/schedules";
-import { TEMP_ADMIN_TEST_MODE } from "@/lib/tempAdminTestMode";
 import { createSchedulesViaApi, deactivateScheduleViaApi, getSchedulesFromApi, setScheduleActiveViaApi, updateScheduleViaApi } from "@/lib/scheduleApi";
 import { showConfirm, showError, showToast } from "@/lib/swal";
 import ScheduleDetailModal from "./ScheduleDetailModal";
@@ -32,8 +29,8 @@ interface SchedulePageProps {
 
 export default function SchedulePage({ initialPatientName = "", readOnly = false }: SchedulePageProps) {
   const linkedPatientName = initialPatientName.trim().toLowerCase();
-  const [schedules, setSchedules] = useState<MedicationScheduleRecord[]>(() => TEMP_ADMIN_TEST_MODE ? medicationSchedules : []);
-  const [patients, setPatients] = useState<PatientRecord[]>(() => TEMP_ADMIN_TEST_MODE ? mockPatients : []);
+  const [schedules, setSchedules] = useState<MedicationScheduleRecord[]>([]);
+  const [patients, setPatients] = useState<PatientRecord[]>([]);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<ScheduleFilter>("all");
   const [currentPage, setCurrentPage] = useState(1);
@@ -46,7 +43,6 @@ export default function SchedulePage({ initialPatientName = "", readOnly = false
 
   useEffect(() => {
     let isMounted = true;
-    if (TEMP_ADMIN_TEST_MODE) return;
 
     Promise.all([getSchedulesFromApi(), getPatientsFromApi()])
       .then(([apiSchedules, apiPatients]) => {

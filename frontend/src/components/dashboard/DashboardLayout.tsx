@@ -14,7 +14,6 @@ import { showConfirm, showToast } from "@/lib/swal";
 import { useAuthStore } from "@/store/auth";
 import type { User } from "@/types/auth";
 import { useIsStandalonePwa } from "@/hooks";
-import { TEMP_ADMIN_TEST_MODE } from "@/lib/tempAdminTestMode";
 import PwaTopLogoBar from "@/components/ui/PwaTopLogoBar";
 import DashboardBottomNav from "./DashboardBottomNav";
 import DashboardNavbar from "./DashboardNavbar";
@@ -34,6 +33,7 @@ function isPathAllowedForRole(pathname: string, role?: string) {
   if (pathname.startsWith("/settings")) return true;
   if (pathname.startsWith("/dashboard")) return true;
   if (pathname.startsWith("/admin-approvals")) return role === "super_admin";
+  if (pathname.startsWith("/activity-log") && role === "super_admin") return true;
   if (pathname.startsWith("/nurses")) return role === "admin" || role === "nurse";
   if (pathname.startsWith("/patients")) return role === "admin" || role === "nurse";
   if (pathname.startsWith("/schedule")) return role === "admin" || role === "nurse" || role === "patient";
@@ -79,7 +79,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   };
 
   const syncCurrentUser = useCallback(async (blockRender = false) => {
-    if (TEMP_ADMIN_TEST_MODE) return;
     if (!hasHydrated || isLoggingOut) return;
 
     if (userRole !== "admin") {
