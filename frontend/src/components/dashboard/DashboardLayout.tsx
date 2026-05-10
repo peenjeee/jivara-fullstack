@@ -139,7 +139,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   }, [hasHydrated, syncCurrentUser, userRole]);
 
   useEffect(() => {
-    if (!hasHydrated) return;
+    if (!hasHydrated || isLoggingOut) return;
 
     if (!user) {
       if (hasTriedSessionRestoreRef.current) {
@@ -166,7 +166,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     }
 
     if (!isCurrentRouteAllowed) router.replace(fallbackPath);
-  }, [fallbackPath, hasHydrated, isCurrentRouteAllowed, router, setAuth, user]);
+  }, [fallbackPath, hasHydrated, isCurrentRouteAllowed, router, setAuth, user, isLoggingOut]);
 
   const handleLogout = async () => {
     const result = await showConfirm("Keluar Akun?", "Anda perlu masuk kembali untuk mengakses data Anda.", "Ya, Keluar");

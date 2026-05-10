@@ -30,10 +30,10 @@ const baseSecurityHeaders = [
     key: "Access-Control-Allow-Origin",
     value: "https://www.jivara.web.id",
   },
-  {
+  ...(process.env.NODE_ENV === "production" ? [{
     key: "Strict-Transport-Security",
     value: "max-age=63072000; includeSubDomains; preload",
-  },
+  }] : []),
 ];
 
 const privateCacheHeaders = [

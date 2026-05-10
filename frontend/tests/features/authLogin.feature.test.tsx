@@ -51,7 +51,7 @@ describe("auth login feature", () => {
     vi.mocked(showLoading).mockClear();
     vi.mocked(showToast).mockClear();
     vi.mocked(showWarning).mockClear();
-    useAuthStore.setState({ user: null, token: null, isAuthenticated: false, hasHydrated: false });
+    useAuthStore.setState({ user: null, token: null, isAuthenticated: false, hasHydrated: true });
   });
 
   it("validates required fields before requesting login", () => {
