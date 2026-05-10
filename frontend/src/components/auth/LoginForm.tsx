@@ -31,30 +31,18 @@ export default function LoginForm() {
     if (!hasHydrated || hasTriedRestoreRef.current) return;
     hasTriedRestoreRef.current = true;
 
-    let isMounted = true;
+    const reason = searchParams.get("reason");
+    if (reason === "unauthenticated" && user) {
+      logout();
+      return;
+    }
 
-    const restoreSession = async () => {
-      try {
-        const response = await axios.post("/api/auth/refresh");
-        const accessToken = response.data.data.access_token;
-        if (!accessToken || !isMounted) return;
+    if (!user) {
+      return;
+    }
 
-        updateToken(accessToken);
-        if (response.data.data.user) updateUser(response.data.data.user);
-
-        const callbackUrl = searchParams.get("callbackUrl");
-        router.replace(getPostLoginPath(response.data.data.user ?? user ?? {}, callbackUrl));
-      } catch {
-        logout();
-        window.localStorage.removeItem("jivara-auth-storage");
-      }
-    };
-
-    void restoreSession();
-
-    return () => {
-      isMounted = false;
-    };
+    const callbackUrl = searchParams.get("callbackUrl");
+    router.replace(getPostLoginPath(user, callbackUrl));
   }, [hasHydrated, logout, router, searchParams, updateToken, updateUser, user]);
 
   const handleLogin = async (event: React.FormEvent) => {
@@ -99,6 +87,15 @@ export default function LoginForm() {
       setLoading(false);
     }
   };
+
+  if (!hasHydrated || user) {
+    return (
+      <div className="flex min-h-[400px] flex-col items-center justify-center space-y-4">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        <p className="font-body text-sm text-muted">Mohon Tunggu ...</p>
+      </div>
+    );
+  }
 
   return (
     <AuthCard

@@ -11,7 +11,7 @@ interface ScrollProviderProps {
 export default function ScrollProvider({ children }: ScrollProviderProps) {
   const pathname = usePathname();
   const lenisRef = useRef<Lenis | null>(null);
-  const shouldUseLenis = pathname === "/";
+  const shouldUseLenis = true;
 
   useEffect(() => {
     if (!shouldUseLenis) return;
@@ -22,6 +22,8 @@ export default function ScrollProvider({ children }: ScrollProviderProps) {
       orientation: "vertical",
       gestureOrientation: "vertical",
       smoothWheel: true,
+      syncTouch: true,
+      syncTouchLerp: 0.075,
       wheelMultiplier: 1,
       touchMultiplier: 2,
     });
@@ -36,7 +38,6 @@ export default function ScrollProvider({ children }: ScrollProviderProps) {
 
     rafId = requestAnimationFrame(raf);
 
-    // Menangani smooth scroll untuk tautan anchor
     const handleAnchorClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       const link = target.closest("a");
@@ -44,11 +45,11 @@ export default function ScrollProvider({ children }: ScrollProviderProps) {
       if (link && link.getAttribute("href")?.startsWith("/#")) {
         const id = link.getAttribute("href")?.split("#")[1];
         const element = document.getElementById(id || "");
-        
+
         if (element) {
           e.preventDefault();
           lenis.scrollTo(element, { offset: -80 });
-          
+
           window.history.pushState(null, "", `#${id}`);
         }
       } else if (link && link.getAttribute("href")?.startsWith("#")) {
@@ -84,9 +85,14 @@ export default function ScrollProvider({ children }: ScrollProviderProps) {
       return;
     }
 
-    if (shouldUseLenis) lenisRef.current?.scrollTo(0, { immediate: true });
+    const lenis = lenisRef.current;
+    if (lenis) {
+      lenis.scrollTo(0, { immediate: true });
+      return;
+    }
+
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
-  }, [pathname, shouldUseLenis]);
+  }, [pathname]);
 
   return <>{children}</>;
 }

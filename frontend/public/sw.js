@@ -1,12 +1,39 @@
 const OFFLINE_URL = "/offline";
-const CACHE_NAME = "jivara-offline-v3";
+const CACHE_NAME = "jivara-offline-v5";
 const OFFLINE_ASSETS = [OFFLINE_URL, "/images/logo/text.png", "/images/logo/notext.png", "/images/logo/splash.png"];
+
+async function cacheRequest(cache, request) {
+  try {
+    const response = await fetch(request);
+    if (response.ok) await cache.put(request, response.clone());
+    return response;
+  } catch {
+    return null;
+  }
+}
+
+function getStaticAssetUrls(html) {
+  return Array.from(html.matchAll(/(?:src|href)="([^\"]*\/_next\/static\/[^\"]+)"/g))
+    .map((match) => new URL(match[1], self.location.origin).href);
+}
+
+async function cacheOfflineRoute(cache) {
+  const request = new Request(OFFLINE_URL, { cache: "reload" });
+  const response = await cacheRequest(cache, request);
+  if (!response) return;
+
+  const html = await response.clone().text();
+  await Promise.allSettled(
+    getStaticAssetUrls(html).map((url) => cacheRequest(cache, new Request(url, { cache: "reload" }))),
+  );
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => Promise.all(
-      OFFLINE_ASSETS.map((asset) => cache.add(new Request(asset, { cache: "reload" }))),
-    )),
+    caches.open(CACHE_NAME).then(async (cache) => {
+      await Promise.allSettled(OFFLINE_ASSETS.map((asset) => cacheRequest(cache, new Request(asset, { cache: "reload" }))));
+      await cacheOfflineRoute(cache);
+    }),
   );
   self.skipWaiting();
 });
@@ -25,6 +52,17 @@ self.addEventListener("fetch", (event) => {
   if (event.request.mode === "navigate") {
     event.respondWith(
       fetch(event.request).catch(() => caches.match(OFFLINE_URL).then((response) => response ?? Response.error())),
+    );
+    return;
+  }
+
+  if (url.pathname.startsWith("/_next/static/")) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const cached = await cache.match(event.request);
+        const network = cacheRequest(cache, event.request);
+        return cached ?? await network ?? Response.error();
+      }),
     );
     return;
   }

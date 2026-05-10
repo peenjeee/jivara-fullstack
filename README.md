@@ -42,18 +42,18 @@ Proyek ini dibangun menggunakan arsitektur *monorepo* yang memisahkan antara fro
 
 Proyek ini dibagi menjadi dua bagian utama:
 
-- `/frontend` - Aplikasi Web berbasis Next.js 16 (App Router), React 19, dan Tailwind CSS 4. ([Lihat README Frontend](./frontend/README.md))
-- `/backend` - API Server berbasis Node.js 22, Express.js 5, Drizzle ORM, dan PostgreSQL. ([Lihat README Backend](./backend/README.md))
+- `/frontend` - ([Lihat README Frontend](./frontend/README.md))
+- `/backend` - ([Lihat README Backend](./backend/README.md))
 
 ---
 
 ## Persiapan (Prerequisites)
 
 Sebelum memulai, pastikan Anda telah menginstal:
-- [Node.js](https://nodejs.org/en) (Minimal versi **22.x**)
-- [npm](https://www.npmjs.com/) (Biasanya sudah sepaket dengan Node.js)
-- [Supabase](https://supabase.com/) (Layanan Database PostgreSQL utama yang digunakan dalam proyek ini)
-- Akun [Vercel](https://vercel.com/) (Untuk keperluan *deployment* frontend)
+- [Node.js](https://nodejs.org/en)
+- [npm](https://www.npmjs.com/)
+- [Supabase](https://supabase.com/)
+- [Vercel](https://vercel.com/)
 
 ---
 
@@ -62,24 +62,24 @@ Sebelum memulai, pastikan Anda telah menginstal:
 Karena proyek ini menggunakan dua direktori terpisah, Anda harus menjalankan *frontend* dan *backend* secara terpisah (di dua terminal berbeda).
 
 ### 1. Menjalankan Backend
-Silakan merujuk ke [Backend README](./backend/README.md) untuk konfigurasi environment dan database.
+[Backend README](./backend/README.md).
 
 ```bash
 cd backend
 npm install
-cp .env.example .env # Atur variabel di dalam .env
-npm run db:push      # Push skema ke database
-npm run dev          # Menjalankan server di port 5000 (default)
+cp .env.example .env
+npm run db:push
+npm run dev
 ```
 
 ### 2. Menjalankan Frontend
-Silakan merujuk ke [Frontend README](./frontend/README.md) untuk detail arsitektur antarmuka.
+[Frontend README](./frontend/README.md)
 
 ```bash
 cd frontend
 npm install
-cp .env.local.example .env.local # Atur variabel di dalam .env.local
-npm run dev                      # Menjalankan aplikasi web di port 3000
+cp .env.local.example .env.local
+npm run dev
 ```
 
 ---

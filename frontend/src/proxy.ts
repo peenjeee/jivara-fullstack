@@ -59,8 +59,31 @@ function createContentSecurityPolicy(nonce: string, pathname: string) {
 
 const protectedRoutes = ['/dashboard', '/patients', '/schedule', '/activity-log', '/settings', '/food-scan', '/nurses', '/admin-approvals', '/account-status'];
 
-// Route yang TIDAK boleh diakses jika sudah login
 const authRoutes = ['/login', '/register'];
+const authCookieNames = ['jivara-token', 'jivara-refresh-token', 'jivara-role', 'jivara-account-status'];
+const logoutCookieName = 'jivara-logged-out';
+
+function expireAuthCookies(response: NextResponse) {
+  for (const name of authCookieNames) {
+    response.cookies.set(name, '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/',
+      maxAge: 0,
+    });
+  }
+}
+
+function setLogoutMarker(response: NextResponse) {
+  response.cookies.set(logoutCookieName, '1', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    path: '/',
+    maxAge: 5 * 60,
+  });
+}
 
 function decodeJwtPayload(token?: string) {
   if (!token) return null;
@@ -120,9 +143,10 @@ export async function proxy(request: NextRequest) {
   const refreshToken = request.cookies.get('jivara-refresh-token')?.value;
   const roleCookie = request.cookies.get('jivara-role')?.value;
   const accountStatusCookie = request.cookies.get('jivara-account-status')?.value;
+  const hasLogoutMarker = request.cookies.get(logoutCookieName)?.value === '1';
   const hasValidToken = isTokenUsable(token);
   const hasRefreshToken = Boolean(refreshToken && refreshToken !== 'undefined' && refreshToken !== 'null');
-  const hasSession = hasValidToken || hasRefreshToken;
+  const hasSession = !hasLogoutMarker && (hasValidToken || hasRefreshToken);
   const tokenPayload = decodeJwtPayload(token);
   const { pathname } = request.nextUrl;
   const contentSecurityPolicy = createContentSecurityPolicy(nonce, pathname);
@@ -131,6 +155,17 @@ export async function proxy(request: NextRequest) {
 
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
   const isAuthRoute = authRoutes.some(route => pathname.startsWith(route));
+  const isExplicitLogout = isAuthRoute && request.nextUrl.searchParams.get('loggedOut') === '1';
+
+  if (isExplicitLogout) {
+    const response = NextResponse.redirect(new URL('/login', request.url));
+    response.headers.set('Content-Security-Policy', contentSecurityPolicy);
+    response.headers.set('Cache-Control', 'no-store, max-age=0');
+    supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
+    expireAuthCookies(response);
+    setLogoutMarker(response);
+    return response;
+  }
 
   if (isProtectedRoute && !hasSession) {
     const url = new URL('/login', request.url);
@@ -138,6 +173,7 @@ export async function proxy(request: NextRequest) {
     const response = NextResponse.redirect(url);
     response.headers.set('Content-Security-Policy', contentSecurityPolicy);
     supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
+    if (hasLogoutMarker) expireAuthCookies(response);
     return response;
   }
 
@@ -171,18 +207,12 @@ export async function proxy(request: NextRequest) {
   });
   response.headers.set('Content-Security-Policy', contentSecurityPolicy);
   supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
+  if (hasLogoutMarker) expireAuthCookies(response);
   return response;
 }
 
 export const config = {
   matcher: [
-    /*
-     * Cocokkan semua path permintaan kecuali yang dimulai dengan:
-     * - api (route API)
-     * - _next/static (file statis)
-     * - _next/image (file optimisasi gambar)
-     * - favicon.ico (file favicon)
-     */
     '/((?!api|_next/static|_next/image|favicon.ico).*)',
   ],
 };

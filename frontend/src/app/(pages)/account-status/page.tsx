@@ -33,7 +33,7 @@ export default async function AccountStatusRoute() {
   const hasRefreshToken = Boolean(refreshToken && refreshToken !== "undefined" && refreshToken !== "null");
 
   if (!isTokenUsable(token) && !hasRefreshToken) {
-    redirect("/login");
+    redirect("/login?reason=unauthenticated");
   }
 
   return (

@@ -6,6 +6,7 @@ export const ACCESS_COOKIE = "jivara-token";
 export const REFRESH_COOKIE = "jivara-refresh-token";
 export const ROLE_COOKIE = "jivara-role";
 export const ACCOUNT_STATUS_COOKIE = "jivara-account-status";
+export const LOGOUT_COOKIE = "jivara-logged-out";
 
 const commonCookieOptions = {
   httpOnly: true,
@@ -35,6 +36,10 @@ export const setAuthCookies = (response: NextResponse, data: { accessToken: stri
     ...commonCookieOptions,
     maxAge: 7 * 24 * 60 * 60,
   });
+  response.cookies.set(LOGOUT_COOKIE, "", {
+    ...commonCookieOptions,
+    maxAge: 0,
+  });
 };
 
 export const clearAuthCookies = (response: NextResponse) => {
@@ -44,6 +49,13 @@ export const clearAuthCookies = (response: NextResponse) => {
       maxAge: 0,
     });
   }
+};
+
+export const setLogoutCookie = (response: NextResponse) => {
+  response.cookies.set(LOGOUT_COOKIE, "1", {
+    ...commonCookieOptions,
+    maxAge: 5 * 60,
+  });
 };
 
 export const getBackendApiUrl = () => process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";

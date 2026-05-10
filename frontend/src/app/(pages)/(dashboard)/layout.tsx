@@ -26,7 +26,7 @@ export default async function ProtectedDashboardLayout({ children }: { readonly 
   const hasRefreshToken = Boolean(refreshToken && refreshToken !== "undefined" && refreshToken !== "null");
 
   if (!isTokenUsable(token) && !hasRefreshToken) {
-    redirect("/login");
+    redirect("/login?reason=unauthenticated");
   }
 
   return <DashboardLayout>{children}</DashboardLayout>;

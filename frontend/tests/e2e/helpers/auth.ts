@@ -1,4 +1,4 @@
-import type { BrowserContext, Page } from "@playwright/test";
+import type { BrowserContext, Page, Route } from "@playwright/test";
 
 type Role = "super_admin" | "admin" | "nurse" | "patient";
 
@@ -28,25 +28,45 @@ export const createJwt = (role: Role) => [
 
 export async function loginAs(context: BrowserContext, page: Page, role: Role, user = defaultUserByRole[role]) {
   const token = createJwt(role);
-  await page.route("**/api/auth/status", async (route) => {
+  const appUrl = `http://localhost:${process.env.PLAYWRIGHT_PORT ?? 3000}`;
+  const fulfillStatus = async (route: Route) => {
     await route.fulfill({ json: { data: { user } } });
-  });
-  await page.route("**/api/auth/refresh", async (route) => {
+  };
+  const fulfillRefresh = async (route: Route) => {
     await route.fulfill({ json: { data: { access_token: token, user } } });
-  });
-  await page.route("**/api/auth/logout", async (route) => {
+  };
+  const fulfillLogout = async (route: Route) => {
     await route.fulfill({ json: { data: {} } });
-  });
+  };
+
+  await context.route("**/api/auth/status", fulfillStatus);
+  await context.route("**/api/auth/refresh", fulfillRefresh);
+  await context.route("**/api/auth/logout", fulfillLogout);
+  await page.route("**/api/auth/status", fulfillStatus);
+  await page.route("**/api/auth/refresh", fulfillRefresh);
+  await page.route("**/api/auth/logout", fulfillLogout);
   await context.addCookies([
-    { name: "jivara-token", value: token, domain: "127.0.0.1", path: "/" },
-    { name: "jivara-refresh-token", value: "e2e-refresh-token", domain: "127.0.0.1", path: "/" },
-    { name: "jivara-role", value: role, domain: "127.0.0.1", path: "/" },
-    { name: "jivara-account-status", value: user.accountStatus, domain: "127.0.0.1", path: "/" },
+    { name: "jivara-token", value: token, url: appUrl },
+    { name: "jivara-refresh-token", value: "e2e-refresh-token", url: appUrl },
+    { name: "jivara-role", value: role, url: appUrl },
+    { name: "jivara-account-status", value: user.accountStatus, url: appUrl },
   ]);
-  await context.addInitScript(({ storedUser }) => {
+  const seedAuth = ({ storedUser }: { storedUser: E2EUser }) => {
     window.localStorage.setItem("jivara-auth-storage", JSON.stringify({
-      state: { user: storedUser, isAuthenticated: true, hasHydrated: true },
+      state: { user: storedUser, isAuthenticated: true },
       version: 2,
     }));
-  }, { storedUser: user });
+  };
+
+  await context.addInitScript(seedAuth, { storedUser: user });
+  await page.addInitScript(seedAuth, { storedUser: user });
+}
+
+export async function waitForHydration(page: Page) {
+  await page.waitForFunction(() => document.documentElement.dataset.nextjsRouterTree !== undefined || document.readyState === "complete");
+  await page.waitForLoadState("networkidle");
+}
+
+export async function gotoApp(page: Page, path: string) {
+  await page.goto(path, { waitUntil: "domcontentloaded" });
 }

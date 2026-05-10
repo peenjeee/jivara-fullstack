@@ -95,25 +95,23 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
   formData.append("patientId", patientId);
   formData.append("image", file);
 
-  const uploadResponse = await api.post<{ data: UploadResponse }>("/food/upload", formData, {
+  const uploadResponse = await api.post<{ data: UploadResponse }>("/food-scans", formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
 
   const upload = uploadResponse.data.data;
-  const detectResponse = await api.post<{ data: DetectResponse }>("/detect", {
+  const detectResponse = await api.post<{ data: DetectResponse }>(`/food-scans/${encodeURIComponent(upload.image_id)}/detections`, {
     patientId,
-    imageId: upload.image_id,
   });
   const detection = detectResponse.data.data;
   const detectedLabels = detection.detected_items.map((item) => item.label);
 
   const [interactionResponse] = await Promise.all([
-    api.post<{ data: InteractionResponse }>("/interaction-check", {
+    api.post<{ data: InteractionResponse }>(`/food-scans/${encodeURIComponent(upload.image_id)}/interactions`, {
       patientId,
-      scanId: upload.image_id,
       detectedItems: detectedLabels,
     }),
-    api.post("/nutrition", {
+    api.post("/nutrition-estimates", {
       detectedItems: detection.detected_items.map((item) => ({ label: item.label, confidence: item.confidence })),
     }),
   ]);

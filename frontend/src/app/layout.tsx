@@ -2,6 +2,7 @@ import "@/styles/globals.css";
 import AppSplashScreen from "@/components/ui/AppSplashScreen";
 import BackToTopButton from "@/components/ui/BackToTopButton";
 import PwaPullToRefresh from "@/components/ui/PwaPullToRefresh";
+import AuthNavigationProvider from "@/providers/AuthNavigationProvider";
 import PwaInstallPromptProvider from "@/providers/PwaInstallPromptProvider";
 import ScrollProvider from "@/providers/ScrollProvider";
 import type { Metadata, Viewport } from "next";
@@ -219,12 +220,14 @@ export default async function RootLayout({ children }: RootLayoutProps) {
       </head>
       <body className="font-body relative overflow-x-hidden">
         <ScrollProvider>
-          <PwaInstallPromptProvider>
-            {children}
-            <AppSplashScreen />
-            <PwaPullToRefresh />
-            <BackToTopButton />
-          </PwaInstallPromptProvider>
+          <AuthNavigationProvider>
+            <PwaInstallPromptProvider>
+              {children}
+              <AppSplashScreen />
+              <PwaPullToRefresh />
+              <BackToTopButton />
+            </PwaInstallPromptProvider>
+          </AuthNavigationProvider>
         </ScrollProvider>
       </body>
     </html>
