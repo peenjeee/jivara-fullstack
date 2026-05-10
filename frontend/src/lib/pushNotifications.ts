@@ -8,6 +8,13 @@ interface PublicKeyResponse {
   publicKey: string;
 }
 
+interface PreferenceResponse {
+  patientId: string;
+  enabled: boolean;
+  subscriptionCount: number;
+  activeSubscriptions: number;
+}
+
 const urlBase64ToUint8Array = (base64String: string) => {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = `${base64String}${padding}`.replace(/-/g, "+").replace(/_/g, "/");
@@ -21,7 +28,7 @@ const urlBase64ToUint8Array = (base64String: string) => {
   return outputArray;
 };
 
-const getPatientId = async () => {
+export const getNotificationPatientId = async () => {
   const response = await api.get<{ data: PatientResponse[] }>("/patients", { params: { limit: 1 } });
   const patient = response.data.data[0];
 
@@ -52,7 +59,7 @@ export const enableMedicationPushNotifications = async () => {
   }
 
   const [patientId, keyResponse, registration] = await Promise.all([
-    getPatientId(),
+    getNotificationPatientId(),
     api.get<{ data: PublicKeyResponse }>("/notifications/public-key"),
     getServiceWorkerRegistration(),
   ]);
@@ -72,10 +79,16 @@ export const enableMedicationPushNotifications = async () => {
 };
 
 export const setMedicationPushPreference = async (enabled: boolean) => {
-  const patientId = await getPatientId();
+  const patientId = await getNotificationPatientId();
 
   await api.patch("/notifications/preferences", {
     patient_id: patientId,
     enabled,
   });
+};
+
+export const getMedicationPushPreference = async () => {
+  const patientId = await getNotificationPatientId();
+  const response = await api.get<{ data: PreferenceResponse }>("/notifications/preferences", { params: { patient_id: patientId } });
+  return response.data.data;
 };

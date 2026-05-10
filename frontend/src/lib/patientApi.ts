@@ -1,4 +1,5 @@
 import api from "@/lib/axios";
+import type { ActivityLogRecord } from "@/lib/mocks/activityLogs";
 import type { PatientRecord, PatientStatus } from "@/lib/mocks/patients";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
 import type { PatientDetailData } from "@/helpers/patientDetails";
@@ -49,6 +50,32 @@ interface PatientDetailResponse extends PatientListResponse {
 interface PaginatedResponse<T> {
   data: T[];
   meta?: { total?: number };
+}
+
+interface MedicationLogResponse {
+  id: string;
+  scheduleId: string;
+  patientId: string;
+  drugName: string;
+  status: string;
+  scheduledTime: string;
+  confirmedAt?: string | null;
+  createdAt?: string | null;
+}
+
+interface AlertResponse {
+  id: string;
+  patientId: string;
+  patientName: string;
+  scheduleId: string;
+  drugName: string;
+  dosage: string;
+  scheduledTime: string;
+  status: string;
+  severity: "warning" | "critical";
+  message: string;
+  updatedAt?: string | null;
+  createdAt?: string | null;
 }
 
 const getAge = (dateOfBirth?: string | null) => {
@@ -132,6 +159,62 @@ const mapMedication = (patient: PatientRecord, medication: NonNullable<PatientDe
   };
 };
 
+const mapMedicationLogActivity = (log: MedicationLogResponse, patient: PatientRecord): ActivityLogRecord => ({
+  id: `medication-log-${log.id}`,
+  title: log.status === "confirmed" ? "Obat dikonfirmasi" : log.status === "missed" ? "Obat terlewat" : log.status === "snoozed" ? "Reminder ditunda" : "Aktivitas obat",
+  description: `${log.drugName} berstatus ${log.status}.`,
+  category: "Reminder",
+  severity: log.status === "missed" ? "Kritis" : log.status === "snoozed" ? "Peringatan" : log.status === "confirmed" ? "Sukses" : "Info",
+  timestamp: log.confirmedAt || log.createdAt || log.scheduledTime,
+  patientId: log.patientId,
+  patientName: patient.name,
+  patientAvatar: patient.avatar,
+  scheduleId: log.scheduleId,
+  medicineName: log.drugName,
+  read: true,
+});
+
+const mapAlertActivity = (alert: AlertResponse, patient: PatientRecord): ActivityLogRecord => ({
+  id: `alert-${alert.id}`,
+  title: alert.severity === "critical" ? "Kepatuhan kritis" : "Peringatan kepatuhan",
+  description: alert.message,
+  category: "Kepatuhan",
+  severity: alert.severity === "critical" ? "Kritis" : "Peringatan",
+  timestamp: alert.updatedAt || alert.createdAt || alert.scheduledTime,
+  patientId: alert.patientId,
+  patientName: alert.patientName || patient.name,
+  patientAvatar: patient.avatar,
+  scheduleId: alert.scheduleId,
+  medicineName: `${alert.drugName} ${alert.dosage}`,
+  read: false,
+});
+
+const getPatientActivitiesFromApi = async (patient: PatientRecord, scans: PatientDetailData["scans"]): Promise<ActivityLogRecord[]> => {
+  const [logResponse, alertResponse] = await Promise.all([
+    api.get<PaginatedResponse<MedicationLogResponse>>("/medication-logs", { params: { patient_id: patient.id, limit: 100 } }).catch(() => ({ data: { data: [] } })),
+    api.get<PaginatedResponse<AlertResponse>>("/alerts", { params: { patient_id: patient.id, limit: 100 } }).catch(() => ({ data: { data: [] } })),
+  ]);
+
+  const medicationActivities = logResponse.data.data.map((log) => mapMedicationLogActivity(log, patient));
+  const alertActivities = alertResponse.data.data.map((alert) => mapAlertActivity(alert, patient));
+  const scanActivities = scans.map((scan): ActivityLogRecord => ({
+    id: `food-scan-${scan.id}`,
+    title: scan.risk === "High Risk" ? "Scan makanan berisiko" : "Scan makanan selesai",
+    description: scan.result,
+    category: "Scan Makanan",
+    severity: scan.risk === "High Risk" ? "Peringatan" : "Sukses",
+    timestamp: scan.scannedAt,
+    patientId: scan.patientId,
+    patientName: patient.name,
+    patientAvatar: patient.avatar,
+    scanId: scan.id,
+    read: true,
+  }));
+
+  return [...medicationActivities, ...alertActivities, ...scanActivities]
+    .sort((first, second) => Date.parse(second.timestamp) - Date.parse(first.timestamp));
+};
+
 export const getPatientsFromApi = async () => {
   const response = await api.get<PaginatedResponse<PatientListResponse>>("/patients", { params: { limit: 100, status: "active" } });
   const patients = response.data.data.map((patient) => mapPatient(patient, 100));
@@ -160,11 +243,12 @@ export const getPatientDetailFromApi = async (patientId: string): Promise<Patien
   const patient = mapPatient({ ...detail, createdAt: detail.registeredAt ?? detail.createdAt }, adherence);
   const schedules = detail.activeMedications?.map((medication) => mapMedication(patient, medication)) ?? [];
   const scans = await getFoodScansForPatientFromApi(patientId).catch(() => []);
+  const activities = await getPatientActivitiesFromApi(patient, scans).catch(() => []);
 
   return {
     patient,
     schedules,
-    activities: [],
+    activities,
     scans,
   };
 };

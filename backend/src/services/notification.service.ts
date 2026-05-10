@@ -99,6 +99,27 @@ export const setNotificationPreference = async (dto: NotificationPreferenceDTO, 
   return { enabled: dto.enabled, updatedSubscriptions: rows.length };
 };
 
+export const getNotificationPreference = async (patientId: string, user: AccessUser | undefined) => {
+  await assertCanAccessPatient(user, patientId);
+
+  const subscriptions = await db
+    .select({ isEnabled: pushSubscriptions.isEnabled })
+    .from(pushSubscriptions)
+    .where(and(
+      eq(pushSubscriptions.patientId, patientId),
+      eq(pushSubscriptions.userId, user!.id),
+    ));
+
+  const activeSubscriptions = subscriptions.filter((subscription) => subscription.isEnabled).length;
+
+  return {
+    patientId,
+    enabled: activeSubscriptions > 0,
+    subscriptionCount: subscriptions.length,
+    activeSubscriptions,
+  };
+};
+
 export const listNotifications = async (query: Record<string, unknown>, user: AccessUser | undefined) => {
   const patientId = typeof query.patient_id === "string" ? query.patient_id : typeof query.patientId === "string" ? query.patientId : undefined;
   const type = typeof query.type === "string" ? query.type : undefined;

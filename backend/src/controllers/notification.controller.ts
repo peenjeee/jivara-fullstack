@@ -37,6 +37,20 @@ export const updatePreference = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const getPreference = async (req: AuthRequest, res: Response) => {
+  try {
+    const patientId = typeof req.query.patient_id === "string" ? req.query.patient_id : typeof req.query.patientId === "string" ? req.query.patientId : undefined;
+    if (!patientId) {
+      return res.status(400).json({ status: "gagal", message: "patientId wajib diisi", error_code: "VALIDATION_ERROR" });
+    }
+
+    const data = await notificationService.getNotificationPreference(patientId, req.user);
+    res.status(200).json({ status: "berhasil", data });
+  } catch (error) {
+    sendError(res, error);
+  }
+};
+
 export const listNotifications = async (req: AuthRequest, res: Response) => {
   try {
     const result = await notificationService.listNotifications(req.query, req.user);

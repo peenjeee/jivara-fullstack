@@ -1,15 +1,31 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Save } from "lucide-react";
 import Button from "@/components/ui/Button";
-import { enableMedicationPushNotifications, setMedicationPushPreference } from "@/lib/pushNotifications";
+import { enableMedicationPushNotifications, getMedicationPushPreference, setMedicationPushPreference } from "@/lib/pushNotifications";
 import { showToast } from "@/lib/swal";
 import ToggleRow from "./ToggleRow";
 
 export default function PatientReminderSettingsForm() {
-  const [medicineReminder, setMedicineReminder] = useState(true);
+  const [medicineReminder, setMedicineReminder] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    getMedicationPushPreference()
+      .then((preference) => {
+        if (isMounted) setMedicineReminder(preference.enabled);
+      })
+      .catch(() => {
+        if (isMounted) setMedicineReminder(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();

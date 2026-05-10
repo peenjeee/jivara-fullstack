@@ -66,6 +66,8 @@ router.use(authenticateToken);
  */
 router.get("/", authorizeRoles("patient", "nurse", "admin"), notificationController.listNotifications);
 
+router.get("/preferences", authorizeRoles("patient"), notificationController.getPreference);
+
 /**
  * @swagger
  * /api/notifications/subscribe:

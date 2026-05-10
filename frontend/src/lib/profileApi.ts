@@ -12,3 +12,8 @@ export const updateProfileViaApi = async (payload: UpdateProfilePayload): Promis
   const response = await api.patch<{ data: User }>("/auth/me", payload);
   return response.data.data;
 };
+
+export const changePasswordViaApi = async (currentPassword: string, newPassword: string): Promise<User> => {
+  const response = await api.put<{ data: { user: User } }>("/auth/change-password", { currentPassword, newPassword });
+  return response.data.data.user;
+};

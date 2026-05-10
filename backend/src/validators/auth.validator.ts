@@ -103,6 +103,11 @@ export const validateCompletePasswordChange = validate([
   { field: "newPassword", label: "Kata sandi baru", required: true, minLength: 8 },
 ]);
 
+export const validateChangePassword = validate([
+  { field: "currentPassword", label: "Kata sandi saat ini", required: true },
+  { field: "newPassword", label: "Kata sandi baru", required: true, minLength: 8 },
+]);
+
 export const validateUpdateProfile = validate([
   { field: "fullName", label: "Nama lengkap", minLength: 2 },
   {

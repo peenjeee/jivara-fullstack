@@ -8,6 +8,7 @@ import { writeAuditLog } from "./audit-log.service";
 import {
   RegisterDTO,
   LoginDTO,
+  ChangePasswordDTO,
   CompletePasswordChangeDTO,
   RejectAdminApprovalDTO,
   UpdateProfileDTO,
@@ -465,6 +466,45 @@ export const completePasswordChange = async (userId: string, dto: CompletePasswo
     });
 
   return updatedUser;
+};
+
+export const changePassword = async (userId: string, dto: ChangePasswordDTO) => {
+  const user = await db
+    .select({ id: users.id, password: users.password })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  if (user.length === 0) {
+    throw { status: 404, message: "Pengguna tidak ditemukan", code: "NOT_FOUND" };
+  }
+
+  const isCurrentPasswordValid = await bcrypt.compare(dto.currentPassword, user[0].password);
+  if (!isCurrentPasswordValid) {
+    throw { status: 400, message: "Kata sandi saat ini tidak sesuai", code: "INVALID_CURRENT_PASSWORD" };
+  }
+
+  const isSamePassword = await bcrypt.compare(dto.newPassword, user[0].password);
+  if (isSamePassword) {
+    throw { status: 400, message: "Kata sandi baru harus berbeda dari kata sandi saat ini", code: "PASSWORD_REUSED" };
+  }
+
+  const hashedPassword = await bcrypt.hash(dto.newPassword, AUTH_CONSTANTS.BCRYPT_SALT_ROUNDS);
+
+  await db
+    .update(users)
+    .set({ password: hashedPassword, mustChangePassword: false, updatedAt: new Date() })
+    .where(eq(users.id, userId));
+
+  await writeAuditLog({
+    userId,
+    action: "auth.password.changed",
+    resourceType: "user",
+    resourceId: userId,
+    changes: { after: { passwordChanged: true } },
+  });
+
+  return getUserProfile(userId);
 };
 
 /**

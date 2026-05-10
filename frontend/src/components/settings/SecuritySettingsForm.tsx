@@ -4,16 +4,18 @@ import { useState, type FormEvent } from "react";
 import { Lock, Save } from "lucide-react";
 import AuthInput from "@/components/ui/AuthInput";
 import Button from "@/components/ui/Button";
+import { changePasswordViaApi } from "@/lib/profileApi";
 import { showToast, showWarning } from "@/lib/swal";
 import { useAuthStore } from "@/store/auth";
 
 export default function SecuritySettingsForm() {
-  const user = useAuthStore((state) => state.user);
+  const { user, token, setAuth } = useAuthStore();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
 
     if (!currentPassword || !newPassword || !confirmPassword) {
@@ -21,8 +23,8 @@ export default function SecuritySettingsForm() {
       return;
     }
 
-    if (newPassword.length < 6) {
-      showWarning("Kata sandi baru minimal 6 karakter.", "Password Terlalu Pendek");
+    if (newPassword.length < 8) {
+      showWarning("Kata sandi baru minimal 8 karakter.", "Password Terlalu Pendek");
       return;
     }
 
@@ -31,10 +33,25 @@ export default function SecuritySettingsForm() {
       return;
     }
 
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
-    showToast("Kata sandi berhasil diperbarui.");
+    if (!user) {
+      showWarning("Sesi pengguna tidak ditemukan. Silakan login ulang.");
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const updatedUser = await changePasswordViaApi(currentPassword, newPassword);
+      setAuth(updatedUser, token);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      showToast("Kata sandi berhasil diperbarui.");
+    } catch {
+      showWarning("Kata sandi gagal diperbarui. Pastikan kata sandi saat ini benar.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -80,7 +97,7 @@ export default function SecuritySettingsForm() {
         autoComplete="new-password"
       />
       <div className="flex justify-end pt-2">
-        <Button type="submit" icon={<Save size={18} />}>Simpan</Button>
+        <Button type="submit" icon={<Save size={18} />} loading={isSaving}>Simpan</Button>
       </div>
     </form>
   );

@@ -6,6 +6,7 @@ import {
   validateRegister,
   validateLogin,
   validateLoginIdentifier,
+  validateChangePassword,
   validateCompletePasswordChange,
   validateRejectAdminApproval,
   validateUpdateProfile,
@@ -230,8 +231,8 @@ router.post(
 router.put(
   "/change-password",
   authenticateToken,
-  validateCompletePasswordChange,
-  authController.completePasswordChange
+  validateChangePassword,
+  authController.changePassword
 );
 
 /**
