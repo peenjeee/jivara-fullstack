@@ -35,6 +35,7 @@ const formatJoinedAt = (value?: string | null) => {
 const mapGender = (gender?: string | null): NurseGender => gender === "male" ? "Pria" : "Wanita";
 const mapStatus = (isActive?: boolean | null): NurseStatus => isActive === false ? "Nonaktif" : "Aktif";
 const mapApiGender = (gender: NurseGender) => gender === "Pria" ? "male" : "female";
+const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
 const mapNurse = (nurse: NurseResponse): NurseRecord => ({
   id: nurse.id,
@@ -63,6 +64,21 @@ export const getNursesFromApi = async (): Promise<NurseRecord[]> => {
   return nurses;
 };
 
+const resolveNurseId = async (nurseId: string, values?: Pick<NurseFormValues, "email" | "phone">) => {
+  if (isUuid(nurseId)) return nurseId;
+
+  const nurses = await getNursesFromApi();
+  const matchedNurse = values
+    ? nurses.find((nurse) => nurse.email === values.email || nurse.phone === values.phone)
+    : null;
+
+  if (!matchedNurse) {
+    throw new Error("NURSE_ID_NOT_RESOLVED");
+  }
+
+  return matchedNurse.id;
+};
+
 export const createNurseViaApi = async (values: NurseFormValues): Promise<NurseRecord> => {
   const response = await api.post<SingleNurseResponse<NurseResponse>>("/nurses", mapFormValuesToPayload(values));
   const createdNurse = mapNurse(response.data.data);
@@ -79,10 +95,12 @@ export const createNurseViaApi = async (values: NurseFormValues): Promise<NurseR
 };
 
 export const updateNurseViaApi = async (nurseId: string, values: NurseFormValues): Promise<NurseRecord> => {
-  const response = await api.put<SingleNurseResponse<NurseResponse>>(`/nurses/${encodeURIComponent(nurseId)}`, mapFormValuesToPayload(values));
+  const resolvedNurseId = await resolveNurseId(nurseId, values);
+  const response = await api.put<SingleNurseResponse<NurseResponse>>(`/nurses/${encodeURIComponent(resolvedNurseId)}`, mapFormValuesToPayload(values));
   return { ...mapNurse(response.data.data), temporaryPassword: values.password ? true : false };
 };
 
 export const deactivateNurseViaApi = async (nurseId: string) => {
-  await api.delete(`/nurses/${encodeURIComponent(nurseId)}`);
+  const resolvedNurseId = await resolveNurseId(nurseId);
+  await api.delete(`/nurses/${encodeURIComponent(resolvedNurseId)}`);
 };

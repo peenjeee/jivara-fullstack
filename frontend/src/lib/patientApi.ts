@@ -24,7 +24,13 @@ interface PatientListResponse {
 }
 
 interface SinglePatientResponse {
-  data: PatientListResponse;
+  data: PatientListResponse & {
+    user?: {
+      fullName?: string | null;
+      email?: string | null;
+      phone?: string | null;
+    } | null;
+  };
 }
 
 interface PatientDetailResponse extends PatientListResponse {
@@ -223,7 +229,18 @@ export const getPatientsFromApi = async () => {
 
 export const createPatientViaApi = async (values: AddPatientValues) => {
   const response = await api.post<SinglePatientResponse>("/patients", mapPatientPayload(values, true));
-  return getPatientDetailFromApi(response.data.data.id).then((detail) => detail.patient);
+  const created = response.data.data;
+
+  return mapPatient({
+    ...created,
+    fullName: created.fullName || created.user?.fullName || values.fullName,
+    email: created.email || created.user?.email || values.email,
+    phone: created.phone || created.user?.phone || values.phone,
+    dateOfBirth: created.dateOfBirth || getDateOfBirthFromAge(values.age),
+    gender: created.gender || mapGenderToApi(values.gender),
+    address: created.address || values.address,
+    createdAt: created.createdAt ?? new Date().toISOString(),
+  });
 };
 
 export const updatePatientViaApi = async (patientId: string, values: AddPatientValues) => {
