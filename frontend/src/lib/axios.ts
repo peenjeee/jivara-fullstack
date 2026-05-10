@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { notifyAuthExpired } from '@/lib/authNavigation';
 import { useAuthStore } from '@/store/auth';
 
 const api = axios.create({
@@ -81,7 +82,7 @@ api.interceptors.response.use(
         logout();
         if (typeof window !== 'undefined') {
           window.localStorage.removeItem('jivara-auth-storage');
-          window.location.href = '/login';
+          notifyAuthExpired();
         }
         return Promise.reject(refreshError);
       } finally {

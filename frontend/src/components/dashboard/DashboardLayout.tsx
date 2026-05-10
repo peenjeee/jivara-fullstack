@@ -45,6 +45,7 @@ function isPathAllowedForRole(pathname: string, role?: string) {
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const { logout, user, hasHydrated, setAuth, setHasHydrated, updateUser } = useAuthStore();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isRedirectingToLogin, setIsRedirectingToLogin] = useState(false);
   const [isRestoringSession, setIsRestoringSession] = useState(false);
   const isSyncingRef = useRef(false);
   const hasTriedSessionRestoreRef = useRef(false);
@@ -56,6 +57,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const isCurrentRouteAllowed = isPathAllowedForRole(pathname, userRole);
   const fallbackPath = getFallbackPathForRole(userRole);
+
+  const redirectToLogin = useCallback(() => {
+    router.replace("/login?loggedOut=1");
+  }, [router]);
 
   const handleRouteClickCapture = (event: MouseEvent<HTMLDivElement>) => {
     if (!userRole || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -82,6 +87,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const navigateToLogin = useCallback(async () => {
     if (isNavigatingAwayRef.current) return;
     isNavigatingAwayRef.current = true;
+    setIsRedirectingToLogin(true);
     logout();
     window.localStorage.removeItem("jivara-auth-storage");
 
@@ -90,8 +96,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     } catch {
     }
 
-    window.location.replace("/login?loggedOut=1");
-  }, [logout]);
+    redirectToLogin();
+  }, [logout, redirectToLogin]);
 
   const syncCurrentUser = useCallback(async () => {
     if (!hasHydrated || isLoggingOut || isNavigatingAwayRef.current) return;
@@ -113,9 +119,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         router.replace("/account-status");
         return;
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (isNavigatingAwayRef.current) return;
-      if (error.response?.status === 401 || error.response?.status === 403) {
+      if (axios.isAxiosError(error) && (error.response?.status === 401 || error.response?.status === 403)) {
         navigateToLogin();
         return;
       }
@@ -139,16 +145,17 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     if (isNavigatingAwayRef.current) return;
 
     const timer = window.setTimeout(async () => {
+      setIsRedirectingToLogin(true);
       logout();
       window.localStorage.removeItem("jivara-auth-storage");
       try {
         await axios.post("/api/auth/logout", undefined, { timeout: 2000 });
       } catch {
       }
-      window.location.replace("/login?loggedOut=1");
+      redirectToLogin();
     }, MAX_LOADING_SECONDS * 1000);
     return () => window.clearTimeout(timer);
-  }, [user, hasHydrated, logout]);
+  }, [user, hasHydrated, logout, redirectToLogin]);
 
   useEffect(() => {
     if (!hasHydrated || !userRole || isNavigatingAwayRef.current) return;
@@ -219,6 +226,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     if (result.isConfirmed) {
       setIsLoggingOut(true);
       isNavigatingAwayRef.current = true;
+      setIsRedirectingToLogin(true);
 
       logout();
       window.localStorage.removeItem("jivara-auth-storage");
@@ -228,7 +236,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       } catch {
       }
 
-      window.location.replace("/login?loggedOut=1");
+      redirectToLogin();
     }
   };
 
@@ -249,7 +257,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="flex flex-col items-center space-y-4">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
           <p className="text-sm font-medium text-text-secondary">
-            {isNavigatingAwayRef.current ? "Mengarahkan ke halaman masuk ..." : "Mohon tunggu ..."}
+            {isRedirectingToLogin ? "Mengarahkan ke halaman masuk ..." : "Mohon tunggu ..."}
           </p>
         </div>
       </div>
