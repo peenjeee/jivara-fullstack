@@ -31,6 +31,12 @@ export default function LoginForm() {
     if (!hasHydrated || hasTriedRestoreRef.current) return;
     hasTriedRestoreRef.current = true;
 
+    const reason = searchParams.get("reason");
+    if (reason === "unauthenticated" && user) {
+      logout();
+      return;
+    }
+
     if (!user) {
       return;
     }
