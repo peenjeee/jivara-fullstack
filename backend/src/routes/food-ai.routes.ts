@@ -26,6 +26,21 @@ const attachScanIdParam = (req: Request, _res: Response, next: NextFunction) => 
  */
 
 router.get("/food-scans", authorizeRoles("patient", "nurse", "admin"), foodAiController.listFoodScans);
+
+/**
+ * @swagger
+ * /api/food-scans/analytics/interactions:
+ *   get:
+ *     summary: Ambil analitik agregat interaksi makanan-obat
+ *     tags: [Food AI]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Analitik interaksi berhasil diambil
+ *       403:
+ *         description: Role tidak memiliki akses
+ */
 router.get("/food-scans/analytics/interactions", authorizeRoles("nurse", "admin"), foodAiController.getInteractionAnalytics);
 router.get("/food-scans/:scanId", authorizeRoles("patient", "nurse", "admin"), foodAiController.getFoodScan);
 

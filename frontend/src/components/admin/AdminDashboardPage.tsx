@@ -12,6 +12,7 @@ import PatientStatusBadge from "@/components/patients/PatientStatusBadge";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import type { SummaryCardItem } from "@/components/ui/SummaryCard";
 import { getPatientsForNurse } from "@/helpers/nurses";
+import { getInteractionAnalyticsFromApi, getNotificationAnalyticsFromApi, type InteractionAnalyticsData, type NotificationAnalyticsData } from "@/lib/analyticsApi";
 import { getAdminDashboardStats } from "@/lib/dashboardApi";
 import { getSchedulesFromApi } from "@/lib/scheduleApi";
 import type { PatientRecord } from "@/lib/mocks/patients";
@@ -45,6 +46,8 @@ export default function AdminDashboardPage() {
   const priorityActivities = activities.filter((activity) => activity.severity === "Kritis" || activity.severity === "Peringatan" || activity.category === "Administrasi");
 
   const [stats, setStats] = useState<SummaryCardItem[]>(() => getFallbackStats(0));
+  const [notificationAnalytics, setNotificationAnalytics] = useState<NotificationAnalyticsData | null>(null);
+  const [interactionAnalytics, setInteractionAnalytics] = useState<InteractionAnalyticsData | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -69,6 +72,26 @@ export default function AdminDashboardPage() {
       isMounted = false;
     };
   }, [nurses.length]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    Promise.all([getNotificationAnalyticsFromApi(), getInteractionAnalyticsFromApi()])
+      .then(([notifications, interactions]) => {
+        if (!isMounted) return;
+        setNotificationAnalytics(notifications);
+        setInteractionAnalytics(interactions);
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setNotificationAnalytics(null);
+        setInteractionAnalytics(null);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <DashboardPageShell>
@@ -126,6 +149,34 @@ export default function AdminDashboardPage() {
           {priorityActivities.length === 0 && <EmptyInsight message="Tidak ada aktivitas prioritas." />}
         </AdminPanel>
       </div>
+
+      <div className="mt-6 grid gap-6 xl:grid-cols-2">
+        <AdminPanel title="Analitik Notifikasi" href="/activity-log">
+          {notificationAnalytics ? (
+            <>
+              <MetricRow label="Open Rate" value={`${notificationAnalytics.openRate}%`} />
+              <MetricRow label="Click-through Rate" value={`${notificationAnalytics.clickThroughRate}%`} />
+              <MetricRow label="Rata-rata TTO" value={formatDuration(notificationAnalytics.averageTimeToOpenMs)} />
+              <MetricRow label="Delivered / Opened" value={`${notificationAnalytics.delivered} / ${notificationAnalytics.opened}`} />
+            </>
+          ) : (
+            <EmptyInsight message="Analitik notifikasi belum tersedia." />
+          )}
+        </AdminPanel>
+
+        <AdminPanel title="Analitik Interaksi" href="/food-scan">
+          {interactionAnalytics ? (
+            <>
+              <MetricRow label="Interaction Rate" value={`${interactionAnalytics.interactionRate}%`} />
+              <MetricRow label="Scan dengan Interaksi" value={`${interactionAnalytics.scansWithInteractions} dari ${interactionAnalytics.totalScans}`} />
+              <MetricRow label="Top Makanan" value={interactionAnalytics.topFoods[0]?.label ?? "-"} />
+              <MetricRow label="Top Obat" value={interactionAnalytics.topMedications[0]?.label ?? "-"} />
+            </>
+          ) : (
+            <EmptyInsight message="Analitik interaksi belum tersedia." />
+          )}
+        </AdminPanel>
+      </div>
     </DashboardPageShell>
   );
 }
@@ -144,4 +195,23 @@ function AdminPanel({ title, href, children }: { readonly title: string; readonl
 
 function EmptyInsight({ message }: { readonly message: string }) {
   return <div className="rounded-2xl bg-surface px-4 py-5 text-sm font-bold leading-6 text-muted">{message}</div>;
+}
+
+function MetricRow({ label, value }: { readonly label: string; readonly value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-2xl bg-surface px-4 py-3">
+      <span className="text-sm font-bold text-muted">{label}</span>
+      <span className="text-right text-sm font-extrabold text-text-main">{value}</span>
+    </div>
+  );
+}
+
+function formatDuration(value: number | null) {
+  if (value === null) return "-";
+  if (value < 1000) return `${value} ms`;
+
+  const seconds = Math.round(value / 1000);
+  if (seconds < 60) return `${seconds} detik`;
+
+  return `${Math.round(seconds / 60)} menit`;
 }

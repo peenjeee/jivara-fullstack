@@ -38,6 +38,15 @@ Ini adalah repositori layanan API (Backend) untuk platform Jivara. Backend ini d
    ```
    *Pastikan Anda mengisi variabel koneksi database (seperti `DATABASE_URL`) dan `JWT_SECRET` di dalam file `.env`.*
 
+   Variabel penting tambahan:
+
+   | Variabel | Fungsi |
+   | --- | --- |
+   | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Web Push Notification PWA |
+   | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_STORAGE_BUCKET` | Upload foto scan makanan ke Supabase Storage production |
+   | `SUPABASE_STORAGE_PUBLIC_URL` | Opsional, public URL/CDN bucket storage |
+   | `ENABLE_REMINDER_SCHEDULER` | Mengaktifkan scheduler reminder obat |
+
 3. **Sinkronisasi Skema Database (Drizzle)**
    Push skema yang ada di kode ke dalam database PostgreSQL Anda:
    ```bash
@@ -73,6 +82,31 @@ Server secara default akan berjalan di `http://localhost:3001`.
 | `npm run db:push` |
 | `npm run seed` |
 | `npm run lint` |
+
+---
+
+## Endpoint Penting
+
+Dokumentasi interaktif tersedia melalui Swagger UI saat server berjalan. Endpoint yang perlu diperhatikan untuk integrasi terbaru:
+
+| Endpoint | Fungsi |
+| --- | --- |
+| `PATCH /api/auth/me` | Menyimpan perubahan profil user saat ini |
+| `PUT /api/auth/change-password` | Ganti password normal dengan verifikasi password lama |
+| `GET /api/notifications/preferences` | Membaca status push notification pasien |
+| `PATCH /api/notifications/preferences` | Enable/disable push notification pasien |
+| `POST /api/notifications/events` | Tracking klik/open Web Push dari service worker |
+| `GET /api/notifications/analytics` | Open rate, CTR, dan rata-rata TTO notifikasi |
+| `GET /api/food-scans/analytics/interactions` | Agregat severity, makanan, dan obat yang terkait interaksi |
+
+---
+
+## Catatan Production
+
+- Untuk Web Push di HP/PWA, frontend harus berjalan pada HTTPS atau secure context.
+- Untuk Railway/production, jangan mengandalkan filesystem lokal `uploads/`; gunakan Supabase Storage dengan env storage di atas.
+- Endpoint `/api/notifications/events` sengaja tidak membutuhkan bearer token karena dipanggil dari service worker saat user mengklik notifikasi.
+- `GET /api/food-scans/analytics/interactions` dibatasi untuk role `nurse` dan `admin`, dan tetap mengikuti scope akses pasien.
 
 ---
 

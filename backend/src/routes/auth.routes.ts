@@ -204,7 +204,7 @@ router.post(
  * /api/auth/change-password:
  *   put:
  *     summary: Ganti kata sandi akun saat ini
- *     description: Alias standar untuk flow penggantian kata sandi wajib.
+ *     description: Verifikasi kata sandi lama sebelum menyimpan kata sandi baru.
  *     tags: [Auth]
  *     security:
  *       - bearerAuth: []
@@ -215,8 +215,11 @@ router.post(
  *           schema:
  *             type: object
  *             required:
+ *               - currentPassword
  *               - newPassword
  *             properties:
+ *               currentPassword:
+ *                 type: string
  *               newPassword:
  *                 type: string
  *                 minLength: 8
@@ -224,7 +227,7 @@ router.post(
  *       200:
  *         description: Kata sandi berhasil diperbarui
  *       400:
- *         description: Kata sandi tidak valid atau perubahan tidak diperlukan
+ *         description: Kata sandi lama salah atau kata sandi baru tidak valid
  *       401:
  *         description: Tidak terautentikasi
  */
@@ -303,6 +306,39 @@ router.post("/logout", authController.logout);
  *         description: Tidak terautentikasi
  */
 router.get("/me", authenticateToken, authController.getMe);
+
+/**
+ * @swagger
+ * /api/auth/me:
+ *   patch:
+ *     summary: Perbarui profil pengguna saat ini
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               fullName:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               phone:
+ *                 type: string
+ *               address:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Profil berhasil diperbarui
+ *       400:
+ *         description: Payload tidak valid
+ *       409:
+ *         description: Email atau nomor telepon sudah digunakan
+ */
 router.patch("/me", authenticateToken, validateUpdateProfile, authController.updateMe);
 
 export default router;
