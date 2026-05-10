@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { Menu } from "lucide-react";
 import { useIsStandalonePwa, useLockBodyScroll } from "@/hooks";
 import { useAuthStore } from "@/store/auth";
 import DashboardSidebar from "./DashboardSidebar";
@@ -64,11 +63,19 @@ export default function DashboardNavbar({ onLogout }: DashboardNavbarProps) {
           <Image src="/images/logo/notext.png" alt="Jivara" width={132} height={42} sizes="118px" priority className="h-auto w-[118px]" />
           <button
             ref={menuButtonRef}
-            className="flex h-11 w-11 items-center justify-center rounded-xl text-text-main transition-colors"
-            onClick={() => setIsMenuOpen(true)}
-            aria-label="Buka menu"
+            className={`flex lg:hidden flex-col gap-[5px] w-11 h-11 justify-center items-center rounded-xl cursor-pointer transition-all duration-300 shrink-0 z-[40000]`}
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            aria-label={isMenuOpen ? "Tutup menu" : "Buka menu"}
           >
-            <Menu size={24} />
+            <span
+              className={`w-5 h-0.5 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] pointer-events-none ${isMenuOpen ? "bg-text-main translate-y-[7px] rotate-45" : "bg-text-main"}`}
+            />
+            <span
+              className={`w-5 h-0.5 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] pointer-events-none ${isMenuOpen ? "opacity-0 translate-x-[10px]" : "bg-text-main"}`}
+            />
+            <span
+              className={`w-5 h-0.5 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] pointer-events-none ${isMenuOpen ? "bg-text-main -translate-y-[7px] -rotate-45" : "bg-text-main"}`}
+            />
           </button>
         </div>
       </header>}
