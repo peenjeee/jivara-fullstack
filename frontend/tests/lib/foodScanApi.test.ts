@@ -30,9 +30,10 @@ describe("foodScanApi", () => {
     const analysis = await scanFoodImage(file);
 
     expect(mockedGet).toHaveBeenCalledWith("/patients", { params: { limit: 1 } });
-    expect(mockedPost).toHaveBeenNthCalledWith(1, "/food/upload", expect.any(FormData), { headers: { "Content-Type": "multipart/form-data" } });
-    expect(mockedPost).toHaveBeenNthCalledWith(2, "/detect", { patientId: "patient-1", imageId: "img-1" });
-    expect(mockedPost).toHaveBeenNthCalledWith(3, "/interaction-check", { patientId: "patient-1", scanId: "img-1", detectedItems: ["milk"] });
+    expect(mockedPost).toHaveBeenNthCalledWith(1, "/food-scans", expect.any(FormData), { headers: { "Content-Type": "multipart/form-data" } });
+    expect(mockedPost).toHaveBeenNthCalledWith(2, "/food-scans/img-1/detections", { patientId: "patient-1" });
+    expect(mockedPost).toHaveBeenNthCalledWith(3, "/food-scans/img-1/interactions", { patientId: "patient-1", detectedItems: ["milk"] });
+    expect(mockedPost).toHaveBeenNthCalledWith(4, "/nutrition-estimates", { detectedItems: [{ label: "milk", confidence: 0.95 }] });
     expect(analysis).toMatchObject({
       overallRisk: "High Risk",
       scan: { id: "img-1", patientId: "patient-1", foodName: "Susu", risk: "High Risk" },

@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { NextFunction, Request, Response, Router } from "express";
 import * as foodAiController from "../controllers/food-ai.controller";
 import { authenticateToken, authorizeRoles } from "../middleware/auth.middleware";
 import { uploadSingleFoodImage } from "../middleware/upload.middleware";
@@ -13,6 +13,11 @@ const router = Router();
 
 router.use(authenticateToken);
 
+const attachScanIdParam = (req: Request, _res: Response, next: NextFunction) => {
+  req.body = { ...req.body, scanId: req.params.scanId, imageId: req.params.scanId };
+  next();
+};
+
 /**
  * @swagger
  * tags:
@@ -22,9 +27,9 @@ router.use(authenticateToken);
 
 /**
  * @swagger
- * /api/food/upload:
+ * /api/food-scans:
  *   post:
- *     summary: Upload foto makanan
+ *     summary: Buat data scan makanan dari foto
  *     tags: [Food AI]
  *     security:
  *       - bearerAuth: []
@@ -64,41 +69,55 @@ router.use(authenticateToken);
  *       400:
  *         description: Payload atau file gambar tidak valid
  */
-router.post("/food/upload", authorizeRoles("patient", "nurse", "admin"), uploadSingleFoodImage, validateFoodUpload, foodAiController.uploadFoodImage);
+router.post("/food-scans", authorizeRoles("patient", "nurse", "admin"), uploadSingleFoodImage, validateFoodUpload, foodAiController.uploadFoodImage);
 
 /**
  * @swagger
- * /api/detect:
+ * /api/food-scans/{scanId}/detections:
  *   post:
- *     summary: Jalankan mock YOLOv11 food detection
+ *     summary: Buat hasil deteksi makanan untuk scan
  *     tags: [Food AI]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: scanId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
  *     responses:
  *       200:
  *         description: Deteksi makanan berhasil
  */
-router.post("/detect", authorizeRoles("patient", "nurse", "admin"), validateFoodDetect, foodAiController.detectFood);
+router.post("/food-scans/:scanId/detections", authorizeRoles("patient", "nurse", "admin"), attachScanIdParam, validateFoodDetect, foodAiController.detectFood);
 
 /**
  * @swagger
- * /api/interaction-check:
+ * /api/food-scans/{scanId}/interactions:
  *   post:
- *     summary: Cek interaksi obat-makanan rule-based
+ *     summary: Buat hasil analisis interaksi obat-makanan untuk scan
  *     tags: [Food AI]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: scanId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
  *     responses:
  *       200:
  *         description: Hasil interaksi berhasil dibuat
  */
-router.post("/interaction-check", authorizeRoles("patient", "nurse", "admin"), validateInteractionCheck, foodAiController.checkInteraction);
+router.post("/food-scans/:scanId/interactions", authorizeRoles("patient", "nurse", "admin"), attachScanIdParam, validateInteractionCheck, foodAiController.checkInteraction);
 
 /**
  * @swagger
- * /api/nutrition:
+ * /api/nutrition-estimates:
  *   post:
- *     summary: Estimasi nutrisi makanan mock TKPI
+ *     summary: Buat estimasi nutrisi dari makanan terdeteksi
  *     tags: [Food AI]
  *     security:
  *       - bearerAuth: []
@@ -106,6 +125,6 @@ router.post("/interaction-check", authorizeRoles("patient", "nurse", "admin"), v
  *       200:
  *         description: Estimasi nutrisi berhasil dibuat
  */
-router.post("/nutrition", authorizeRoles("patient", "nurse", "admin"), validateNutrition, foodAiController.estimateNutrition);
+router.post("/nutrition-estimates", authorizeRoles("patient", "nurse", "admin"), validateNutrition, foodAiController.estimateNutrition);
 
 export default router;
