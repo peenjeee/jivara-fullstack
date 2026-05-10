@@ -22,7 +22,7 @@ interface DashboardLayoutProps {
 }
 
 /** Batas waktu maksimal untuk loading state (detik) */
-const MAX_LOADING_SECONDS = 12;
+const MAX_LOADING_SECONDS = 8;
 
 function getFallbackPathForRole(role?: string) {
   return role === "super_admin" ? "/admin-approvals" : "/dashboard";
@@ -87,12 +87,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     logout();
     window.localStorage.removeItem("jivara-auth-storage");
 
-    // Hapus cookies via API agar server-side layout tidak lolos
-    axios.post("/api/auth/logout", undefined, { timeout: 2000 })
-      .catch(() => {})
-      .finally(() => {
-        window.location.replace("/login");
-      });
+    // Hapus cookies via API — fire and forget, JANGAN tunggu
+    axios.post("/api/auth/logout", undefined, { timeout: 2000 }).catch(() => {});
+
+    // Redirect LANGSUNG — tidak tunggu API, dengan fallback berlapis
+    window.location.href = "/login";
+    // Fallback 1: jika href gagal, coba replace setelah 500ms
+    setTimeout(() => { window.location.replace("/login"); }, 500);
+    // Fallback 2: jika masih stuck, coba assign setelah 1.5s
+    setTimeout(() => { window.location.assign("/login"); }, 1500);
   }, [logout]);
 
   /** Sync status akun admin — jalan di background, TIDAK block render */
@@ -145,15 +148,17 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     if (isNavigatingAwayRef.current) return;
 
     const timer = window.setTimeout(() => {
-      if (isNavigatingAwayRef.current) return;
-      // Masih loading setelah MAX_LOADING_SECONDS → paksa ke login
-      const state = useAuthStore.getState();
-      if (!state.user) {
-        navigateToLogin();
-      }
+      // Masih loading setelah MAX_LOADING_SECONDS → langsung redirect
+      // Tidak pakai navigateToLogin karena bisa ada state yang block
+      logout();
+      window.localStorage.removeItem("jivara-auth-storage");
+      axios.post("/api/auth/logout", undefined, { timeout: 2000 }).catch(() => {});
+      window.location.href = "/login";
+      setTimeout(() => { window.location.replace("/login"); }, 500);
+      setTimeout(() => { window.location.assign("/login"); }, 1500);
     }, MAX_LOADING_SECONDS * 1000);
     return () => window.clearTimeout(timer);
-  }, [user, hasHydrated, navigateToLogin]);
+  }, [user, hasHydrated, logout]);
 
   // Sync status akun admin secara berkala (background, tanpa block render)
   useEffect(() => {
@@ -198,7 +203,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
       hasTriedSessionRestoreRef.current = true;
       setIsRestoringSession(true);
-      axios.post("/api/auth/status", undefined, { timeout: 8000 })
+      axios.post("/api/auth/status", undefined, { timeout: 5000 })
         .then((response) => {
           if (isNavigatingAwayRef.current) return;
           const restoredUser: User | undefined = response.data.data.user;
@@ -242,7 +247,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       
       // Full reload lebih aman untuk mereset semua state aplikasi
       setTimeout(() => {
-        window.location.replace("/login");
+        window.location.href = "/login";
       }, 500);
     }
   };
@@ -259,14 +264,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   }
 
   // Render gate: hanya block untuk hydration dan session restore
-  // isCheckingAccount DIHAPUS dari sini — sync admin jalan di background
   if (!hasHydrated || !user || isRestoringSession) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-surface" aria-label="Memuat halaman">
         <div className="flex flex-col items-center space-y-4">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
           <p className="text-sm font-medium text-text-secondary">
-            Mohon tunggu ...
+            {isNavigatingAwayRef.current ? "Mengarahkan ke halaman masuk ..." : "Mohon tunggu ..."}
           </p>
         </div>
       </div>
