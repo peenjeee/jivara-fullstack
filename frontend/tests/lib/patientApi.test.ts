@@ -83,8 +83,7 @@ describe("patientApi", () => {
   });
 
   it("creates, updates, deletes, and assigns patients", async () => {
-    mockedPost.mockResolvedValueOnce({ data: { data: { id: "patient-1" } } });
-    mockedGet.mockResolvedValueOnce({ data: { data: patientResponse } });
+    mockedPost.mockResolvedValueOnce({ data: { data: { id: "patient-1", user: { fullName: "Budi Santoso", email: "budi@test.local", phone: "6281" } } } });
     mockedPut.mockResolvedValueOnce({ data: { data: patientResponse } });
 
     await expect(createPatientViaApi(patientValues)).resolves.toMatchObject({ id: "patient-1" });
@@ -93,6 +92,7 @@ describe("patientApi", () => {
     await assignPatientToNurseViaApi("patient/1", "nurse-1");
 
     expect(mockedPost).toHaveBeenCalledWith("/patients", expect.objectContaining({ fullName: "Budi Santoso", gender: "male", password: "secret123" }));
+    expect(mockedGet).not.toHaveBeenCalledWith("/patients/patient-1");
     expect(mockedPut).toHaveBeenNthCalledWith(1, "/patients/patient%2F1", expect.not.objectContaining({ password: expect.anything() }));
     expect(mockedDelete).toHaveBeenCalledWith("/patients/patient%2F1");
     expect(mockedPut).toHaveBeenNthCalledWith(2, "/patients/patient%2F1/assign", { nurseId: "nurse-1" });
