@@ -92,7 +92,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     if (blockRender) setIsCheckingAccount(true);
 
     try {
-      const response = await axios.post("/api/auth/status");
+      const response = await axios.post("/api/auth/status", undefined, { timeout: 8000 });
       const currentUser: User = response.data.data.user;
 
       updateUser(currentUser);
@@ -101,14 +101,17 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         router.replace("/account-status");
         return;
       }
-    } catch {
-      // Kegagalan jaringan/refresh bukan bukti akun belum aktif. Jangan redirect agar tidak loop
-      // antara /dashboard dan /account-status saat status check transient gagal.
+    } catch (error: any) {
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        logout();
+        window.localStorage.removeItem("jivara-auth-storage");
+        window.location.replace("/login");
+      }
     } finally {
       isSyncingRef.current = false;
       if (blockRender) setIsCheckingAccount(false);
     }
-  }, [hasHydrated, isLoggingOut, router, updateUser, userRole]);
+  }, [hasHydrated, isLoggingOut, router, updateUser, userRole, logout]);
 
   useEffect(() => {
     if (!hasHydrated || !userRole) return;
@@ -143,7 +146,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
     if (!user) {
       if (hasTriedSessionRestoreRef.current) {
-        router.replace("/login");
+        window.location.replace("/login");
         return;
       }
 
@@ -152,11 +155,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       axios.post("/api/auth/status", undefined, { timeout: 8000 })
         .then((response) => {
           const restoredUser: User | undefined = response.data.data.user;
-          if (restoredUser) setAuth(restoredUser, null);
-          else router.replace("/login");
+          if (restoredUser) {
+            setAuth(restoredUser, null);
+          } else {
+            window.location.replace("/login");
+          }
         })
         .catch(() => {
-          router.replace("/login");
+          window.location.replace("/login");
         })
         .finally(() => {
           setIsRestoringSession(false);
@@ -204,11 +210,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   }
 
   if (!hasHydrated || !user || isCheckingAccount || isRestoringSession) {
+    const isRedirecting = !user && hasTriedSessionRestoreRef.current && !isRestoringSession;
     return (
-      <div className="flex min-h-screen items-center justify-center bg-surface" aria-label="Memeriksa status akun">
+      <div className="flex min-h-screen items-center justify-center bg-surface" aria-label={isRedirecting ? "Mengarahkan ke halaman masuk" : "Memeriksa status akun"}>
         <div className="flex flex-col items-center space-y-4">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-          <p className="text-sm font-medium text-text-secondary">Memeriksa status akun ...</p>
+          <p className="text-sm font-medium text-text-secondary">
+            {isRedirecting ? "Mengarahkan ke halaman masuk ..." : "Memeriksa status akun ..."}
+          </p>
         </div>
       </div>
     );
