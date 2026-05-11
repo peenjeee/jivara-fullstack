@@ -11,7 +11,7 @@ import {
   users,
 } from "../db/schema";
 import { AUTH_CONSTANTS } from "../types/auth.types";
-import { AccessUser, assertCanAccessPatient, ensureOrganizationIdForUser, getOrganizationIdForUser, scopedPatientFilter } from "./access-control.service";
+import { AccessUser, assertCanAccessPatient, ensureOrganizationIdForUser, getNurseIdForUser, getOrganizationIdForUser, scopedPatientFilter } from "./access-control.service";
 import { writeAuditLog } from "./audit-log.service";
 import {
   PatientCreateDTO,
@@ -215,8 +215,11 @@ export const createPatient = async (dto: PatientCreateDTO, createdBy?: string) =
     throw { status: 409, message: "Nomor telepon atau email sudah terdaftar", code: "USER_EXISTS" };
   }
 
-  if (dto.assignedNurseId) {
-    const nurse = await db.select({ id: nurses.id }).from(nurses).where(and(eq(nurses.id, dto.assignedNurseId), eq(nurses.organizationId, organizationId))).limit(1);
+  const createdByNurseId = createdBy ? await getNurseIdForUser(createdBy) : null;
+  const assignedNurseId = dto.assignedNurseId || createdByNurseId;
+
+  if (assignedNurseId) {
+    const nurse = await db.select({ id: nurses.id }).from(nurses).where(and(eq(nurses.id, assignedNurseId), eq(nurses.organizationId, organizationId))).limit(1);
     if (nurse.length === 0) {
       throw { status: 404, message: "Perawat tidak ditemukan", code: "NURSE_NOT_FOUND" };
     }
@@ -253,10 +256,10 @@ export const createPatient = async (dto: PatientCreateDTO, createdBy?: string) =
       })
       .returning();
 
-    if (dto.assignedNurseId) {
+    if (assignedNurseId) {
       await tx.insert(patientNurseAssignments).values({
         patientId: newPatient.id,
-        nurseId: dto.assignedNurseId,
+        nurseId: assignedNurseId,
         assignedBy: createdBy || null,
       });
     }
@@ -264,7 +267,7 @@ export const createPatient = async (dto: PatientCreateDTO, createdBy?: string) =
     return {
       ...newPatient,
       user: newUser,
-      assignedNurseId: dto.assignedNurseId || null,
+      assignedNurseId: assignedNurseId || null,
     };
   }).then(async (patient) => {
     await writeAuditLog({

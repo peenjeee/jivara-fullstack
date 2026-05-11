@@ -1,4 +1,4 @@
-import type { NextResponse } from "next/server";
+import type { NextRequest, NextResponse } from "next/server";
 
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -8,14 +8,21 @@ export const ROLE_COOKIE = "jivara-role";
 export const ACCOUNT_STATUS_COOKIE = "jivara-account-status";
 export const LOGOUT_COOKIE = "jivara-logged-out";
 
-const commonCookieOptions = {
-  httpOnly: true,
-  secure: isProduction,
-  sameSite: "strict" as const,
-  path: "/",
+const isSecureRequest = (request?: NextRequest) => {
+  if (!request) return isProduction;
+  return request.nextUrl.protocol === "https:" || request.headers.get("x-forwarded-proto") === "https";
 };
 
-export const setAuthCookies = (response: NextResponse, data: { accessToken: string; refreshToken?: string; role?: string | null; accountStatus?: string | null; expiresIn?: number }) => {
+const getCookieOptions = (request?: NextRequest) => ({
+  httpOnly: true,
+  secure: isSecureRequest(request),
+  sameSite: "strict" as const,
+  path: "/",
+});
+
+export const setAuthCookies = (response: NextResponse, data: { accessToken: string; refreshToken?: string; role?: string | null; accountStatus?: string | null; expiresIn?: number }, request?: NextRequest) => {
+  const commonCookieOptions = getCookieOptions(request);
+
   response.cookies.set(ACCESS_COOKIE, data.accessToken, {
     ...commonCookieOptions,
     maxAge: data.expiresIn ?? 60 * 60,
@@ -42,7 +49,9 @@ export const setAuthCookies = (response: NextResponse, data: { accessToken: stri
   });
 };
 
-export const clearAuthCookies = (response: NextResponse) => {
+export const clearAuthCookies = (response: NextResponse, request?: NextRequest) => {
+  const commonCookieOptions = getCookieOptions(request);
+
   for (const name of [ACCESS_COOKIE, REFRESH_COOKIE, ROLE_COOKIE, ACCOUNT_STATUS_COOKIE]) {
     response.cookies.set(name, "", {
       ...commonCookieOptions,
@@ -51,7 +60,9 @@ export const clearAuthCookies = (response: NextResponse) => {
   }
 };
 
-export const setLogoutCookie = (response: NextResponse) => {
+export const setLogoutCookie = (response: NextResponse, request?: NextRequest) => {
+  const commonCookieOptions = getCookieOptions(request);
+
   response.cookies.set(LOGOUT_COOKIE, "1", {
     ...commonCookieOptions,
     maxAge: 5 * 60,

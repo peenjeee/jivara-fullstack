@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
         accessToken,
         role: payload.data?.user?.role,
         accountStatus: payload.data?.user?.accountStatus,
-      });
+      }, request);
     }
   }
 

@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     role: user?.role,
     accountStatus: user?.accountStatus,
     expiresIn: data.expires_in,
-  });
+  }, request);
 
   return response;
 }
