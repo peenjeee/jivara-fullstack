@@ -19,7 +19,7 @@ import { getDashboardRole, isOperationalAdminRole } from "@/components/dashboard
 import type { ActivityLogRecord } from "@/lib/mocks/activityLogs";
 import type { PatientRecord } from "@/lib/mocks/patients";
 import { deactivateNurseViaApi } from "@/lib/nurseApi";
-import { assignPatientToNurseViaApi } from "@/lib/patientApi";
+import { assignPatientToNurseViaApi, getPatientsAssignedToNurseFromApi } from "@/lib/patientApi";
 import { showConfirm, showError, showToast, showWarning } from "@/lib/swal";
 import { useActivityLogStore } from "@/store/activityLog";
 import { useNurseStore } from "@/store/nurses";
@@ -59,6 +59,23 @@ export default function NurseDetailPage({ nurseId }: NurseDetailPageProps) {
     if (!hasAuthHydrated || isOperationalAdminRole(dashboardRole) || dashboardRole === "nurse") return;
     router.replace("/dashboard");
   }, [dashboardRole, hasAuthHydrated, router]);
+
+  useEffect(() => {
+    if (!hasAuthHydrated || (dashboardRole !== "admin" && dashboardRole !== "nurse")) return;
+
+    let isMounted = true;
+    getPatientsAssignedToNurseFromApi(nurseId)
+      .then((patients) => {
+        if (isMounted) setAssignedPatients(patients);
+      })
+      .catch(() => {
+        if (isMounted) setAssignedPatients([]);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [dashboardRole, hasAuthHydrated, nurseId]);
 
   if (!hasAuthHydrated || (dashboardRole !== "nurse" && !isOperationalAdminRole(dashboardRole))) return null;
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { updateSession } from './lib/supabase/middleware';
+import { JSON_LD_SCRIPT } from './config/seo';
 
 function getConfiguredApiOrigin() {
   try {
@@ -10,7 +11,12 @@ function getConfiguredApiOrigin() {
   }
 }
 
-function createContentSecurityPolicy(nonce: string, pathname: string) {
+async function createSha256Hash(value: string) {
+  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return btoa(String.fromCharCode(...new Uint8Array(hash)));
+}
+
+async function createContentSecurityPolicy(nonce: string, pathname: string) {
   const isDev = process.env.NODE_ENV === 'development';
   const isLandingPage = pathname === '/';
   const allowInlineStyles = isDev || isLandingPage;
@@ -35,14 +41,15 @@ function createContentSecurityPolicy(nonce: string, pathname: string) {
     ...(apiOrigin ? [apiOrigin] : []),
   ].join(' ');
 
+  const jsonLdHash = await createSha256Hash(JSON_LD_SCRIPT);
   const directives = [
     "default-src 'self'",
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
     "object-src 'none'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://ajax.googleapis.com${allowEval ? " 'unsafe-eval'" : ''}`,
-    `script-src-elem 'self' 'nonce-${nonce}' https://ajax.googleapis.com${allowEval ? " 'unsafe-eval'" : ''}`,
+    `script-src 'self' 'nonce-${nonce}' 'sha256-${jsonLdHash}' 'strict-dynamic' https://ajax.googleapis.com${allowEval ? " 'unsafe-eval'" : ''}`,
+    `script-src-elem 'self' 'nonce-${nonce}' 'sha256-${jsonLdHash}' https://ajax.googleapis.com${allowEval ? " 'unsafe-eval'" : ''}`,
     `style-src 'self' ${allowInlineStyles ? "'unsafe-inline'" : `'nonce-${nonce}' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'sha256-RpGvlRbRQP1LZDBLDKCjN1VY9+ac/RHqgjmDHc2Y6PA='`}`,
     `style-src-elem 'self' ${allowInlineStyles ? "'unsafe-inline'" : `'nonce-${nonce}' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'sha256-RpGvlRbRQP1LZDBLDKCjN1VY9+ac/RHqgjmDHc2Y6PA='`}`,
     `style-src-attr 'self'${allowInlineStyles ? " 'unsafe-inline'" : ""}`,
@@ -108,30 +115,6 @@ function isTokenUsable(token?: string) {
   return true;
 }
 
-function getDefaultPathForRole(role?: string) {
-  return role === 'super_admin' ? '/admin-approvals' : '/dashboard';
-}
-
-function isRouteAllowedForRole(pathname: string, role?: string) {
-  if (!role) return false;
-  if (pathname.startsWith('/account-status')) return role === 'admin';
-  if (pathname.startsWith('/settings')) return ['super_admin', 'admin', 'nurse', 'patient'].includes(role);
-  if (pathname.startsWith('/dashboard')) return ['super_admin', 'admin', 'nurse', 'patient'].includes(role);
-  if (pathname.startsWith('/admin-approvals')) return role === 'super_admin';
-  if (pathname.startsWith('/nurses')) return role === 'admin' || role === 'nurse';
-  if (pathname.startsWith('/patients')) return role === 'admin' || role === 'nurse';
-  if (pathname.startsWith('/schedule')) return role === 'admin' || role === 'nurse' || role === 'patient';
-  if (pathname.startsWith('/activity-log')) return role === 'super_admin' || role === 'admin' || role === 'nurse' || role === 'patient';
-  if (pathname.startsWith('/food-scan')) return role === 'patient';
-  return true;
-}
-
-function shouldRedirectAdminToAccountStatus(pathname: string, role?: string, accountStatus?: string) {
-  if (role !== 'admin') return false;
-  if (!accountStatus || accountStatus === 'active') return false;
-  return !pathname.startsWith('/account-status') && protectedRoutes.some(route => pathname.startsWith(route));
-}
-
 export async function proxy(request: NextRequest) {
   const supabaseResponse = await updateSession(request);
 
@@ -141,15 +124,12 @@ export async function proxy(request: NextRequest) {
 
   const token = request.cookies.get('jivara-token')?.value;
   const refreshToken = request.cookies.get('jivara-refresh-token')?.value;
-  const roleCookie = request.cookies.get('jivara-role')?.value;
-  const accountStatusCookie = request.cookies.get('jivara-account-status')?.value;
   const hasLogoutMarker = request.cookies.get(logoutCookieName)?.value === '1';
   const hasValidToken = isTokenUsable(token);
   const hasRefreshToken = Boolean(refreshToken && refreshToken !== 'undefined' && refreshToken !== 'null');
   const hasSession = !hasLogoutMarker && (hasValidToken || hasRefreshToken);
-  const tokenPayload = decodeJwtPayload(token);
   const { pathname } = request.nextUrl;
-  const contentSecurityPolicy = createContentSecurityPolicy(nonce, pathname);
+  const contentSecurityPolicy = await createContentSecurityPolicy(nonce, pathname);
   requestHeaders.set('Content-Security-Policy', contentSecurityPolicy);
   requestHeaders.set('x-pathname', pathname);
 
@@ -178,23 +158,7 @@ export async function proxy(request: NextRequest) {
   }
 
   if (isAuthRoute && hasSession) {
-    const response = NextResponse.redirect(new URL(getDefaultPathForRole(tokenPayload?.role), request.url));
-    response.headers.set('Content-Security-Policy', contentSecurityPolicy);
-    supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
-    return response;
-  }
-
-  const effectiveRole = roleCookie || tokenPayload?.role;
-
-  if (isProtectedRoute && hasSession && shouldRedirectAdminToAccountStatus(pathname, effectiveRole, accountStatusCookie)) {
-    const response = NextResponse.redirect(new URL('/account-status', request.url));
-    response.headers.set('Content-Security-Policy', contentSecurityPolicy);
-    supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
-    return response;
-  }
-
-  if (isProtectedRoute && hasSession && !isRouteAllowedForRole(pathname, effectiveRole)) {
-    const response = NextResponse.redirect(new URL(getDefaultPathForRole(effectiveRole), request.url));
+    const response = NextResponse.redirect(new URL('/dashboard', request.url));
     response.headers.set('Content-Security-Policy', contentSecurityPolicy);
     supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
     return response;

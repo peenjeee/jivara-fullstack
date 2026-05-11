@@ -13,9 +13,8 @@ import IconActionButton from "@/components/ui/IconActionButton";
 import SearchField from "@/components/ui/SearchField";
 import ToolbarCard from "@/components/ui/ToolbarCard";
 import PatientPagination from "@/components/patients/PatientPagination";
-import { getNurseInitials, getPatientsForNurse } from "@/helpers/nurses";
+import { getNurseInitials } from "@/helpers/nurses";
 import { getDashboardRole, isOperationalAdminRole } from "@/components/dashboard/navigation";
-import { patients } from "@/lib/mocks/patients";
 import type { NurseRecord, NurseStatus } from "@/lib/mocks/nurses";
 import { createNurseViaApi, deactivateNurseViaApi, getNursesFromApi, updateNurseViaApi } from "@/lib/nurseApi";
 import { showConfirm, showError, showToast, showWarning } from "@/lib/swal";
@@ -45,7 +44,6 @@ export default function NurseListPage() {
   const hasAuthHydrated = useAuthStore((state) => state.hasHydrated);
   const dashboardRole = getDashboardRole(userRole);
   const nurses = useNurseStore((state) => state.nurses);
-  const assignments = useNurseStore((state) => state.assignments);
   const setNurses = useNurseStore((state) => state.setNurses);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<NurseFilter>("all");
@@ -145,7 +143,7 @@ export default function NurseListPage() {
   };
 
   const handleDelete = async (nurse: NurseRecord) => {
-    const assignedCount = getPatientsForNurse(patients, assignments, nurse.id).length;
+    const assignedCount = nurse.assignedPatients ?? 0;
     if (assignedCount > 0) {
       showWarning(`${nurse.fullName} masih menangani ${assignedCount} pasien. Reassign pasien terlebih dahulu sebelum menghapus perawat.`, "Tidak Bisa Dihapus");
       return;
@@ -204,7 +202,7 @@ export default function NurseListPage() {
             </thead>
             <tbody className="divide-y divide-line">
               {paginatedNurses.map((nurse) => {
-                const assignedCount = getPatientsForNurse(patients, assignments, nurse.id).length;
+                const assignedCount = nurse.assignedPatients ?? 0;
                 return (
                   <tr key={nurse.id} className="transition-colors hover:bg-surface/60">
                     <td className="px-5 py-4"><NurseIdentity nurse={nurse} /></td>
@@ -229,7 +227,7 @@ export default function NurseListPage() {
 
         <div className="divide-y divide-line sm:hidden">
           {paginatedNurses.map((nurse) => {
-            const assignedCount = getPatientsForNurse(patients, assignments, nurse.id).length;
+            const assignedCount = nurse.assignedPatients ?? 0;
             return (
               <article key={nurse.id} className="p-5">
                 <div className="flex items-start justify-between gap-4">

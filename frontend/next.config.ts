@@ -26,10 +26,6 @@ const baseSecurityHeaders = [
     key: "Permissions-Policy",
     value: "camera=(self), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), accelerometer=(), gyroscope=(), magnetometer=()",
   },
-  {
-    key: "Access-Control-Allow-Origin",
-    value: "https://www.jivara.web.id",
-  },
   ...(process.env.NODE_ENV === "production" ? [{
     key: "Strict-Transport-Security",
     value: "max-age=63072000; includeSubDomains; preload",
@@ -76,20 +72,20 @@ const manifestCacheHeaders = [
   },
 ];
 
-const crossOriginIsolationHeaders = [
-  {
-    key: "Cross-Origin-Opener-Policy",
-    value: "same-origin",
-  },
-  {
-    key: "Cross-Origin-Embedder-Policy",
-    value: "require-corp",
-  },
-  {
-    key: "Cross-Origin-Resource-Policy",
-    value: "same-origin",
-  },
-];
+const getApiImageRemotePattern = () => {
+  try {
+    const apiUrl = new URL(process.env.NEXT_PUBLIC_API_URL || "https://api.jivara.web.id/api");
+    return {
+      protocol: apiUrl.protocol.replace(":", "") as "http" | "https",
+      hostname: apiUrl.hostname,
+    };
+  } catch {
+    return {
+      protocol: "https" as const,
+      hostname: "api.jivara.web.id",
+    };
+  }
+};
 
 const nextConfig: NextConfig = {
   compress: true,
@@ -102,6 +98,11 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "images.unsplash.com",
+      },
+      getApiImageRemotePattern(),
+      {
+        protocol: "https",
+        hostname: "jivara-production.up.railway.app",
       },
     ],
   },
@@ -135,38 +136,49 @@ const nextConfig: NextConfig = {
         source: "/manifest.json",
         headers: manifestCacheHeaders,
       },
-      // Landing page — relaxed COEP for model-viewer 3D rendering
       {
         source: "/",
         headers: baseSecurityHeaders,
       },
       {
-        source: "/:path((?!dashboard|patients|schedule|activity-log|settings|food-scan).*)",
-        headers: [...baseSecurityHeaders, ...crossOriginIsolationHeaders],
+        source: "/:path((?!dashboard|patients|schedule|activity-log|settings|food-scan|nurses|admin-approvals|account-status).*)",
+        headers: baseSecurityHeaders,
       },
       {
         source: "/dashboard/:path*",
-        headers: [...baseSecurityHeaders, ...crossOriginIsolationHeaders, ...privateCacheHeaders],
+        headers: [...baseSecurityHeaders, ...privateCacheHeaders],
       },
       {
         source: "/patients/:path*",
-        headers: [...baseSecurityHeaders, ...crossOriginIsolationHeaders, ...privateCacheHeaders],
+        headers: [...baseSecurityHeaders, ...privateCacheHeaders],
       },
       {
         source: "/schedule/:path*",
-        headers: [...baseSecurityHeaders, ...crossOriginIsolationHeaders, ...privateCacheHeaders],
+        headers: [...baseSecurityHeaders, ...privateCacheHeaders],
       },
       {
         source: "/activity-log/:path*",
-        headers: [...baseSecurityHeaders, ...crossOriginIsolationHeaders, ...privateCacheHeaders],
+        headers: [...baseSecurityHeaders, ...privateCacheHeaders],
       },
       {
         source: "/settings/:path*",
-        headers: [...baseSecurityHeaders, ...crossOriginIsolationHeaders, ...privateCacheHeaders],
+        headers: [...baseSecurityHeaders, ...privateCacheHeaders],
       },
       {
         source: "/food-scan/:path*",
-        headers: [...baseSecurityHeaders, ...crossOriginIsolationHeaders, ...privateCacheHeaders],
+        headers: [...baseSecurityHeaders, ...privateCacheHeaders],
+      },
+      {
+        source: "/nurses/:path*",
+        headers: [...baseSecurityHeaders, ...privateCacheHeaders],
+      },
+      {
+        source: "/admin-approvals/:path*",
+        headers: [...baseSecurityHeaders, ...privateCacheHeaders],
+      },
+      {
+        source: "/account-status/:path*",
+        headers: [...baseSecurityHeaders, ...privateCacheHeaders],
       },
     ];
   },

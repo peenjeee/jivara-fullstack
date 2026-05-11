@@ -54,6 +54,10 @@ export const listPatients = async (query: PatientListQuery, user?: AccessUser) =
     ));
   }
 
+  if (query.nurseId) {
+    conditions.push(eq(patientNurseAssignments.nurseId, query.nurseId));
+  }
+
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
   const [rows, totalRows] = await Promise.all([
@@ -70,11 +74,16 @@ export const listPatients = async (query: PatientListQuery, user?: AccessUser) =
         address: patients.address,
         diagnosis: patients.diagnosis,
         emergencyContact: patients.emergencyContact,
+        assignedNurseId: patientNurseAssignments.nurseId,
         isActive: patients.isActive,
         createdAt: patients.createdAt,
       })
       .from(patients)
       .innerJoin(users, eq(patients.userId, users.id))
+      .leftJoin(patientNurseAssignments, and(
+        eq(patientNurseAssignments.patientId, patients.id),
+        eq(patientNurseAssignments.isActive, true),
+      ))
       .where(where)
       .orderBy(desc(patients.createdAt))
       .limit(limit)
@@ -83,6 +92,10 @@ export const listPatients = async (query: PatientListQuery, user?: AccessUser) =
       .select({ total: count() })
       .from(patients)
       .innerJoin(users, eq(patients.userId, users.id))
+      .leftJoin(patientNurseAssignments, and(
+        eq(patientNurseAssignments.patientId, patients.id),
+        eq(patientNurseAssignments.isActive, true),
+      ))
       .where(where),
   ]);
 

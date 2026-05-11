@@ -28,7 +28,7 @@ export const createJwt = (role: Role) => [
 
 export async function loginAs(context: BrowserContext, page: Page, role: Role, user = defaultUserByRole[role]) {
   const token = createJwt(role);
-  const appUrl = `http://localhost:${process.env.PLAYWRIGHT_PORT ?? 3000}`;
+  const appUrl = `http://localhost:${process.env.PLAYWRIGHT_PORT ?? 3100}`;
   const fulfillStatus = async (route: Route) => {
     await route.fulfill({ json: { data: { user } } });
   };

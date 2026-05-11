@@ -98,14 +98,12 @@ describe("patientApi", () => {
     expect(mockedPut).toHaveBeenNthCalledWith(2, "/patients/patient%2F1/assign", { nurseId: "nurse-1" });
   });
 
-  it("filters patients assigned to a nurse and ignores failed detail requests", async () => {
-    mockedGet
-      .mockResolvedValueOnce({ data: { data: [{ ...patientResponse, id: "patient-1" }, { ...patientResponse, id: "patient-2" }] } })
-      .mockResolvedValueOnce({ data: { data: { ...patientResponse, id: "patient-1", assignedNurseId: "nurse-1" } } })
-      .mockRejectedValueOnce(new Error("detail failed"));
+  it("loads patients assigned to a nurse with a server-side filter", async () => {
+    mockedGet.mockResolvedValueOnce({ data: { data: [{ ...patientResponse, id: "patient-1", assignedNurseId: "nurse-1" }] } });
 
     const patients = await getPatientsAssignedToNurseFromApi("nurse-1");
 
+    expect(mockedGet).toHaveBeenCalledWith("/patients", { params: { limit: 100, status: "active", nurseId: "nurse-1" } });
     expect(patients).toHaveLength(1);
     expect(patients[0]?.id).toBe("patient-1");
   });

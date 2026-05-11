@@ -10,6 +10,7 @@ export interface NurseRecord {
   readonly status: NurseStatus;
   readonly joinedAt: string;
   readonly temporaryPassword: boolean;
+  readonly assignedPatients?: number;
 }
 
 export type PatientNurseAssignment = Record<string, string>;

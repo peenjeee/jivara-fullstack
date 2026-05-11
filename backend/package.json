@@ -12,7 +12,7 @@
     "start": "node dist/src/app.js",
     "seed": "npm run build && node dist/src/scripts/seed.js",
     "db:push": "drizzle-kit push",
-    "lint": "eslint . --ext .ts",
+    "lint": "eslint \"src/**/*.ts\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

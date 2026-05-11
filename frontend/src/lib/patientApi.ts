@@ -19,6 +19,7 @@ interface PatientListResponse {
   dateOfBirth?: string | null;
   gender?: string | null;
   address?: string | null;
+  assignedNurseId?: string | null;
   isActive?: boolean | null;
   createdAt?: string | null;
 }
@@ -271,20 +272,8 @@ export const getPatientDetailFromApi = async (patientId: string): Promise<Patien
 };
 
 export const getPatientsAssignedToNurseFromApi = async (nurseId: string) => {
-  const patients = await getPatientsFromApi();
-  const details = await Promise.all(patients.map(async (patient) => {
-    try {
-      const response = await api.get<{ data: PatientDetailResponse }>(`/patients/${patient.id}`);
-      return { patient, detail: response.data.data };
-    } catch {
-      return null;
-    }
-  }));
-
-  return details
-    .filter((entry): entry is { patient: PatientRecord; detail: PatientDetailResponse } => Boolean(entry))
-    .filter((entry) => entry.detail.assignedNurseId === nurseId || entry.detail.assignedNurse?.id === nurseId)
-    .map((entry) => entry.patient);
+  const response = await api.get<PaginatedResponse<PatientListResponse>>("/patients", { params: { limit: 100, status: "active", nurseId } });
+  return response.data.data.map((patient) => mapPatient(patient, 100));
 };
 
 export const assignPatientToNurseViaApi = async (patientId: string, nurseId: string) => {

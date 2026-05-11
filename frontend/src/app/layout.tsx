@@ -5,14 +5,10 @@ import PwaPullToRefresh from "@/components/ui/PwaPullToRefresh";
 import AuthNavigationProvider from "@/providers/AuthNavigationProvider";
 import PwaInstallPromptProvider from "@/providers/PwaInstallPromptProvider";
 import ScrollProvider from "@/providers/ScrollProvider";
+import { JSON_LD_SCRIPT, SITE_URL } from "@/config/seo";
 import type { Metadata, Viewport } from "next";
 import { Archivo, Inter } from "next/font/google";
-import { headers } from "next/headers";
 import type { ReactNode } from "react";
-
-export const dynamic = "force-dynamic";
-
-const BASE_URL = "https://www.jivara.web.id";
 
 const archivo = Archivo({
   subsets: ["latin"],
@@ -38,7 +34,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL(BASE_URL),
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "Jivara - Platform Kesehatan AI: Pengingat Obat & Deteksi Interaksi Makanan",
     template: "%s | Jivara",
@@ -84,13 +80,13 @@ export const metadata: Metadata = {
     },
   },
   alternates: {
-    canonical: BASE_URL,
+    canonical: SITE_URL,
   },
   openGraph: {
     title: "Jivara - Stay on Track, Stay Healthy",
     description:
       "Platform kesehatan berbasis AI - pengingat obat otomatis, deteksi interaksi makanan-obat dengan Computer Vision, dan monitoring pasien jarak jauh oleh perawat.",
-    url: BASE_URL,
+    url: SITE_URL,
     siteName: "Jivara",
     locale: "id_ID",
     type: "website",
@@ -131,91 +127,19 @@ export const metadata: Metadata = {
     google: "cA4OyhUu359dNPpjiHWaSN2-ELXIsjC1qdBmu-dDsKM",
   },
 };
-// JSON-LD Structured Data - menggunakan tipe yang didukung Google Rich Results
-const jsonLdGraph = {
-  "@context": "https://schema.org",
-  "@graph": [
-    // 1. WebSite - untuk Sitelinks Search Box di Google
-    {
-      "@type": "WebSite",
-      "@id": `${BASE_URL}/`,
-      name: "Jivara",
-      alternateName: "Jivara Health Platform",
-      url: BASE_URL,
-      description:
-        "Platform kesehatan berbasis AI untuk pengingat obat otomatis, deteksi interaksi makanan-obat, dan pemantauan pasien jarak jauh.",
-      inLanguage: "id",
-      publisher: { "@id": `${BASE_URL}/team` },
-    },
-    // 2. Organization - untuk Knowledge Panel Google
-    {
-      "@type": "Organization",
-      "@id": `${BASE_URL}/team`,
-      name: "Jivara",
-      url: BASE_URL,
-      logo: {
-        "@type": "ImageObject",
-        url: `${BASE_URL}/images/logo/splash.png`,
-        width: 1080,
-        height: 1080,
-      },
-      description:
-        "Tim pengembang platform kesehatan AI Jivara - pengingat obat, deteksi interaksi makanan-obat, dan monitoring pasien.",
-      contactPoint: {
-        "@type": "ContactPoint",
-        email: "hello@jivara.id",
-        contactType: "customer support",
-        availableLanguage: "Indonesian",
-      },
-      sameAs: ["https://instagram.com/jivara.id"],
-    },
-    // 3. SoftwareApplication - untuk App Rich Results
-    {
-      "@type": "SoftwareApplication",
-      "@id": `${BASE_URL}/docs`,
-      name: "Jivara",
-      url: BASE_URL,
-      description:
-        "Platform kesehatan berbasis AI untuk pengingat obat otomatis, deteksi interaksi makanan-obat menggunakan Computer Vision, dan pemantauan pasien jarak jauh oleh perawat.",
-      applicationCategory: "HealthApplication",
-      operatingSystem: "Web",
-      offers: {
-        "@type": "Offer",
-        price: "0",
-        priceCurrency: "IDR",
-      },
-      image: `${BASE_URL}/images/og-image.png`,
-      screenshot: `${BASE_URL}/images/og-image.png`,
-      featureList: [
-        "Pengingat obat otomatis",
-        "Deteksi interaksi makanan-obat via Computer Vision",
-        "Pemantauan pasien jarak jauh oleh perawat",
-        "Scan makanan dengan AI",
-        "Jadwal obat digital",
-        "Log aktivitas kesehatan",
-      ],
-      creator: { "@id": `${BASE_URL}/team` },
-    },
-  ],
-};
 
 interface RootLayoutProps {
   readonly children: ReactNode;
 }
 
-export default async function RootLayout({ children }: RootLayoutProps) {
-  const headersList = await headers();
-  const nonce = headersList.get('x-nonce') || '';
-
+export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="id" className={`${archivo.variable} ${inter.variable} relative`} suppressHydrationWarning>
       <head>
-        {nonce && <meta property="csp-nonce" nonce={nonce} />}
         <script
           type="application/ld+json"
-          nonce={nonce || undefined}
           suppressHydrationWarning
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdGraph) }}
+          dangerouslySetInnerHTML={{ __html: JSON_LD_SCRIPT }}
         />
       </head>
       <body className="font-body relative overflow-x-hidden">
