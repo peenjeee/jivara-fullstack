@@ -47,7 +47,7 @@ function FoodScanHero({ scan, risk, imageSizes }: { readonly scan: FoodScanAnaly
   return (
     <motion.section className="overflow-hidden rounded-3xl bg-surface" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}>
       <div className="relative aspect-video overflow-hidden rounded-3xl bg-line">
-        <Image src={scan.image} alt={scan.foodName} fill sizes={imageSizes} className="object-cover" unoptimized={scan.image.startsWith("http")} />
+        <Image src={scan.image} alt={scan.foodName} fill sizes={imageSizes} className="object-cover" />
       </div>
 
       <div className="p-5">

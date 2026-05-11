@@ -1,7 +1,9 @@
 import type { Page, Route } from "@playwright/test";
 
+const appOrigin = `http://localhost:${process.env.PLAYWRIGHT_PORT ?? 3100}`;
+
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "http://localhost:3000",
+  "Access-Control-Allow-Origin": appOrigin,
   "Access-Control-Allow-Credentials": "true",
   "Access-Control-Allow-Headers": "accept, authorization, content-type",
   "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",

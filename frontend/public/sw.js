@@ -115,9 +115,9 @@ self.addEventListener("notificationclick", (event) => {
 
 async function trackNotificationEvent(data, eventType) {
   const notificationId = data?.notification_id;
-  const trackingUrl = data?.tracking_url;
+  const trackingUrl = getSafeSameOriginUrl(data?.tracking_url);
 
-  if (typeof notificationId !== "string" || typeof trackingUrl !== "string") return;
+  if (typeof notificationId !== "string" || !trackingUrl) return;
 
   await fetch(trackingUrl, {
     method: "POST",
@@ -135,6 +135,15 @@ function getSafeActionUrl(actionUrl) {
   if (targetUrl.origin !== self.location.origin) {
     return `${self.location.origin}/dashboard`;
   }
+
+  return targetUrl.href;
+}
+
+function getSafeSameOriginUrl(value) {
+  if (typeof value !== "string" || !value.startsWith("/")) return null;
+
+  const targetUrl = new URL(value, self.location.origin);
+  if (targetUrl.origin !== self.location.origin) return null;
 
   return targetUrl.href;
 }

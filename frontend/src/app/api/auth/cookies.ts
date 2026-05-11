@@ -58,4 +58,4 @@ export const setLogoutCookie = (response: NextResponse) => {
   });
 };
 
-export const getBackendApiUrl = () => process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
+export const getBackendApiUrl = () => process.env.NEXT_PUBLIC_API_URL || "https://api.jivara.web.id/api";

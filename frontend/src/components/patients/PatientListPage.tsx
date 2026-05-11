@@ -1,25 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { Plus } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import Button from "@/components/ui/Button";
-import { getNurseByPatientId } from "@/helpers/nurses";
-import type { PatientRecord } from "@/lib/mocks/patients";
-import { createPatientViaApi, deactivatePatientViaApi, getPatientsFromApi, updatePatientViaApi } from "@/lib/patientApi";
-import { showConfirm, showError, showToast } from "@/lib/swal";
-import { useNurseStore } from "@/store/nurses";
 import AddPatientModal from "./AddPatientModal";
-import type { AddPatientValues } from "./AddPatientForm";
-import type { PatientAction } from "./PatientActions";
 import PatientPagination from "./PatientPagination";
 import PatientTable from "./PatientTable";
-import PatientToolbar, { type PatientFilter } from "./PatientToolbar";
-
-const pageSize = 10;
+import PatientToolbar from "./PatientToolbar";
+import { usePatientList } from "./usePatientList";
 
 interface PatientListPageProps {
   readonly mode?: "manage" | "readonly";
@@ -27,125 +18,14 @@ interface PatientListPageProps {
 
 export default function PatientListPage({ mode = "manage" }: PatientListPageProps) {
   const router = useRouter();
-  const nurses = useNurseStore((state) => state.nurses);
-  const assignments = useNurseStore((state) => state.assignments);
-  const [patientRecords, setPatientRecords] = useState<PatientRecord[]>([]);
-  const [search, setSearch] = useState("");
-  const [activeFilter, setActiveFilter] = useState<PatientFilter>("all");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [editingPatient, setEditingPatient] = useState<PatientRecord | null>(null);
-  const deferredSearch = useDeferredValue(search);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    getPatientsFromApi()
-      .then((patients) => {
-        if (isMounted) setPatientRecords(patients);
-      })
-      .catch(() => {
-        if (isMounted) setPatientRecords([]);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  const filteredPatients = useMemo(() => {
-    const query = deferredSearch.trim().toLowerCase();
-
-    return patientRecords.filter((patient) => {
-      const matchesSearch = !query || patient.name.toLowerCase().includes(query) || patient.id.toLowerCase().includes(query);
-      const matchesFilter = activeFilter === "all" || patient.status === activeFilter;
-      return matchesSearch && matchesFilter;
-    });
-  }, [activeFilter, deferredSearch, patientRecords]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredPatients.length / pageSize));
-  const paginatedPatients = filteredPatients.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  const assignedNurseByPatientId = useMemo(() => Object.fromEntries(patientRecords.map((patient) => [patient.id, getNurseByPatientId(nurses, assignments, patient.id)?.fullName ?? "Belum ditugaskan"])), [assignments, nurses, patientRecords]);
-
-  const handleSearchChange = (value: string) => {
-    setSearch(value);
-    setCurrentPage(1);
-  };
-
-  const handleFilterChange = (value: PatientFilter) => {
-    setActiveFilter(value);
-    setCurrentPage(1);
-  };
-
-  const resetFilters = () => {
-    setSearch("");
-    setActiveFilter("all");
-    setCurrentPage(1);
-  };
-
-  const handleAddPatient = async (values: AddPatientValues) => {
-    try {
-      const createdPatient = await createPatientViaApi(values);
-      setPatientRecords((currentPatients) => [createdPatient, ...currentPatients]);
-    } catch {
-      showError("Gagal menambahkan pasien dari API.");
-      return;
-    }
-
-    setIsAddModalOpen(false);
-    setSearch("");
-    setActiveFilter("all");
-    setCurrentPage(1);
-    showToast("Pasien berhasil ditambahkan.", "success");
-  };
-
-  const handleEditPatient = async (values: AddPatientValues) => {
-    if (!editingPatient) return;
-
-    try {
-      const updatedPatient = await updatePatientViaApi(editingPatient.id, values);
-      setPatientRecords((currentPatients) => currentPatients.map((patient) => patient.id === editingPatient.id ? updatedPatient : patient));
-    } catch {
-      showError("Gagal memperbarui pasien dari API.");
-      return;
-    }
-
-    setEditingPatient(null);
-    showToast("Data pasien berhasil diperbarui.");
-  };
-
-  const handlePatientAction = async (action: PatientAction, patient: PatientRecord) => {
-    if (action === "view") {
-      router.push(`/patients/${encodeURIComponent(patient.id)}`);
-    }
-
-    if (action === "edit") {
-      setEditingPatient(patient);
-    }
-
-    if (action === "delete") {
-      const result = await showConfirm("Hapus pasien?", `Data ${patient.name} akan dihapus dari daftar pasien.`, "Ya, Hapus");
-
-      if (result.isConfirmed) {
-        try {
-          await deactivatePatientViaApi(patient.id);
-          setPatientRecords((currentPatients) => currentPatients.filter((currentPatient) => currentPatient.id !== patient.id));
-        } catch {
-          showError("Gagal menghapus pasien dari API.");
-          return;
-        }
-
-        showToast("Pasien berhasil dihapus.");
-      }
-    }
-  };
+  const patientList = usePatientList((patientId) => router.push(`/patients/${encodeURIComponent(patientId)}`));
 
   return (
     <DashboardPageShell>
       <DashboardPageHeader
         title="Daftar Pasien"
         action={mode === "manage" && (
-          <Button size="sm" icon={<Plus size={16} />} onClick={() => setIsAddModalOpen(true)}>
+            <Button size="sm" icon={<Plus size={16} />} onClick={() => patientList.setIsAddModalOpen(true)}>
             Tambah Pasien Baru
           </Button>
         )}
@@ -158,12 +38,12 @@ export default function PatientListPage({ mode = "manage" }: PatientListPageProp
         transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
       >
         <PatientToolbar
-          search={search}
-          activeFilter={activeFilter}
-          hasActiveFilters={Boolean(search || activeFilter !== "all")}
-          onSearchChange={handleSearchChange}
-          onFilterChange={handleFilterChange}
-          onReset={resetFilters}
+          search={patientList.search}
+          activeFilter={patientList.activeFilter}
+          hasActiveFilters={Boolean(patientList.search || patientList.activeFilter !== "all")}
+          onSearchChange={patientList.handleSearchChange}
+          onFilterChange={patientList.handleFilterChange}
+          onReset={patientList.resetFilters}
         />
       </motion.div>
 
@@ -173,34 +53,34 @@ export default function PatientListPage({ mode = "manage" }: PatientListPageProp
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.18 }}
       >
-        <PatientTable patients={paginatedPatients} actions={mode === "readonly" ? ["view"] : ["view", "edit", "delete"]} onAction={handlePatientAction} embedded emptyMessage="Tidak ada data pasien." assignedNurseByPatientId={mode === "readonly" ? assignedNurseByPatientId : undefined} />
+        <PatientTable patients={patientList.paginatedPatients} actions={mode === "readonly" ? ["view"] : ["view", "edit", "delete"]} onAction={patientList.handlePatientAction} embedded emptyMessage="Tidak ada data pasien." assignedNurseByPatientId={mode === "readonly" ? patientList.assignedNurseByPatientId : undefined} />
         <PatientPagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          totalItems={filteredPatients.length}
-          pageSize={pageSize}
-          onPageChange={(page) => setCurrentPage(Math.min(Math.max(page, 1), totalPages))}
+          currentPage={patientList.currentPage}
+          totalPages={patientList.totalPages}
+          totalItems={patientList.filteredPatients.length}
+          pageSize={10}
+          onPageChange={patientList.setCurrentPage}
         />
       </motion.div>
-      {mode === "manage" && <AddPatientModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} onSubmit={handleAddPatient} />}
+      {mode === "manage" && <AddPatientModal isOpen={patientList.isAddModalOpen} onClose={() => patientList.setIsAddModalOpen(false)} onSubmit={patientList.handleAddPatient} />}
       <AddPatientModal
-        isOpen={mode === "manage" && Boolean(editingPatient)}
+        isOpen={mode === "manage" && Boolean(patientList.editingPatient)}
         initialValues={
-          editingPatient
+          patientList.editingPatient
             ? {
-                fullName: editingPatient.name,
-                age: editingPatient.age,
-                gender: editingPatient.gender,
-                phone: editingPatient.phone ?? "",
-                email: editingPatient.email ?? "",
+                fullName: patientList.editingPatient.name,
+                age: patientList.editingPatient.age,
+                gender: patientList.editingPatient.gender,
+                phone: patientList.editingPatient.phone ?? "",
+                email: patientList.editingPatient.email ?? "",
                 password: "********",
-                address: editingPatient.address ?? "",
+                address: patientList.editingPatient.address ?? "",
               }
             : undefined
         }
         mode="edit"
-        onClose={() => setEditingPatient(null)}
-        onSubmit={handleEditPatient}
+        onClose={() => patientList.setEditingPatient(null)}
+        onSubmit={patientList.handleEditPatient}
       />
     </DashboardPageShell>
   );

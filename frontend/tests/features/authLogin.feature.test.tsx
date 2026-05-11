@@ -8,11 +8,9 @@ import type { User } from "@/types/auth";
 
 const push = vi.fn();
 const replace = vi.fn();
-let callbackUrl: string | null = null;
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace }),
-  useSearchParams: () => ({ get: (key: string) => key === "callbackUrl" ? callbackUrl : null }),
 }));
 
 vi.mock("axios", () => ({
@@ -44,7 +42,7 @@ describe("auth login feature", () => {
   beforeEach(() => {
     push.mockClear();
     replace.mockClear();
-    callbackUrl = null;
+    window.history.replaceState(null, "", "/login");
     axiosPost.mockReset();
     vi.mocked(closeAlert).mockClear();
     vi.mocked(showError).mockClear();
@@ -64,7 +62,7 @@ describe("auth login feature", () => {
   });
 
   it("logs in, stores auth state, and redirects to callback url", async () => {
-    callbackUrl = "/patients";
+    window.history.replaceState(null, "", "/login?callbackUrl=/patients");
     axiosPost.mockResolvedValueOnce({ data: { data: { user, access_token: "access-token" } } });
     render(<LoginForm />);
 

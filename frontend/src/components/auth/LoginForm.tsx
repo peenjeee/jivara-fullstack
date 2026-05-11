@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Lock, LogIn, Mail } from "lucide-react";
 import axios from "axios";
 import { closeAlert, showError, showLoading, showToast, showWarning } from "@/lib/swal";
@@ -23,13 +23,13 @@ export default function LoginForm() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const { hasHydrated, user, setAuth, updateToken, updateUser, logout } = useAuthStore();
+  const { hasHydrated, user, setAuth, logout } = useAuthStore();
   const hasTriedRestoreRef = useRef(false);
 
   useEffect(() => {
     if (!hasHydrated || hasTriedRestoreRef.current) return;
     hasTriedRestoreRef.current = true;
+    const searchParams = new URLSearchParams(window.location.search);
 
     const reason = searchParams.get("reason");
     if (reason === "unauthenticated" && user) {
@@ -43,7 +43,7 @@ export default function LoginForm() {
 
     const callbackUrl = searchParams.get("callbackUrl");
     router.replace(getPostLoginPath(user, callbackUrl));
-  }, [hasHydrated, logout, router, searchParams, updateToken, updateUser, user]);
+  }, [hasHydrated, logout, router, user]);
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -78,7 +78,7 @@ export default function LoginForm() {
       setAuth(user, access_token);
 
       showToast("Anda berhasil masuk.", "success");
-      const callbackUrl = searchParams.get("callbackUrl");
+      const callbackUrl = new URLSearchParams(window.location.search).get("callbackUrl");
       router.push(getPostLoginPath(user, callbackUrl));
     } catch {
       closeAlert();
@@ -109,7 +109,7 @@ export default function LoginForm() {
         </p>
       }
     >
-      <form onSubmit={handleLogin} className="space-y-6" noValidate>
+      <form method="post" onSubmit={handleLogin} className="space-y-6" noValidate>
         <AuthInput
           id="identifier"
           label="Email"

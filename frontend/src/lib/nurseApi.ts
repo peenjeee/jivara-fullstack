@@ -14,6 +14,7 @@ interface NurseResponse {
   phone?: string | null;
   gender?: string | null;
   isActive?: boolean | null;
+  assignedPatients?: number | null;
   createdAt?: string | null;
 }
 
@@ -46,6 +47,7 @@ const mapNurse = (nurse: NurseResponse): NurseRecord => ({
   status: mapStatus(nurse.isActive),
   joinedAt: formatJoinedAt(nurse.createdAt),
   temporaryPassword: false,
+  assignedPatients: nurse.assignedPatients ?? 0,
 });
 
 const mapFormValuesToPayload = (values: NurseFormValues) => ({

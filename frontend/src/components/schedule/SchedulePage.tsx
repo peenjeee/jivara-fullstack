@@ -1,216 +1,38 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { BellRing, CalendarClock, CheckCircle2, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import Button from "@/components/ui/Button";
 import PatientPagination from "@/components/patients/PatientPagination";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
-import { groupSchedulesByPatient } from "@/helpers/schedules";
-import { getPatientsFromApi } from "@/lib/patientApi";
-import type { PatientRecord } from "@/lib/mocks/patients";
-import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
-import { createSchedulesViaApi, deactivateScheduleViaApi, getSchedulesFromApi, setScheduleActiveViaApi, updateScheduleViaApi } from "@/lib/scheduleApi";
-import { showConfirm, showError, showToast } from "@/lib/swal";
 import ScheduleDetailModal from "./ScheduleDetailModal";
 import ScheduleModal from "./ScheduleModal";
 import ScheduleTable from "./ScheduleTable";
-import ScheduleToolbar, { type ScheduleFilter } from "./ScheduleToolbar";
-import { getEmptyScheduleFormValues, getScheduleFormValues, type ScheduleFormValues } from "./ScheduleForm";
-import type { ScheduleAction } from "./ScheduleActions";
-
-const pageSize = 10;
+import ScheduleToolbar from "./ScheduleToolbar";
+import { getEmptyScheduleFormValues } from "./ScheduleForm";
+import { useScheduleManager } from "./useScheduleManager";
 interface SchedulePageProps {
   readonly initialPatientName?: string;
   readonly readOnly?: boolean;
 }
 
 export default function SchedulePage({ initialPatientName = "", readOnly = false }: SchedulePageProps) {
-  const linkedPatientName = initialPatientName.trim().toLowerCase();
-  const [schedules, setSchedules] = useState<MedicationScheduleRecord[]>([]);
-  const [patients, setPatients] = useState<PatientRecord[]>([]);
-  const [search, setSearch] = useState("");
-  const [activeFilter, setActiveFilter] = useState<ScheduleFilter>("all");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [addMedicinePatientId, setAddMedicinePatientId] = useState<string | null>(null);
-  const [editingSchedule, setEditingSchedule] = useState<MedicationScheduleRecord | null>(null);
-  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
-  const [returnToDetailPatientId, setReturnToDetailPatientId] = useState<string | null>(null);
-  const deferredSearch = useDeferredValue(search);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    Promise.all([getSchedulesFromApi(), getPatientsFromApi()])
-      .then(([apiSchedules, apiPatients]) => {
-        if (isMounted) {
-          setSchedules(apiSchedules);
-          setPatients(apiPatients);
-        }
-      })
-      .catch(() => {
-        if (isMounted) {
-          setSchedules([]);
-          setPatients([]);
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  const summaryStats = useMemo(() => {
-    const active = schedules.filter((schedule) => schedule.status === "Aktif").length;
-    const completed = schedules.filter((schedule) => schedule.status === "Selesai").length;
-    const reminders = schedules.filter((schedule) => schedule.reminderEnabled).length;
-
-    return [
-      { label: "Jadwal Aktif", value: String(active), tone: "safe" as const, color: "pine" as const, icon: CalendarClock },
-      { label: "Selesai", value: String(completed), tone: "safe" as const, color: "leaf" as const, icon: CheckCircle2 },
-      { label: "Reminder Aktif", value: String(reminders), tone: "neutral" as const, color: "lime" as const, icon: BellRing },
-    ];
-  }, [schedules]);
-
-  const filteredSchedules = useMemo(() => {
-    const query = deferredSearch.trim().toLowerCase();
-    return schedules.filter((schedule) => {
-      const matchesSearch = !query || [schedule.patientName, schedule.medicineName, schedule.dose, schedule.frequency, schedule.instructions ?? ""]
-        .some((value) => value.toLowerCase().includes(query));
-      const matchesFilter = activeFilter === "all";
-
-      return matchesSearch && matchesFilter;
-    });
-  }, [activeFilter, deferredSearch, schedules]);
-
-  const patientGroups = useMemo(() => groupSchedulesByPatient(filteredSchedules), [filteredSchedules]);
-  const allPatientGroups = useMemo(() => groupSchedulesByPatient(schedules), [schedules]);
-  const medicineCountByPatient = useMemo(
-    () => Object.fromEntries(allPatientGroups.map((group) => [group.patientId, group.schedules.length])),
-    [allPatientGroups],
-  );
-  const selectedGroup = selectedPatientId ? allPatientGroups.find((group) => group.patientId === selectedPatientId) ?? null : null;
-  const addMedicinePatientGroup = addMedicinePatientId ? allPatientGroups.find((group) => group.patientId === addMedicinePatientId) ?? null : null;
-  const totalPages = Math.max(1, Math.ceil(patientGroups.length / pageSize));
-  const paginatedGroups = patientGroups.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-
-  useEffect(() => {
-    if (!linkedPatientName) return;
-
-    const linkedPatientId = schedules.find((schedule) => schedule.patientName.toLowerCase() === linkedPatientName)?.patientId;
-    if (!linkedPatientId) return;
-
-    const openTimer = window.setTimeout(() => setSelectedPatientId(linkedPatientId), 420);
-    return () => window.clearTimeout(openTimer);
-  }, [linkedPatientName, schedules]);
-
-  const handleSearchChange = (value: string) => {
-    setSearch(value);
-    setCurrentPage(1);
-  };
-
-  const handleFilterChange = (value: ScheduleFilter) => {
-    setActiveFilter(value);
-    setCurrentPage(1);
-  };
-
-  const resetFilters = () => {
-    setSearch("");
-    setActiveFilter("all");
-    setCurrentPage(1);
-  };
-
-  const handleAddSchedule = async (values: ScheduleFormValues) => {
-    try {
-      const createdSchedules = await createSchedulesViaApi(values.patientId, values.medicines, patients);
-      setSchedules((currentSchedules) => [...createdSchedules, ...currentSchedules]);
-    } catch {
-      showError("Gagal menambahkan jadwal obat dari API.");
-      return;
-    }
-
-    setIsAddModalOpen(false);
-    setAddMedicinePatientId(null);
-    setSearch("");
-    setActiveFilter("all");
-    setCurrentPage(1);
-    showToast(values.medicines.length > 1 ? "Beberapa jadwal obat berhasil ditambahkan." : "Jadwal obat berhasil ditambahkan.");
-  };
-
-  const handleEditSchedule = async (values: ScheduleFormValues) => {
-    if (!editingSchedule) return;
-    const [medicine] = values.medicines;
-    if (!medicine) return;
-
-    try {
-      const updatedSchedule = await updateScheduleViaApi(editingSchedule.id, values.patientId, medicine, patients);
-      setSchedules((currentSchedules) => currentSchedules.map((schedule) => schedule.id === editingSchedule.id ? updatedSchedule : schedule));
-    } catch {
-      showError("Gagal memperbarui jadwal obat dari API.");
-      return;
-    }
-
-    setEditingSchedule(null);
-    setSelectedPatientId(returnToDetailPatientId);
-    setReturnToDetailPatientId(null);
-    showToast("Jadwal obat berhasil diperbarui.");
-  };
-
-  const handleScheduleAction = async (action: ScheduleAction, schedule: MedicationScheduleRecord) => {
-    if (action === "view") return;
-
-    if (action === "edit") {
-      setReturnToDetailPatientId(selectedPatientId);
-      setSelectedPatientId(null);
-      setEditingSchedule(schedule);
-      return;
-    }
-
-    if (action === "toggle") {
-      try {
-        const updatedSchedule = await setScheduleActiveViaApi(schedule, schedule.status === "Nonaktif", patients);
-        setSchedules((currentSchedules) => currentSchedules.map((currentSchedule) => currentSchedule.id === schedule.id ? updatedSchedule : currentSchedule));
-      } catch {
-        showError("Gagal mengubah status jadwal obat dari API.");
-        return;
-      }
-
-      showToast(schedule.status === "Nonaktif" ? "Jadwal berhasil diaktifkan." : "Jadwal berhasil dinonaktifkan.");
-      return;
-    }
-
-    if (action === "delete") {
-      const result = await showConfirm("Hapus jadwal obat?", `Jadwal ${schedule.medicineName} untuk ${schedule.patientName} akan dihapus.`, "Ya, Hapus");
-
-      if (result.isConfirmed) {
-        try {
-          await deactivateScheduleViaApi(schedule.id);
-          setSchedules((currentSchedules) => currentSchedules.filter((currentSchedule) => currentSchedule.id !== schedule.id));
-        } catch {
-          showError("Gagal menghapus jadwal obat dari API.");
-          return;
-        }
-
-        showToast("Jadwal obat berhasil dihapus.");
-      }
-    }
-  };
+  const schedule = useScheduleManager(initialPatientName);
 
   return (
     <DashboardPageShell>
       <DashboardPageHeader
         title="Jadwal Obat"
         action={!readOnly && (
-          <Button size="sm" icon={<Plus size={16} />} onClick={() => setIsAddModalOpen(true)}>
+            <Button size="sm" icon={<Plus size={16} />} onClick={() => schedule.setIsAddModalOpen(true)}>
             Tambah Jadwal
           </Button>
         )}
       />
 
-      <SummaryCardGrid stats={summaryStats} />
+      <SummaryCardGrid stats={schedule.summaryStats} />
 
       <motion.div
         className="mt-6"
@@ -218,7 +40,7 @@ export default function SchedulePage({ initialPatientName = "", readOnly = false
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: 0.32 }}
       >
-        <ScheduleToolbar search={search} activeFilter={activeFilter} hasActiveFilters={Boolean(search || activeFilter !== "all")} onSearchChange={handleSearchChange} onFilterChange={handleFilterChange} onReset={resetFilters} />
+        <ScheduleToolbar search={schedule.search} activeFilter={schedule.activeFilter} hasActiveFilters={Boolean(schedule.search || schedule.activeFilter !== "all")} onSearchChange={schedule.handleSearchChange} onFilterChange={schedule.handleFilterChange} onReset={schedule.resetFilters} />
       </motion.div>
 
       <motion.div
@@ -228,46 +50,42 @@ export default function SchedulePage({ initialPatientName = "", readOnly = false
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.4 }}
       >
         <ScheduleTable
-          groups={paginatedGroups}
-          onViewDetail={(group) => setSelectedPatientId(group.patientId)}
-          onAddMedicine={(group) => setAddMedicinePatientId(group.patientId)}
+          groups={schedule.paginatedGroups}
+          onViewDetail={(group) => schedule.setSelectedPatientId(group.patientId)}
+          onAddMedicine={(group) => schedule.setAddMedicinePatientId(group.patientId)}
           readOnly={readOnly}
           emptyMessage="Tidak ada data jadwal."
         />
         <PatientPagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          totalItems={patientGroups.length}
-          pageSize={pageSize}
+          currentPage={schedule.currentPage}
+          totalPages={schedule.totalPages}
+          totalItems={schedule.patientGroups.length}
+          pageSize={10}
           itemLabel="pasien"
-          onPageChange={(page) => setCurrentPage(Math.min(Math.max(page, 1), totalPages))}
+          onPageChange={schedule.setCurrentPage}
         />
       </motion.div>
 
-      {!readOnly && <ScheduleModal isOpen={isAddModalOpen} patients={patients} medicineIndexOffsetByPatient={medicineCountByPatient} onClose={() => setIsAddModalOpen(false)} onSubmit={handleAddSchedule} />}
+      {!readOnly && <ScheduleModal isOpen={schedule.isAddModalOpen} patients={schedule.patients} medicineIndexOffsetByPatient={schedule.medicineCountByPatient} onClose={() => schedule.setIsAddModalOpen(false)} onSubmit={schedule.handleAddSchedule} />}
       <ScheduleModal
-        isOpen={Boolean(addMedicinePatientId)}
-        patients={patients}
-        initialValues={getEmptyScheduleFormValues(addMedicinePatientId ?? "")}
+        isOpen={Boolean(schedule.addMedicinePatientId)}
+        patients={schedule.patients}
+        initialValues={getEmptyScheduleFormValues(schedule.addMedicinePatientId ?? "")}
         patientLocked
-        medicineIndexOffset={addMedicinePatientGroup?.schedules.length ?? 0}
-        onClose={() => setAddMedicinePatientId(null)}
-        onSubmit={handleAddSchedule}
+        medicineIndexOffset={schedule.addMedicinePatientGroup?.schedules.length ?? 0}
+        onClose={() => schedule.setAddMedicinePatientId(null)}
+        onSubmit={schedule.handleAddSchedule}
       />
       <ScheduleModal
-        isOpen={Boolean(editingSchedule)}
-        patients={patients}
-        initialValues={editingSchedule ? getScheduleFormValues(editingSchedule) : undefined}
+        isOpen={Boolean(schedule.editingSchedule)}
+        patients={schedule.patients}
+        initialValues={schedule.getEditingScheduleValues()}
         mode="edit"
         patientLocked
-        onClose={() => {
-          setEditingSchedule(null);
-          setSelectedPatientId(returnToDetailPatientId);
-          setReturnToDetailPatientId(null);
-        }}
-        onSubmit={handleEditSchedule}
+        onClose={schedule.closeEditSchedule}
+        onSubmit={schedule.handleEditSchedule}
       />
-      <ScheduleDetailModal group={selectedGroup} readOnly={readOnly} onClose={() => setSelectedPatientId(null)} onAction={handleScheduleAction} />
+      <ScheduleDetailModal group={schedule.selectedGroup} readOnly={readOnly} onClose={() => schedule.setSelectedPatientId(null)} onAction={schedule.handleScheduleAction} />
     </DashboardPageShell>
   );
 }

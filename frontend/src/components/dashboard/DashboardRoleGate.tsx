@@ -3,14 +3,13 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth";
+import { getFallbackPathForRole } from "./access";
 import DashboardRouteFallback from "./DashboardRouteFallback";
 
 interface DashboardRoleGateProps {
   readonly allowedRoles: readonly string[];
   readonly children: React.ReactNode;
 }
-
-const getFallbackPath = (role?: string | null) => role === "super_admin" ? "/admin-approvals" : "/dashboard";
 
 export default function DashboardRoleGate({ allowedRoles, children }: DashboardRoleGateProps) {
   const router = useRouter();
@@ -25,7 +24,7 @@ export default function DashboardRoleGate({ allowedRoles, children }: DashboardR
       router.replace("/login");
       return;
     }
-    if (!isAllowed) router.replace(getFallbackPath(role));
+    if (!isAllowed) router.replace(getFallbackPathForRole(role));
   }, [hasHydrated, isAllowed, role, router, user]);
 
   if (!hasHydrated || !isAllowed) return <DashboardRouteFallback />;

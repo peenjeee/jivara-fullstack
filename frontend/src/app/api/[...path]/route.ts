@@ -7,10 +7,11 @@ interface ProxyRouteContext {
   }>;
 }
 
-const hopByHopHeaders = new Set([
-  "connection",
+const forwardedRequestHeaders = new Set(["accept", "authorization", "content-type", "x-requested-with"]);
+const strippedResponseHeaders = [
+  "content-encoding",
   "content-length",
-  "host",
+  "connection",
   "keep-alive",
   "proxy-authenticate",
   "proxy-authorization",
@@ -18,7 +19,7 @@ const hopByHopHeaders = new Set([
   "trailer",
   "transfer-encoding",
   "upgrade",
-]);
+];
 
 const buildBackendUrl = async (request: NextRequest, context: ProxyRouteContext) => {
   const { path } = await context.params;
@@ -31,8 +32,14 @@ const buildBackendUrl = async (request: NextRequest, context: ProxyRouteContext)
 const buildHeaders = (request: NextRequest) => {
   const headers = new Headers();
   request.headers.forEach((value, key) => {
-    if (!hopByHopHeaders.has(key.toLowerCase())) headers.set(key, value);
+    if (forwardedRequestHeaders.has(key.toLowerCase())) headers.set(key, value);
   });
+
+  const accessToken = request.cookies.get("jivara-token")?.value;
+  if (accessToken && accessToken !== "undefined" && accessToken !== "null") {
+    headers.set("authorization", `Bearer ${accessToken}`);
+  }
+
   return headers;
 };
 
@@ -47,8 +54,7 @@ const proxyRequest = async (request: NextRequest, context: ProxyRouteContext) =>
   });
 
   const responseHeaders = new Headers(response.headers);
-  responseHeaders.delete("content-encoding");
-  responseHeaders.delete("content-length");
+  strippedResponseHeaders.forEach((header) => responseHeaders.delete(header));
   responseHeaders.set("Cache-Control", "no-store, max-age=0");
 
   return new NextResponse(response.body, {

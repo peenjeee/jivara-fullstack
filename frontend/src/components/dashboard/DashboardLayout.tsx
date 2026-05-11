@@ -16,31 +16,13 @@ import PwaTopLogoBar from "@/components/ui/PwaTopLogoBar";
 import DashboardBottomNav from "./DashboardBottomNav";
 import DashboardNavbar from "./DashboardNavbar";
 import DashboardRouteFallback from "./DashboardRouteFallback";
+import { getFallbackPathForRole, isPathAllowedForRole } from "./access";
 
 interface DashboardLayoutProps {
   readonly children: ReactNode;
 }
 
 const MAX_LOADING_SECONDS = 8;
-
-function getFallbackPathForRole(role?: string) {
-  return role === "super_admin" ? "/admin-approvals" : "/dashboard";
-}
-
-function isPathAllowedForRole(pathname: string, role?: string) {
-  if (!role) return false;
-  if (pathname.startsWith("/account-status")) return role === "admin";
-  if (pathname.startsWith("/settings")) return true;
-  if (pathname.startsWith("/dashboard")) return true;
-  if (pathname.startsWith("/admin-approvals")) return role === "super_admin";
-  if (pathname.startsWith("/activity-log") && role === "super_admin") return true;
-  if (pathname.startsWith("/nurses")) return role === "admin" || role === "nurse";
-  if (pathname.startsWith("/patients")) return role === "admin" || role === "nurse";
-  if (pathname.startsWith("/schedule")) return role === "admin" || role === "nurse" || role === "patient";
-  if (pathname.startsWith("/activity-log")) return role === "admin" || role === "nurse" || role === "patient";
-  if (pathname.startsWith("/food-scan")) return role === "patient";
-  return true;
-}
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const { logout, user, hasHydrated, setAuth, setHasHydrated, updateUser } = useAuthStore();

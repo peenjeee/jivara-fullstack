@@ -2,6 +2,9 @@ const eslint = require('@eslint/js');
 const tseslint = require('typescript-eslint');
 
 module.exports = tseslint.config(
+  {
+    ignores: ['dist/**', 'node_modules/**', 'server.log', 'eslint.config.js', 'public/**', 'backend/public/**'],
+  },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
@@ -11,7 +14,4 @@ module.exports = tseslint.config(
       'no-console': 'off',
     },
   },
-  {
-    ignores: ['dist/**', 'node_modules/**', 'server.log', 'eslint.config.js', 'public/**'],
-  }
 );

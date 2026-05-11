@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import { Ban, CheckCircle2, Clock3, PauseCircle, Power, RotateCcw, XCircle } from "lucide-react";
@@ -14,21 +14,10 @@ import Modal from "@/components/ui/Modal";
 import SearchField from "@/components/ui/SearchField";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import ToolbarCard from "@/components/ui/ToolbarCard";
-import api from "@/lib/axios";
-import { showConfirm, showError, showToast } from "@/lib/swal";
 import type { User } from "@/types/auth";
 import { useAuthStore } from "@/store/auth";
 import AccountStatusBadge from "./AccountStatusBadge";
-
-type AdminApprovalSummary = {
-  readonly pending: number;
-  readonly active: number;
-  readonly rejected: number;
-  readonly suspended: number;
-};
-
-const emptySummary: AdminApprovalSummary = { pending: 0, active: 0, rejected: 0, suspended: 0 };
-type ApprovalFilter = "all" | "pending" | "active" | "rejected" | "suspended";
+import { pageSize, useAdminApprovals, type ApprovalFilter } from "./useAdminApprovals";
 
 const approvalFilters: { readonly label: string; readonly value: ApprovalFilter }[] = [
   { label: "Semua", value: "all" },
@@ -38,53 +27,18 @@ const approvalFilters: { readonly label: string; readonly value: ApprovalFilter 
   { label: "Suspend", value: "suspended" },
 ];
 
-const pageSize = 10;
-
 export default function AdminApprovalsPage() {
   const router = useRouter();
   const role = useAuthStore((state) => state.user?.role);
   const hasAuthHydrated = useAuthStore((state) => state.hasHydrated);
-  const [approvals, setApprovals] = useState<User[]>([]);
-  const [summary, setSummary] = useState<AdminApprovalSummary>(emptySummary);
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<ApprovalFilter>("pending");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [processingId, setProcessingId] = useState<string | null>(null);
-  const [rejectingUser, setRejectingUser] = useState<User | null>(null);
-  const deferredSearch = useDeferredValue(search);
-
-  const filteredApprovals = useMemo(() => {
-    const query = deferredSearch.trim().toLowerCase();
-    return approvals.filter((user) => {
-      const status = user.accountStatus ?? "active";
-      const matchesFilter = filter === "all" || status === filter;
-      const matchesSearch = !query || [user.fullName, user.email, user.phone ?? ""].some((value) => value.toLowerCase().includes(query));
-      return matchesFilter && matchesSearch;
-    });
-  }, [approvals, deferredSearch, filter]);
-  const totalPages = Math.max(1, Math.ceil(filteredApprovals.length / pageSize));
-  const paginatedApprovals = filteredApprovals.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const approvals = useAdminApprovals(hasAuthHydrated && role === "super_admin");
 
   const stats = [
-    { label: "Menunggu", value: String(summary.pending), tone: summary.pending ? "critical" as const : "safe" as const, color: "lime" as const, icon: Clock3 },
-    { label: "Diterima", value: String(summary.active), tone: "safe" as const, color: "leaf" as const, icon: CheckCircle2 },
-    { label: "Tolak", value: String(summary.rejected), tone: summary.rejected ? "critical" as const : "neutral" as const, color: "danger" as const, icon: Ban },
-    { label: "Suspend", value: String(summary.suspended), tone: summary.suspended ? "critical" as const : "neutral" as const, color: "pine" as const, icon: PauseCircle },
+    { label: "Menunggu", value: String(approvals.summary.pending), tone: approvals.summary.pending ? "critical" as const : "safe" as const, color: "lime" as const, icon: Clock3 },
+    { label: "Diterima", value: String(approvals.summary.active), tone: "safe" as const, color: "leaf" as const, icon: CheckCircle2 },
+    { label: "Tolak", value: String(approvals.summary.rejected), tone: approvals.summary.rejected ? "critical" as const : "neutral" as const, color: "danger" as const, icon: Ban },
+    { label: "Suspend", value: String(approvals.summary.suspended), tone: approvals.summary.suspended ? "critical" as const : "neutral" as const, color: "pine" as const, icon: PauseCircle },
   ];
-
-  const loadApprovals = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await api.get("/auth/admin-approvals");
-      setApprovals(response.data.data.users ?? []);
-      setSummary(response.data.data.summary ?? emptySummary);
-    } catch {
-      showError("Gagal memuat daftar pengajuan admin.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   useEffect(() => {
     if (!hasAuthHydrated) return;
@@ -92,100 +46,9 @@ export default function AdminApprovalsPage() {
       router.replace("/dashboard");
       return;
     }
-    void Promise.resolve().then(loadApprovals);
-  }, [hasAuthHydrated, loadApprovals, role, router]);
+  }, [hasAuthHydrated, role, router]);
 
   if (!hasAuthHydrated || role !== "super_admin") return null;
-
-  const handleApprove = async (user: User) => {
-    const result = await showConfirm("Setujui Admin?", `${user.fullName} akan aktif sebagai admin Jivara.`, "Ya, Setujui");
-    if (!result.isConfirmed) return;
-
-    setProcessingId(user.id);
-    try {
-      await api.post(`/auth/admin-approvals/${encodeURIComponent(user.id)}/approve`);
-      setApprovals((current) => current.filter((item) => item.id !== user.id));
-      setSummary((current) => ({ ...current, pending: Math.max(0, current.pending - 1), active: current.active + 1 }));
-      showToast("Admin berhasil disetujui.", "success");
-    } catch {
-      showError("Gagal menyetujui pengajuan admin.");
-    } finally {
-      setProcessingId(null);
-    }
-  };
-
-  const handleReject = async (reason: string) => {
-    if (!rejectingUser) return;
-    setProcessingId(rejectingUser.id);
-    try {
-      await api.post(`/auth/admin-approvals/${encodeURIComponent(rejectingUser.id)}/reject`, { reason });
-      setApprovals((current) => current.filter((item) => item.id !== rejectingUser.id));
-      setSummary((current) => ({ ...current, pending: Math.max(0, current.pending - 1), rejected: current.rejected + 1 }));
-      setRejectingUser(null);
-      showToast("Pengajuan admin ditolak.");
-    } catch {
-      showError("Gagal menolak pengajuan admin.");
-    } finally {
-      setProcessingId(null);
-    }
-  };
-
-  const handleActivate = async (user: User) => {
-    const result = await showConfirm("Aktifkan Admin?", `${user.fullName} akan aktif kembali sebagai admin Jivara.`, "Ya, Aktifkan");
-    if (!result.isConfirmed) return;
-
-    setProcessingId(user.id);
-    try {
-      await api.post(`/auth/admin-approvals/${encodeURIComponent(user.id)}/activate`);
-      setApprovals((current) => current.map((item) => item.id === user.id ? { ...item, accountStatus: "active" } : item));
-      setSummary((current) => ({ ...current, suspended: Math.max(0, current.suspended - 1), active: current.active + 1 }));
-      showToast("Admin berhasil diaktifkan kembali.", "success");
-    } catch {
-      showError("Gagal mengaktifkan admin.");
-    } finally {
-      setProcessingId(null);
-    }
-  };
-
-  const handleSuspend = async (user: User) => {
-    const result = await showConfirm("Suspend Admin?", `${user.fullName} tidak akan bisa mengakses dashboard admin sampai diaktifkan kembali.`, "Ya, Suspend");
-    if (!result.isConfirmed) return;
-
-    setProcessingId(user.id);
-    try {
-      await api.post(`/auth/admin-approvals/${encodeURIComponent(user.id)}/suspend`);
-      setApprovals((current) => current.map((item) => item.id === user.id ? { ...item, accountStatus: "suspended" } : item));
-      setSummary((current) => ({ ...current, active: Math.max(0, current.active - 1), suspended: current.suspended + 1 }));
-      showToast("Admin berhasil disuspend.", "success");
-    } catch {
-      showError("Gagal suspend admin.");
-    } finally {
-      setProcessingId(null);
-    }
-  };
-
-  const handleRestore = async (user: User) => {
-    const result = await showConfirm("Pulihkan Pengajuan?", `${user.fullName} akan dikembalikan ke status menunggu approval.`, "Ya, Pulihkan");
-    if (!result.isConfirmed) return;
-
-    setProcessingId(user.id);
-    try {
-      await api.post(`/auth/admin-approvals/${encodeURIComponent(user.id)}/restore`);
-      setApprovals((current) => current.map((item) => item.id === user.id ? { ...item, accountStatus: "pending", rejectedReason: null, rejectedAt: null } : item));
-      setSummary((current) => ({ ...current, rejected: Math.max(0, current.rejected - 1), pending: current.pending + 1 }));
-      showToast("Pengajuan admin berhasil dipulihkan.", "success");
-    } catch {
-      showError("Gagal memulihkan pengajuan admin.");
-    } finally {
-      setProcessingId(null);
-    }
-  };
-
-  const resetFilters = () => {
-    setSearch("");
-    setFilter("pending");
-    setCurrentPage(1);
-  };
 
   return (
     <DashboardPageShell>
@@ -195,26 +58,26 @@ export default function AdminApprovalsPage() {
       <motion.div className="mt-6" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: 0.12 }}>
         <ToolbarCard>
           <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
-            <SearchField id="adminApprovalSearch" value={search} placeholder="Cari admin ..." onChange={(value) => { setSearch(value); setCurrentPage(1); }} />
-            {(search || filter !== "pending") && <Button type="button" size="sm" variant="outline" onClick={resetFilters}>Reset</Button>}
+            <SearchField id="adminApprovalSearch" value={approvals.search} placeholder="Cari admin ..." onChange={(value) => { approvals.setSearch(value); approvals.setCurrentPage(1); }} />
+            {(approvals.search || approvals.filter !== "pending") && <Button type="button" size="sm" variant="outline" onClick={approvals.resetFilters}>Reset</Button>}
           </div>
-          <FilterPills options={approvalFilters} activeValue={filter} onChange={(value) => { setFilter(value); setCurrentPage(1); }} className="mt-4" />
+          <FilterPills options={approvalFilters} activeValue={approvals.filter} onChange={(value) => { approvals.setFilter(value); approvals.setCurrentPage(1); }} className="mt-4" />
         </ToolbarCard>
       </motion.div>
 
       <motion.section className="mt-6 overflow-hidden rounded-3xl bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)]" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}>
-        {loading ? <ApprovalSkeleton /> : <ApprovalList approvals={paginatedApprovals} activeFilter={filter} processingId={processingId} onApprove={handleApprove} onActivate={handleActivate} onSuspend={handleSuspend} onRestore={handleRestore} onReject={setRejectingUser} />}
+        {approvals.loading ? <ApprovalSkeleton /> : <ApprovalList approvals={approvals.paginatedApprovals} activeFilter={approvals.filter} processingId={approvals.processingId} onApprove={approvals.handleApprove} onActivate={approvals.handleActivate} onSuspend={approvals.handleSuspend} onRestore={approvals.handleRestore} onReject={approvals.setRejectingUser} />}
         <PatientPagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          totalItems={filteredApprovals.length}
+          currentPage={approvals.currentPage}
+          totalPages={approvals.totalPages}
+          totalItems={approvals.filteredApprovals.length}
           pageSize={pageSize}
           itemLabel="admin"
-          onPageChange={(page) => setCurrentPage(Math.min(Math.max(page, 1), totalPages))}
+          onPageChange={approvals.setCurrentPage}
         />
       </motion.section>
 
-      <RejectApprovalModal key={rejectingUser?.id ?? "empty"} user={rejectingUser} loading={processingId === rejectingUser?.id} onClose={() => setRejectingUser(null)} onSubmit={handleReject} />
+      <RejectApprovalModal key={approvals.rejectingUser?.id ?? "empty"} user={approvals.rejectingUser} loading={approvals.processingId === approvals.rejectingUser?.id} onClose={() => approvals.setRejectingUser(null)} onSubmit={approvals.handleReject} />
     </DashboardPageShell>
   );
 }
