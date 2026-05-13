@@ -81,6 +81,7 @@ Server secara default akan berjalan di `http://localhost:3001`.
 | `npm start` |
 | `npm run db:push` |
 | `npm run seed` |
+| `npm run backfill:patient-assignments` |
 | `npm run lint` |
 
 ---
@@ -107,6 +108,8 @@ Dokumentasi interaktif tersedia melalui Swagger UI saat server berjalan. Endpoin
 - Untuk Railway/production, jangan mengandalkan filesystem lokal `uploads/`; gunakan Supabase Storage dengan env storage di atas.
 - Endpoint `/api/notifications/events` sengaja tidak membutuhkan bearer token karena dipanggil dari service worker saat user mengklik notifikasi.
 - `GET /api/food-scans/analytics/interactions` dibatasi untuk role `nurse` dan `admin`, dan tetap mengikuti scope akses pasien.
+- Pasien yang dibuat oleh role `nurse` otomatis dibuatkan assignment aktif ke nurse pembuat agar tetap muncul setelah refresh.
+- Untuk data lama yang sudah terlanjur dibuat tanpa assignment, jalankan `npm run backfill:patient-assignments` untuk dry-run, lalu `npm run backfill:patient-assignments -- --apply` untuk insert assignment aktif.
 
 ---
 
