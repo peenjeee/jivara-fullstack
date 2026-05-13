@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Save } from "lucide-react";
 import Button from "@/components/ui/Button";
+import { getUserNotificationPreferenceFromApi, updateUserNotificationPreferenceViaApi, type UserNotificationPreferenceKey } from "@/lib/notificationSettingsApi";
 import { showToast } from "@/lib/swal";
 import { useAuthStore } from "@/store/auth";
 import ToggleRow from "@/components/settings/ToggleRow";
@@ -10,11 +11,38 @@ import ToggleRow from "@/components/settings/ToggleRow";
 export default function AdminNotificationSettingsForm() {
   const role = useAuthStore((state) => state.user?.role);
   const isSuperAdmin = role === "super_admin";
+  const preferenceKey: UserNotificationPreferenceKey = isSuperAdmin ? "super_admin_approval" : "admin_critical_activity";
   const [notificationEnabled, setNotificationEnabled] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSubmit = (event: FormEvent) => {
+  useEffect(() => {
+    let isMounted = true;
+
+    getUserNotificationPreferenceFromApi(preferenceKey)
+      .then((preference) => {
+        if (isMounted) setNotificationEnabled(preference.enabled);
+      })
+      .catch(() => {
+        if (isMounted) setNotificationEnabled(true);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [preferenceKey]);
+
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    showToast(`Preferensi notifikasi ${isSuperAdmin ? "Super Admin" : "admin"} berhasil disimpan.`);
+    setIsSaving(true);
+
+    try {
+      await updateUserNotificationPreferenceViaApi(preferenceKey, notificationEnabled);
+      showToast(`Preferensi notifikasi ${isSuperAdmin ? "Super Admin" : "admin"} berhasil disimpan.`);
+    } catch {
+      showToast(`Preferensi notifikasi ${isSuperAdmin ? "Super Admin" : "admin"} gagal disimpan.`, "error");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -27,7 +55,7 @@ export default function AdminNotificationSettingsForm() {
         onChange={setNotificationEnabled}
       />
       <div className="flex justify-end pt-2">
-        <Button type="submit" icon={<Save size={18} />}>Simpan</Button>
+        <Button type="submit" icon={<Save size={18} />} disabled={isSaving}>{isSaving ? "Menyimpan..." : "Simpan"}</Button>
       </div>
     </form>
   );

@@ -7,6 +7,7 @@ const isValidUuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
 const resolvePatientId = (body: Record<string, unknown>) => body.patientId || body.patient_id;
+const allowedUserPreferenceKeys = new Set(["admin_critical_activity", "super_admin_approval", "nurse_critical_alert"]);
 
 const isHttpsUrl = (value: string) => {
   try {
@@ -57,6 +58,22 @@ export const validatePreference = (req: Request, res: Response, next: NextFuncti
   }
 
   req.body.patientId = patientId;
+  next();
+};
+
+export const validateUserNotificationPreference = (req: Request, res: Response, next: NextFunction) => {
+  const key = req.body.key || req.body.preferenceKey || req.body.preference_key;
+  const enabled = req.body.enabled;
+
+  if (typeof key !== "string" || !allowedUserPreferenceKeys.has(key)) {
+    return res.status(400).json({ status: "gagal", message: "key preferensi notifikasi tidak valid", error_code: "VALIDATION_ERROR" });
+  }
+
+  if (typeof enabled !== "boolean") {
+    return res.status(400).json({ status: "gagal", message: "enabled wajib boolean", error_code: "VALIDATION_ERROR" });
+  }
+
+  req.body.key = key;
   next();
 };
 

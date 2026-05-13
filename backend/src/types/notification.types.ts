@@ -13,6 +13,11 @@ export interface NotificationPreferenceDTO {
   enabled: boolean;
 }
 
+export interface UserNotificationPreferenceDTO {
+  key: string;
+  enabled: boolean;
+}
+
 export interface SendNotificationDTO {
   patientId: string;
   type: string;

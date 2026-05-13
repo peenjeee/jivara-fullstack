@@ -51,6 +51,29 @@ export const getPreference = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const getUserPreference = async (req: AuthRequest, res: Response) => {
+  try {
+    const key = typeof req.query.key === "string" ? req.query.key : undefined;
+    if (!key) {
+      return res.status(400).json({ status: "gagal", message: "key wajib diisi", error_code: "VALIDATION_ERROR" });
+    }
+
+    const data = await notificationService.getUserNotificationPreference(key, req.user);
+    res.status(200).json({ status: "berhasil", data });
+  } catch (error) {
+    sendError(res, error);
+  }
+};
+
+export const updateUserPreference = async (req: AuthRequest, res: Response) => {
+  try {
+    const data = await notificationService.setUserNotificationPreference(req.body, req.user);
+    res.status(200).json({ status: "berhasil", data, message: "Preferensi notifikasi diperbarui" });
+  } catch (error) {
+    sendError(res, error);
+  }
+};
+
 export const listNotifications = async (req: AuthRequest, res: Response) => {
   try {
     const result = await notificationService.listNotifications(req.query, req.user);

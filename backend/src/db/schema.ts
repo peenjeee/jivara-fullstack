@@ -317,6 +317,20 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
   enabledIdx: index("idx_push_subscriptions_enabled").on(table.isEnabled),
 }));
 
+export const userNotificationPreferences = pgTable("user_notification_preferences", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  preferenceKey: varchar("preference_key", { length: 64 }).notNull(),
+  isEnabled: boolean("is_enabled").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  userIdx: index("idx_user_notification_preferences_user").on(table.userId),
+  uniqueUserPreference: uniqueIndex("uq_user_notification_preferences_user_key").on(table.userId, table.preferenceKey),
+}));
+
 // ─────────────────────────────────────────────
 // 15. AUDIT LOGS
 // ─────────────────────────────────────────────
@@ -343,6 +357,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   patients: many(patients),
   nurses: many(nurses),
   pushSubscriptions: many(pushSubscriptions),
+  notificationPreferences: many(userNotificationPreferences),
   auditLogs: many(auditLogs),
 }));
 
@@ -475,6 +490,13 @@ export const pushSubscriptionsRelations = relations(pushSubscriptions, ({ one })
   }),
   user: one(users, {
     fields: [pushSubscriptions.userId],
+    references: [users.id],
+  }),
+}));
+
+export const userNotificationPreferencesRelations = relations(userNotificationPreferences, ({ one }) => ({
+  user: one(users, {
+    fields: [userNotificationPreferences.userId],
     references: [users.id],
   }),
 }));

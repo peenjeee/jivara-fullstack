@@ -1,8 +1,8 @@
 import webpush from "web-push";
 import { and, count, desc, eq, inArray } from "drizzle-orm";
 import { db } from "../db";
-import { notifications, pushSubscriptions } from "../db/schema";
-import { NotificationPreferenceDTO, PushSubscriptionDTO, SendNotificationDTO } from "../types/notification.types";
+import { notifications, pushSubscriptions, userNotificationPreferences } from "../db/schema";
+import { NotificationPreferenceDTO, PushSubscriptionDTO, SendNotificationDTO, UserNotificationPreferenceDTO } from "../types/notification.types";
 import { AccessUser, assertCanAccessPatient, scopedPatientFilter } from "./access-control.service";
 import { writeAuditLog } from "./audit-log.service";
 
@@ -141,6 +141,58 @@ export const getNotificationPreference = async (patientId: string, user: AccessU
     enabled: activeSubscriptions > 0,
     subscriptionCount: subscriptions.length,
     activeSubscriptions,
+  };
+};
+
+export const getUserNotificationPreference = async (key: string, user: AccessUser | undefined) => {
+  if (!user) {
+    throw { status: 401, message: "Autentikasi diperlukan", code: "MISSING_TOKEN" };
+  }
+
+  const rows = await db
+    .select()
+    .from(userNotificationPreferences)
+    .where(and(
+      eq(userNotificationPreferences.userId, user.id),
+      eq(userNotificationPreferences.preferenceKey, key),
+    ))
+    .limit(1);
+
+  return {
+    key,
+    enabled: rows[0]?.isEnabled ?? true,
+  };
+};
+
+export const setUserNotificationPreference = async (dto: UserNotificationPreferenceDTO, user: AccessUser | undefined) => {
+  if (!user) {
+    throw { status: 401, message: "Autentikasi diperlukan", code: "MISSING_TOKEN" };
+  }
+
+  const [preference] = await db
+    .insert(userNotificationPreferences)
+    .values({
+      userId: user.id,
+      preferenceKey: dto.key,
+      isEnabled: dto.enabled,
+    })
+    .onConflictDoUpdate({
+      target: [userNotificationPreferences.userId, userNotificationPreferences.preferenceKey],
+      set: { isEnabled: dto.enabled, updatedAt: new Date() },
+    })
+    .returning();
+
+  await writeAuditLog({
+    userId: user.id,
+    action: "user_notification_preference.updated",
+    resourceType: "user",
+    resourceId: user.id,
+    changes: { key: dto.key, enabled: dto.enabled },
+  });
+
+  return {
+    key: preference.preferenceKey,
+    enabled: preference.isEnabled ?? true,
   };
 };
 

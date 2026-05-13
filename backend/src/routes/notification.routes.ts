@@ -1,7 +1,7 @@
 import { Router } from "express";
 import * as notificationController from "../controllers/notification.controller";
 import { authenticateToken, authorizeRoles } from "../middleware/auth.middleware";
-import { validatePreference, validateSendNotification, validateSubscribe, validateTrackNotificationEvent } from "../validators/notification.validator";
+import { validatePreference, validateSendNotification, validateSubscribe, validateTrackNotificationEvent, validateUserNotificationPreference } from "../validators/notification.validator";
 
 const router = Router();
 
@@ -135,6 +135,9 @@ router.get("/analytics", authorizeRoles("patient", "nurse", "admin"), notificati
  *         description: Preferensi notifikasi berhasil diambil
  */
 router.get("/preferences", authorizeRoles("patient"), notificationController.getPreference);
+
+router.get("/user-preferences", authorizeRoles("admin", "super_admin", "nurse"), notificationController.getUserPreference);
+router.patch("/user-preferences", authorizeRoles("admin", "super_admin", "nurse"), validateUserNotificationPreference, notificationController.updateUserPreference);
 
 /**
  * @swagger
