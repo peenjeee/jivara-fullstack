@@ -15,6 +15,7 @@ import {
   NutritionDTO,
 } from "../types/food-ai.types";
 import { AccessUser, assertCanAccessPatient } from "./access-control.service";
+import { writeAuditLog } from "./audit-log.service";
 
 type DetectionItem = {
   label: string;
@@ -276,6 +277,14 @@ export const uploadFoodImage = async (dto: FoodUploadDTO, user?: AccessUser) => 
     })
     .returning();
 
+  await writeAuditLog({
+    userId: user?.id || null,
+    action: "food_scan.uploaded",
+    resourceType: "food_scan",
+    resourceId: scan.id,
+    changes: { patientId: dto.patientId, imageSizeKb: scan.imageSizeKb },
+  });
+
   return {
     image_id: scan.id,
     upload_url: scan.imageUrl,
@@ -317,6 +326,14 @@ export const detectFood = async (dto: FoodDetectDTO, user?: AccessUser) => {
     .update(foodScans)
     .set({ inferenceTimeMs: detectionResult.inferenceTimeMs, modelVersion: detectionResult.modelVersion })
     .where(eq(foodScans.id, scan.id));
+
+  await writeAuditLog({
+    userId: user?.id || null,
+    action: "food_scan.detected",
+    resourceType: "food_scan",
+    resourceId: scan.id,
+    changes: { patientId: dto.patientId, detectedItems: detectionResult.detectedItems.length, modelVersion: detectionResult.modelVersion },
+  });
 
   return {
     scan_id: scan.id,
@@ -374,6 +391,14 @@ export const checkInteraction = async (dto: InteractionCheckDTO, user?: AccessUs
       .set({ overallRiskScore: 0.45, overallRiskLevel: "sedang" })
       .where(eq(foodScans.id, dto.scanId));
   }
+
+  await writeAuditLog({
+    userId: user?.id || null,
+    action: "food_scan.interaction_checked",
+    resourceType: "food_scan",
+    resourceId: dto.scanId,
+    changes: { patientId: dto.patientId, interactionCount: interactions.length, detectedItems: dto.detectedItems.length },
+  });
 
   return {
     interactions,

@@ -65,6 +65,14 @@ export const subscribeDevice = async (dto: PushSubscriptionDTO, user: AccessUser
       .where(eq(pushSubscriptions.id, existing[0].id))
       .returning();
 
+    await writeAuditLog({
+      userId: user?.id || null,
+      action: "push_subscription.updated",
+      resourceType: "push_subscription",
+      resourceId: subscription.id,
+      changes: { patientId: dto.patientId, enabled: true },
+    });
+
     return subscription;
   }
 
@@ -81,6 +89,14 @@ export const subscribeDevice = async (dto: PushSubscriptionDTO, user: AccessUser
     })
     .returning();
 
+  await writeAuditLog({
+    userId: user?.id || null,
+    action: "push_subscription.created",
+    resourceType: "push_subscription",
+    resourceId: subscription.id,
+    changes: { patientId: dto.patientId, enabled: true },
+  });
+
   return subscription;
 };
 
@@ -95,6 +111,14 @@ export const setNotificationPreference = async (dto: NotificationPreferenceDTO, 
       eq(pushSubscriptions.userId, user!.id),
     ))
     .returning();
+
+  await writeAuditLog({
+    userId: user?.id || null,
+    action: "notification.preference.updated",
+    resourceType: "patient",
+    resourceId: dto.patientId,
+    changes: { enabled: dto.enabled, updatedSubscriptions: rows.length },
+  });
 
   return { enabled: dto.enabled, updatedSubscriptions: rows.length };
 };
