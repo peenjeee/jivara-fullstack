@@ -7,6 +7,7 @@ import {
   PrescriptionUpdateDTO,
 } from "../types/prescription.types";
 import { AccessUser, assertCanAccessPatient, scopedPatientFilter } from "./access-control.service";
+import { diffChanges, writeAuditLog } from "./audit-log.service";
 
 const ensurePatientExists = async (patientId: string) => {
   const patient = await db.select({ id: patients.id }).from(patients).where(eq(patients.id, patientId)).limit(1);
@@ -89,11 +90,19 @@ export const createPrescription = async (dto: PrescriptionCreateDTO, createdBy?:
     })
     .returning();
 
+  await writeAuditLog({
+    userId: createdBy || user?.id || null,
+    action: "prescription.created",
+    resourceType: "prescription",
+    resourceId: prescription.id,
+    changes: { after: prescription },
+  });
+
   return { ...prescription, medications: [] };
 };
 
 export const updatePrescription = async (id: string, dto: PrescriptionUpdateDTO, user?: AccessUser) => {
-  await getPrescriptionById(id, user);
+  const existing = await getPrescriptionById(id, user);
 
   const updates: Partial<typeof prescriptions.$inferInsert> = {};
   if (dto.diagnosis !== undefined) updates.diagnosis = dto.diagnosis;
@@ -107,11 +116,22 @@ export const updatePrescription = async (id: string, dto: PrescriptionUpdateDTO,
     .where(eq(prescriptions.id, id))
     .returning();
 
+  const changes = diffChanges(existing, prescription, ["diagnosis", "prescribingDoctor", "startDate", "endDate"]);
+  if (Object.keys(changes).length > 0) {
+    await writeAuditLog({
+      userId: user?.id || null,
+      action: "prescription.updated",
+      resourceType: "prescription",
+      resourceId: id,
+      changes,
+    });
+  }
+
   return getPrescriptionById(prescription.id, user);
 };
 
 export const deletePrescription = async (id: string, user?: AccessUser) => {
-  await getPrescriptionById(id, user);
+  const existing = await getPrescriptionById(id, user);
 
   await db.transaction(async (tx) => {
     await tx
@@ -120,5 +140,13 @@ export const deletePrescription = async (id: string, user?: AccessUser) => {
       .where(eq(medicationSchedules.prescriptionId, id));
 
     await tx.delete(prescriptions).where(eq(prescriptions.id, id));
+  });
+
+  await writeAuditLog({
+    userId: user?.id || null,
+    action: "prescription.deleted",
+    resourceType: "prescription",
+    resourceId: id,
+    changes: { before: { id: existing.id, patientId: existing.patientId, diagnosis: existing.diagnosis } },
   });
 };
