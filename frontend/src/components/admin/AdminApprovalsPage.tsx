@@ -12,6 +12,7 @@ import FilterPills from "@/components/ui/FilterPills";
 import IconActionButton from "@/components/ui/IconActionButton";
 import Modal from "@/components/ui/Modal";
 import SearchField from "@/components/ui/SearchField";
+import { SummaryCardsSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import ToolbarCard from "@/components/ui/ToolbarCard";
 import type { User } from "@/types/auth";
@@ -53,28 +54,28 @@ export default function AdminApprovalsPage() {
   return (
     <DashboardPageShell>
       <DashboardPageHeader title="Persetujuan Admin" />
-      <SummaryCardGrid stats={stats} desktopColumns={4} />
+      {approvals.loading ? <SummaryCardsSkeleton count={4} /> : <SummaryCardGrid stats={stats} desktopColumns={4} />}
 
       <motion.div className="mt-6" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: 0.12 }}>
-        <ToolbarCard>
+        {approvals.loading ? <ToolbarSkeleton /> : <ToolbarCard>
           <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
             <SearchField id="adminApprovalSearch" value={approvals.search} placeholder="Cari akun admin ..." onChange={(value) => { approvals.setSearch(value); approvals.setCurrentPage(1); }} />
             {(approvals.search || approvals.filter !== "pending") && <Button type="button" size="sm" variant="outline" onClick={approvals.resetFilters}>Reset</Button>}
           </div>
           <FilterPills options={approvalFilters} activeValue={approvals.filter} onChange={(value) => { approvals.setFilter(value); approvals.setCurrentPage(1); }} className="mt-4" />
-        </ToolbarCard>
+        </ToolbarCard>}
       </motion.div>
 
       <motion.section className="mt-6 overflow-hidden rounded-3xl bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)]" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}>
         {approvals.loading ? <ApprovalSkeleton /> : <ApprovalList approvals={approvals.paginatedApprovals} activeFilter={approvals.filter} processingId={approvals.processingId} onApprove={approvals.handleApprove} onActivate={approvals.handleActivate} onSuspend={approvals.handleSuspend} onRestore={approvals.handleRestore} onReject={approvals.setRejectingUser} />}
-        <PatientPagination
+        {!approvals.loading && <PatientPagination
           currentPage={approvals.currentPage}
           totalPages={approvals.totalPages}
           totalItems={approvals.filteredApprovals.length}
           pageSize={pageSize}
           itemLabel="admin"
           onPageChange={approvals.setCurrentPage}
-        />
+        />}
       </motion.section>
 
       <RejectApprovalModal key={approvals.rejectingUser?.id ?? "empty"} user={approvals.rejectingUser} loading={approvals.processingId === approvals.rejectingUser?.id} onClose={() => approvals.setRejectingUser(null)} onSubmit={approvals.handleReject} />

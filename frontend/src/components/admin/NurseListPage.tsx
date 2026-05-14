@@ -33,6 +33,7 @@ const filters: { readonly label: string; readonly value: NurseFilter }[] = [
 ];
 
 const pageSize = 10;
+const minimumSkeletonMs = 350;
 
 const getApiErrorMessage = (error: unknown) => {
   if (!axios.isAxiosError(error)) return null;
@@ -65,8 +66,8 @@ export default function NurseListPage() {
 
     let isMounted = true;
 
-    getNursesFromApi()
-      .then((apiNurses) => {
+    Promise.all([getNursesFromApi(), new Promise((resolve) => window.setTimeout(resolve, minimumSkeletonMs))])
+      .then(([apiNurses]) => {
         if (isMounted) setNurses(apiNurses);
       })
       .catch(() => {
