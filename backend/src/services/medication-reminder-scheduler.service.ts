@@ -1,7 +1,7 @@
 import { and, eq, lte } from "drizzle-orm";
 import { db } from "../db";
 import { medicationLogs, medicationReminderJobs, medicationSchedules } from "../db/schema";
-import { sendPushNotification } from "./notification.service";
+import { sendCareTeamCriticalPushNotification, sendPushNotification } from "./notification.service";
 
 const DEFAULT_INTERVAL_MS = 60_000;
 const DEFAULT_LOOKBACK_MINUTES = 2;
@@ -149,6 +149,20 @@ const sendUrgentEscalation = async (job: typeof medicationReminderJobs.$inferSel
     },
   });
 
+  await sendCareTeamCriticalPushNotification(job.patientId, {
+    type: "medication_urgent",
+    title: "Pasien belum konfirmasi obat",
+    body: `${schedule.drugName} ${schedule.dosage} belum dikonfirmasi lebih dari ${URGENT_AFTER_MINUTES} menit.`,
+    urgency: "urgent",
+    data: {
+      patient_id: job.patientId,
+      schedule_id: schedule.id,
+      reminder_job_id: job.id,
+      scheduled_time: job.scheduledTime.toISOString(),
+      action_url: "/dashboard",
+    },
+  }).catch(() => undefined);
+
   await db
     .update(medicationReminderJobs)
     .set({
@@ -193,6 +207,21 @@ const markMissedAndNotify = async (job: typeof medicationReminderJobs.$inferSele
       nurse_dashboard_flag: true,
     },
   });
+
+  await sendCareTeamCriticalPushNotification(job.patientId, {
+    type: "medication_missed",
+    title: "Dosis obat pasien terlewat",
+    body: `${schedule.drugName} ${schedule.dosage} ditandai terlewat karena belum dikonfirmasi.`,
+    urgency: "critical",
+    data: {
+      patient_id: job.patientId,
+      schedule_id: schedule.id,
+      reminder_job_id: job.id,
+      medication_log_id: logId,
+      scheduled_time: job.scheduledTime.toISOString(),
+      action_url: "/dashboard",
+    },
+  }).catch(() => undefined);
 
   await db
     .update(medicationReminderJobs)

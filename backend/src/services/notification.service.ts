@@ -1,7 +1,7 @@
 import webpush from "web-push";
 import { and, count, desc, eq, inArray } from "drizzle-orm";
 import { db } from "../db";
-import { notifications, pushSubscriptions, userNotificationPreferences, userPushSubscriptions } from "../db/schema";
+import { notifications, nurses, patientNurseAssignments, patients, pushSubscriptions, userNotificationPreferences, userPushSubscriptions, users } from "../db/schema";
 import { NotificationPreferenceDTO, PushSubscriptionDTO, SendNotificationDTO, UserNotificationPreferenceDTO, UserPushSubscriptionDTO } from "../types/notification.types";
 import { AccessUser, assertCanAccessPatient, scopedPatientFilter } from "./access-control.service";
 import { writeAuditLogAsync } from "./audit-log.service";
@@ -30,6 +30,102 @@ const isInvalidSubscriptionError = (result: PromiseSettledResult<unknown>) => {
 
   const error = result.reason as { statusCode?: number };
   return error.statusCode === 404 || error.statusCode === 410;
+};
+
+type UserPushNotificationDTO = {
+  userIds?: string[];
+  roles?: string[];
+  organizationId?: string | null;
+  preferenceKey: string;
+  type: string;
+  title: string;
+  body: string;
+  urgency?: "normal" | "urgent" | "critical";
+  data?: Record<string, unknown>;
+};
+
+const unique = (values: string[]) => Array.from(new Set(values.filter(Boolean)));
+
+const resolveRoleUserIds = async (dto: Pick<UserPushNotificationDTO, "roles" | "organizationId">) => {
+  if (!dto.roles || dto.roles.length === 0) return [];
+
+  const conditions = [
+    inArray(users.role, dto.roles),
+    eq(users.isActive, true),
+    eq(users.accountStatus, "active"),
+  ];
+
+  if (dto.organizationId) conditions.push(eq(users.organizationId, dto.organizationId));
+
+  const rows = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(...conditions));
+
+  return rows.map((row) => row.id);
+};
+
+const resolveCareTeamTargets = async (patientId: string) => {
+  const patientRows = await db
+    .select({ organizationId: patients.organizationId })
+    .from(patients)
+    .where(eq(patients.id, patientId))
+    .limit(1);
+
+  const patient = patientRows[0];
+  if (!patient) return { adminUserIds: [], nurseUserIds: [] };
+
+  const adminRows = patient.organizationId
+    ? await db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(
+        eq(users.organizationId, patient.organizationId),
+        eq(users.role, "admin"),
+        eq(users.isActive, true),
+        eq(users.accountStatus, "active"),
+      ))
+    : [];
+
+  const assignmentRows = await db
+    .select({ nurseId: patientNurseAssignments.nurseId })
+    .from(patientNurseAssignments)
+    .where(and(
+      eq(patientNurseAssignments.patientId, patientId),
+      eq(patientNurseAssignments.isActive, true),
+    ));
+
+  const nurseIds = unique(assignmentRows.map((assignment) => assignment.nurseId));
+  const nurseRows = nurseIds.length > 0
+    ? await db
+      .select({ userId: nurses.userId })
+      .from(nurses)
+      .where(and(
+        inArray(nurses.id, nurseIds),
+        eq(nurses.isActive, true),
+      ))
+    : [];
+
+  return {
+    adminUserIds: unique(adminRows.map((row) => row.id)),
+    nurseUserIds: unique(nurseRows.map((row) => row.userId)),
+  };
+};
+
+const filterUsersByPreference = async (userIds: string[], preferenceKey: string) => {
+  if (userIds.length === 0) return [];
+
+  const disabledRows = await db
+    .select({ userId: userNotificationPreferences.userId })
+    .from(userNotificationPreferences)
+    .where(and(
+      inArray(userNotificationPreferences.userId, userIds),
+      eq(userNotificationPreferences.preferenceKey, preferenceKey),
+      eq(userNotificationPreferences.isEnabled, false),
+    ));
+
+  const disabledIds = new Set(disabledRows.map((row) => row.userId));
+  return userIds.filter((userId) => !disabledIds.has(userId));
 };
 
 export const getVapidPublicKey = () => {
@@ -346,6 +442,115 @@ export const getNotificationAnalytics = async (query: Record<string, unknown>, u
       if (notification.readAt) summary[type].opened += 1;
       return summary;
     }, {})),
+  };
+};
+
+export const sendUserPushNotification = async (dto: UserPushNotificationDTO) => {
+  const roleUserIds = await resolveRoleUserIds(dto);
+  const targetUserIds = await filterUsersByPreference(unique([...(dto.userIds || []), ...roleUserIds]), dto.preferenceKey);
+
+  if (targetUserIds.length === 0) {
+    return { sent: 0, failed: 0, skipped: true, targetUsers: 0 };
+  }
+
+  const payload = {
+    title: dto.title,
+    body: dto.body,
+    type: dto.type,
+    urgency: dto.urgency || "normal",
+    data: dto.data || {},
+  };
+
+  if (getPayloadSize(payload) > 3500) {
+    throw { status: 400, message: "Payload push notification terlalu besar", code: "PAYLOAD_TOO_LARGE" };
+  }
+
+  const subscriptions = await db
+    .select()
+    .from(userPushSubscriptions)
+    .where(and(
+      inArray(userPushSubscriptions.userId, targetUserIds),
+      eq(userPushSubscriptions.isEnabled, true),
+    ));
+
+  if (subscriptions.length === 0) {
+    writeAuditLogAsync({
+      userId: null,
+      action: "user_notification.skipped",
+      resourceType: "user_push_subscription",
+      resourceId: targetUserIds[0] || null,
+      changes: { type: dto.type, preferenceKey: dto.preferenceKey, reason: "no_active_subscription", targetUsers: targetUserIds.length },
+    });
+
+    return { sent: 0, failed: 0, skipped: true, targetUsers: targetUserIds.length };
+  }
+
+  if (!configureWebPush()) {
+    writeAuditLogAsync({
+      userId: null,
+      action: "user_notification.failed",
+      resourceType: "user_push_subscription",
+      resourceId: subscriptions[0]?.id || null,
+      changes: { type: dto.type, preferenceKey: dto.preferenceKey, reason: "vapid_not_configured", targetUsers: targetUserIds.length },
+    });
+
+    return { sent: 0, failed: subscriptions.length, skipped: false, targetUsers: targetUserIds.length };
+  }
+
+  const serializedPayload = JSON.stringify(payload);
+  const results = await Promise.allSettled(subscriptions.map((subscription) => webpush.sendNotification({
+    endpoint: subscription.endpoint,
+    keys: {
+      p256dh: subscription.p256dh,
+      auth: subscription.auth,
+    },
+  }, serializedPayload)));
+
+  const sent = results.filter((result) => result.status === "fulfilled").length;
+  const failed = results.length - sent;
+
+  if (failed > 0) {
+    const failedEndpoints = subscriptions
+      .filter((_, index) => isInvalidSubscriptionError(results[index]))
+      .map((subscription) => subscription.endpoint);
+
+    if (failedEndpoints.length > 0) {
+      await db
+        .update(userPushSubscriptions)
+        .set({ isEnabled: false, updatedAt: new Date() })
+        .where(inArray(userPushSubscriptions.endpoint, failedEndpoints));
+    }
+  }
+
+  writeAuditLogAsync({
+    userId: null,
+    action: sent > 0 ? "user_notification.delivered" : "user_notification.failed",
+    resourceType: "user_push_subscription",
+    resourceId: subscriptions[0]?.id || null,
+    changes: { type: dto.type, preferenceKey: dto.preferenceKey, sent, failed, targetUsers: targetUserIds.length },
+  });
+
+  return { sent, failed, skipped: false, targetUsers: targetUserIds.length };
+};
+
+export const sendCareTeamPushNotification = async (patientId: string, dto: Omit<UserPushNotificationDTO, "userIds" | "roles" | "organizationId">) => {
+  const targets = await resolveCareTeamTargets(patientId);
+  const userIds = unique([...targets.adminUserIds, ...targets.nurseUserIds]);
+  return sendUserPushNotification({ ...dto, userIds });
+};
+
+export const sendCareTeamCriticalPushNotification = async (patientId: string, dto: Omit<UserPushNotificationDTO, "userIds" | "roles" | "organizationId" | "preferenceKey">) => {
+  const targets = await resolveCareTeamTargets(patientId);
+  const [adminResult, nurseResult] = await Promise.all([
+    sendUserPushNotification({ ...dto, userIds: targets.adminUserIds, preferenceKey: "admin_critical_activity" }),
+    sendUserPushNotification({ ...dto, userIds: targets.nurseUserIds, preferenceKey: "nurse_critical_alert" }),
+  ]);
+
+  return {
+    sent: adminResult.sent + nurseResult.sent,
+    failed: adminResult.failed + nurseResult.failed,
+    skipped: adminResult.skipped && nurseResult.skipped,
+    targetUsers: adminResult.targetUsers + nurseResult.targetUsers,
   };
 };
 

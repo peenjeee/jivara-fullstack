@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { writeAuditLogAsync } from "./audit-log.service";
+import { sendUserPushNotification } from "./notification.service";
 import {
   RegisterDTO,
   LoginDTO,
@@ -117,6 +118,20 @@ export const registerUser = async (dto: RegisterDTO) => {
     resourceId: newUser.id,
     changes: { after: { id: newUser.id, email: newUser.email, role: newUser.role, accountStatus: newUser.accountStatus, organizationId: newUser.organizationId } },
   });
+
+  await sendUserPushNotification({
+    roles: ["super_admin"],
+    preferenceKey: "super_admin_approval",
+    type: "admin_registration_pending",
+    title: "Pendaftaran admin baru",
+    body: `${newUser.fullName} menunggu persetujuan untuk ${newUser.organizationName}.`,
+    urgency: "urgent",
+    data: {
+      user_id: newUser.id,
+      organization_id: newUser.organizationId,
+      action_url: "/dashboard/super-admin",
+    },
+  }).catch(() => undefined);
 
   return newUser;
 };

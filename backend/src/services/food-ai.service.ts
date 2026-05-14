@@ -16,6 +16,7 @@ import {
 } from "../types/food-ai.types";
 import { AccessUser, assertCanAccessPatient } from "./access-control.service";
 import { writeAuditLog } from "./audit-log.service";
+import { sendCareTeamCriticalPushNotification } from "./notification.service";
 
 type DetectionItem = {
   label: string;
@@ -399,6 +400,21 @@ export const checkInteraction = async (dto: InteractionCheckDTO, user?: AccessUs
     resourceId: dto.scanId,
     changes: { patientId: dto.patientId, interactionCount: interactions.length, detectedItems: dto.detectedItems.length },
   });
+
+  if (interactions.length > 0) {
+    await sendCareTeamCriticalPushNotification(dto.patientId, {
+      type: "food_interaction_detected",
+      title: "Interaksi makanan terdeteksi",
+      body: `${interactions.length} potensi interaksi makanan-obat membutuhkan perhatian.`,
+      urgency: "urgent",
+      data: {
+        patient_id: dto.patientId,
+        scan_id: dto.scanId,
+        interaction_count: interactions.length,
+        action_url: "/dashboard",
+      },
+    }).catch(() => undefined);
+  }
 
   return {
     interactions,
