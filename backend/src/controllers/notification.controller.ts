@@ -28,6 +28,20 @@ export const subscribe = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const subscribeUser = async (req: AuthRequest, res: Response) => {
+  try {
+    const data = await notificationService.subscribeUserDevice({
+      endpoint: req.body.endpoint,
+      keys: req.body.keys,
+      userAgent: req.get("user-agent"),
+    }, req.user);
+
+    res.status(201).json({ status: "berhasil", data, message: "Push notification aktif untuk device ini" });
+  } catch (error) {
+    sendError(res, error);
+  }
+};
+
 export const updatePreference = async (req: AuthRequest, res: Response) => {
   try {
     const data = await notificationService.setNotificationPreference(req.body, req.user);

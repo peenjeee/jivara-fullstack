@@ -45,6 +45,26 @@ export const validateSubscribe = (req: Request, res: Response, next: NextFunctio
   next();
 };
 
+export const validateUserSubscribe = (req: Request, res: Response, next: NextFunction) => {
+  const subscription = req.body.subscription as { endpoint?: string; keys?: { p256dh?: string; auth?: string } } | undefined;
+
+  if (!subscription || isMissing(subscription.endpoint) || !subscription.keys || isMissing(subscription.keys.p256dh) || isMissing(subscription.keys.auth)) {
+    return res.status(400).json({ status: "gagal", message: "subscription Web Push tidak lengkap", error_code: "VALIDATION_ERROR" });
+  }
+
+  if (typeof subscription.endpoint !== "string" || subscription.endpoint.length > 2048 || !isHttpsUrl(subscription.endpoint)) {
+    return res.status(400).json({ status: "gagal", message: "endpoint subscription wajib berupa HTTPS URL valid", error_code: "VALIDATION_ERROR" });
+  }
+
+  if (subscription.keys.p256dh!.length > 512 || subscription.keys.auth!.length > 256) {
+    return res.status(400).json({ status: "gagal", message: "key subscription terlalu panjang", error_code: "VALIDATION_ERROR" });
+  }
+
+  req.body.endpoint = subscription.endpoint;
+  req.body.keys = subscription.keys;
+  next();
+};
+
 export const validatePreference = (req: Request, res: Response, next: NextFunction) => {
   const patientId = resolvePatientId(req.body);
   const enabled = req.body.enabled;

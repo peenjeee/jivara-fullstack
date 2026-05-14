@@ -5,6 +5,7 @@ import { Save } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { FormDataSkeleton } from "@/components/ui/PageSkeletons";
 import { getUserNotificationPreferenceFromApi, updateUserNotificationPreferenceViaApi, type UserNotificationPreferenceKey } from "@/lib/notificationSettingsApi";
+import { enableUserPushNotifications } from "@/lib/pushNotifications";
 import { showToast } from "@/lib/swal";
 import { useAuthStore } from "@/store/auth";
 import ToggleRow from "@/components/settings/ToggleRow";
@@ -41,6 +42,7 @@ export default function AdminNotificationSettingsForm() {
     setIsSaving(true);
 
     try {
+      if (notificationEnabled) await enableUserPushNotifications();
       await updateUserNotificationPreferenceViaApi(preferenceKey, notificationEnabled);
       showToast(`Preferensi notifikasi ${isSuperAdmin ? "Super Admin" : "admin"} berhasil disimpan.`);
     } catch {

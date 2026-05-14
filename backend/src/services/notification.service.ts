@@ -1,8 +1,8 @@
 import webpush from "web-push";
 import { and, count, desc, eq, inArray } from "drizzle-orm";
 import { db } from "../db";
-import { notifications, pushSubscriptions, userNotificationPreferences } from "../db/schema";
-import { NotificationPreferenceDTO, PushSubscriptionDTO, SendNotificationDTO, UserNotificationPreferenceDTO } from "../types/notification.types";
+import { notifications, pushSubscriptions, userNotificationPreferences, userPushSubscriptions } from "../db/schema";
+import { NotificationPreferenceDTO, PushSubscriptionDTO, SendNotificationDTO, UserNotificationPreferenceDTO, UserPushSubscriptionDTO } from "../types/notification.types";
 import { AccessUser, assertCanAccessPatient, scopedPatientFilter } from "./access-control.service";
 import { writeAuditLogAsync } from "./audit-log.service";
 
@@ -95,6 +95,65 @@ export const subscribeDevice = async (dto: PushSubscriptionDTO, user: AccessUser
     resourceType: "push_subscription",
     resourceId: subscription.id,
     changes: { patientId: dto.patientId, enabled: true },
+  });
+
+  return subscription;
+};
+
+export const subscribeUserDevice = async (dto: UserPushSubscriptionDTO, user: AccessUser | undefined) => {
+  if (!user) {
+    throw { status: 401, message: "Autentikasi diperlukan", code: "MISSING_TOKEN" };
+  }
+
+  const existing = await db
+    .select({ id: userPushSubscriptions.id })
+    .from(userPushSubscriptions)
+    .where(eq(userPushSubscriptions.endpoint, dto.endpoint))
+    .limit(1);
+
+  if (existing.length > 0) {
+    const [subscription] = await db
+      .update(userPushSubscriptions)
+      .set({
+        userId: user.id,
+        p256dh: dto.keys.p256dh,
+        auth: dto.keys.auth,
+        userAgent: dto.userAgent || null,
+        isEnabled: true,
+        updatedAt: new Date(),
+      })
+      .where(eq(userPushSubscriptions.id, existing[0].id))
+      .returning();
+
+    await writeAuditLog({
+      userId: user.id,
+      action: "user_push_subscription.updated",
+      resourceType: "user_push_subscription",
+      resourceId: subscription.id,
+      changes: { enabled: true },
+    });
+
+    return subscription;
+  }
+
+  const [subscription] = await db
+    .insert(userPushSubscriptions)
+    .values({
+      userId: user.id,
+      endpoint: dto.endpoint,
+      p256dh: dto.keys.p256dh,
+      auth: dto.keys.auth,
+      userAgent: dto.userAgent || null,
+      isEnabled: true,
+    })
+    .returning();
+
+  await writeAuditLog({
+    userId: user.id,
+    action: "user_push_subscription.created",
+    resourceType: "user_push_subscription",
+    resourceId: subscription.id,
+    changes: { enabled: true },
   });
 
   return subscription;

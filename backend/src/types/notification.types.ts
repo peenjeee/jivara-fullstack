@@ -8,6 +8,15 @@ export interface PushSubscriptionDTO {
   userAgent?: string;
 }
 
+export interface UserPushSubscriptionDTO {
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+  userAgent?: string;
+}
+
 export interface NotificationPreferenceDTO {
   patientId: string;
   enabled: boolean;

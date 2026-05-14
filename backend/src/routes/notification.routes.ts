@@ -1,7 +1,7 @@
 import { Router } from "express";
 import * as notificationController from "../controllers/notification.controller";
 import { authenticateToken, authorizeRoles } from "../middleware/auth.middleware";
-import { validatePreference, validateSendNotification, validateSubscribe, validateTrackNotificationEvent, validateUserNotificationPreference } from "../validators/notification.validator";
+import { validatePreference, validateSendNotification, validateSubscribe, validateTrackNotificationEvent, validateUserNotificationPreference, validateUserSubscribe } from "../validators/notification.validator";
 
 const router = Router();
 
@@ -188,6 +188,8 @@ router.patch("/user-preferences", authorizeRoles("admin", "super_admin", "nurse"
  *         description: Tidak boleh mengakses pasien ini
  */
 router.post("/subscribe", authorizeRoles("patient"), validateSubscribe, notificationController.subscribe);
+
+router.post("/user-subscribe", authorizeRoles("admin", "super_admin", "nurse"), validateUserSubscribe, notificationController.subscribeUser);
 
 /**
  * @swagger

@@ -5,6 +5,7 @@ import { Save } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { FormDataSkeleton } from "@/components/ui/PageSkeletons";
 import { getUserNotificationPreferenceFromApi, updateUserNotificationPreferenceViaApi } from "@/lib/notificationSettingsApi";
+import { enableUserPushNotifications } from "@/lib/pushNotifications";
 import { showToast } from "@/lib/swal";
 import ToggleRow from "./ToggleRow";
 
@@ -37,6 +38,7 @@ export default function NotificationSettingsForm() {
     setIsSaving(true);
 
     try {
+      if (criticalAlert) await enableUserPushNotifications();
       await updateUserNotificationPreferenceViaApi("nurse_critical_alert", criticalAlert);
       showToast("Preferensi notifikasi berhasil disimpan.");
     } catch {

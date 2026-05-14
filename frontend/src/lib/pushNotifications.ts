@@ -110,6 +110,28 @@ export const enableMedicationPushNotifications = async () => {
   return patientId;
 };
 
+export const enableUserPushNotifications = async () => {
+  if (!("Notification" in window) || !("PushManager" in window)) {
+    throw new Error("Browser belum mendukung push notification.");
+  }
+
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") {
+    throw new Error("Izin notifikasi belum diberikan.");
+  }
+
+  const [keyResponse, registration] = await Promise.all([
+    api.get<{ data: PublicKeyResponse }>("/notifications/public-key"),
+    getServiceWorkerRegistration(),
+  ]);
+
+  const subscription = await getPushSubscription(registration, keyResponse.data.data.publicKey);
+
+  await api.post("/notifications/user-subscribe", {
+    subscription: subscription.toJSON(),
+  });
+};
+
 export const setMedicationPushPreference = async (enabled: boolean) => {
   const patientId = await getNotificationPatientId();
 
