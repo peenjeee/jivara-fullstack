@@ -70,6 +70,7 @@ const getPushSubscription = async (registration: ServiceWorkerRegistration, publ
         applicationServerKey,
       });
     } catch {
+
       const message = error instanceof Error && error.message ? error.message : "Push service error";
       const diagnostics = {
         permission: Notification.permission,
@@ -78,8 +79,8 @@ const getPushSubscription = async (registration: ServiceWorkerRegistration, publ
         registrationScope: registration.scope,
         serviceWorkerState: registration.active?.state || registration.installing?.state || registration.waiting?.state || null,
       };
-      console.error("[Jivara Push] Subscription failed", diagnostics, error);
-      throw new Error(`Gagal mendaftarkan push notification. Pastikan PWA dibuka dari HTTPS, izin notifikasi aktif, dan browser mendukung Web Push. Detail: ${message}`);
+      console.warn("[Jivara Push] Subscription failed", { ...diagnostics, errorMessage: message });
+      throw new Error(`Gagal mengaktifkan notifikasi. Pastikan aplikasi dibuka dari PWA.`);
     }
   }
 };

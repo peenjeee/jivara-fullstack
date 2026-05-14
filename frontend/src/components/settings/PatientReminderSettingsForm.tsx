@@ -4,11 +4,13 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Save } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { FormDataSkeleton } from "@/components/ui/PageSkeletons";
+import { useIsStandalonePwa } from "@/hooks";
 import { enableMedicationPushNotifications, getMedicationPushPreference, setMedicationPushPreference } from "@/lib/pushNotifications";
 import { showToast } from "@/lib/swal";
 import ToggleRow from "./ToggleRow";
 
 export default function PatientReminderSettingsForm() {
+  const isStandalonePwa = useIsStandalonePwa();
   const [medicineReminder, setMedicineReminder] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -38,6 +40,11 @@ export default function PatientReminderSettingsForm() {
 
     try {
       if (medicineReminder) {
+        if (!isStandalonePwa) {
+          showToast("Reminder obat hanya bisa diaktifkan dari aplikasi PWA.", "warning");
+          return;
+        }
+
         await enableMedicationPushNotifications();
       } else {
         await setMedicationPushPreference(false);
@@ -61,6 +68,11 @@ export default function PatientReminderSettingsForm() {
         checked={medicineReminder}
         onChange={setMedicineReminder}
       />
+      {!isStandalonePwa && medicineReminder && (
+        <p className="rounded-2xl bg-warning/10 px-4 py-3 text-sm font-bold leading-6 text-warning-dark">
+          Buka Jivara sebagai PWA untuk mengaktifkan reminder obat.
+        </p>
+      )}
       <div className="flex justify-end pt-2">
         <Button type="submit" icon={<Save size={18} />} loading={isSaving}>Simpan</Button>
       </div>
