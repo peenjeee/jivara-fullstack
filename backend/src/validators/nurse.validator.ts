@@ -18,7 +18,7 @@ export const validateNurseId = (req: Request, res: Response, next: NextFunction)
 };
 
 export const validateNurseCreate = (req: Request, res: Response, next: NextFunction) => {
-  const { fullName, email, password, gender, age } = req.body;
+  const { fullName, email, password, gender, age, organizationId } = req.body;
 
   if (isMissing(fullName)) {
     return res.status(400).json({ status: "gagal", message: "Nama lengkap wajib diisi", error_code: "VALIDATION_ERROR" });
@@ -34,6 +34,10 @@ export const validateNurseCreate = (req: Request, res: Response, next: NextFunct
 
   if (gender && !["male", "female"].includes(gender)) {
     return res.status(400).json({ status: "gagal", message: "Gender harus laki-laki atau perempuan", error_code: "VALIDATION_ERROR" });
+  }
+
+  if (organizationId && !isValidUuid(organizationId)) {
+    return res.status(400).json({ status: "gagal", message: "organizationId tidak valid", error_code: "VALIDATION_ERROR" });
   }
 
   if (age !== undefined && (!Number.isInteger(age) || age < 0)) {

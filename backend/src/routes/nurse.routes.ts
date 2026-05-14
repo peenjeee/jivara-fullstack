@@ -53,7 +53,7 @@ router.use(authenticateToken);
  *       403:
  *         description: Hanya admin yang dapat mengakses endpoint ini
  */
-router.get("/", authorizeRoles("admin"), nurseController.listNurses);
+router.get("/", authorizeRoles("admin", "super_admin"), nurseController.listNurses);
 
 /**
  * @swagger
@@ -76,7 +76,7 @@ router.get("/", authorizeRoles("admin"), nurseController.listNurses);
  *       404:
  *         description: Perawat tidak ditemukan
  */
-router.get("/:id", authorizeRoles("admin"), validateNurseId, nurseController.getNurse);
+router.get("/:id", authorizeRoles("admin", "super_admin"), validateNurseId, nurseController.getNurse);
 
 /**
  * @swagger
@@ -126,7 +126,7 @@ router.get("/:id", authorizeRoles("admin"), validateNurseId, nurseController.get
  *       409:
  *         description: Email atau nomor telepon sudah terdaftar
  */
-router.post("/", authorizeRoles("admin"), validateNurseCreate, nurseController.createNurse);
+router.post("/", authorizeRoles("admin", "super_admin"), validateNurseCreate, nurseController.createNurse);
 
 /**
  * @swagger
@@ -178,7 +178,7 @@ router.post("/", authorizeRoles("admin"), validateNurseCreate, nurseController.c
  *       404:
  *         description: Perawat tidak ditemukan
  */
-router.put("/:id", authorizeRoles("admin"), validateNurseId, validateNurseUpdate, nurseController.updateNurse);
+router.put("/:id", authorizeRoles("admin", "super_admin"), validateNurseId, validateNurseUpdate, nurseController.updateNurse);
 
 /**
  * @swagger
@@ -201,6 +201,6 @@ router.put("/:id", authorizeRoles("admin"), validateNurseId, validateNurseUpdate
  *       404:
  *         description: Perawat tidak ditemukan
  */
-router.delete("/:id", authorizeRoles("admin"), validateNurseId, nurseController.deactivateNurse);
+router.delete("/:id", authorizeRoles("admin", "super_admin"), validateNurseId, nurseController.deactivateNurse);
 
 export default router;

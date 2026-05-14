@@ -120,7 +120,7 @@ router.put("/:id", authorizeRoles("nurse", "admin"), validatePatientUpdate, pati
  *       200:
  *         description: Pasien berhasil ditugaskan
  */
-router.put("/:id/assign", authorizeRoles("admin"), validateAssignPatient, patientController.assignPatient);
+router.put("/:id/assign", authorizeRoles("admin", "super_admin"), validateAssignPatient, patientController.assignPatient);
 
 /**
  * @swagger
@@ -140,6 +140,6 @@ router.put("/:id/assign", authorizeRoles("admin"), validateAssignPatient, patien
  *       200:
  *         description: Pasien berhasil dinonaktifkan
  */
-router.delete("/:id", authorizeRoles("admin"), patientController.deactivatePatient);
+router.delete("/:id", authorizeRoles("admin", "super_admin"), patientController.deactivatePatient);
 
 export default router;

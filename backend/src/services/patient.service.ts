@@ -323,14 +323,27 @@ export const updatePatient = async (patientId: string, dto: PatientUpdateDTO, us
 };
 
 export const assignPatient = async (patientId: string, nurseId: string, assignedBy?: string) => {
-  const organizationId = assignedBy ? await getOrganizationIdForUser(assignedBy) : null;
-  const patient = await getPatientById(patientId, assignedBy ? { id: assignedBy, email: "", role: "admin" } : undefined);
+  const assignedByUser = assignedBy ? await db.select({ role: users.role }).from(users).where(eq(users.id, assignedBy)).limit(1) : [];
+  const isSuperAdmin = assignedByUser[0]?.role === "super_admin";
+  const organizationId = assignedBy && !isSuperAdmin ? await getOrganizationIdForUser(assignedBy) : null;
+  const patient = await getPatientById(patientId, assignedBy ? { id: assignedBy, email: "", role: isSuperAdmin ? "super_admin" : "admin" } : undefined);
 
-  if (!organizationId || patient.organizationId !== organizationId) {
+  if (!isSuperAdmin && (!organizationId || patient.organizationId !== organizationId)) {
     throw { status: 403, message: "Pasien tidak berada dalam organisasi admin", code: "FORBIDDEN" };
   }
 
-  const nurse = await db.select({ id: nurses.id }).from(nurses).where(and(eq(nurses.id, nurseId), eq(nurses.organizationId, organizationId))).limit(1);
+  if (isSuperAdmin && !patient.organizationId) {
+    throw { status: 400, message: "Pasien belum terhubung ke organisasi", code: "ORGANIZATION_REQUIRED" };
+  }
+
+  const nurseConditions = [eq(nurses.id, nurseId)];
+  if (isSuperAdmin) {
+    nurseConditions.push(eq(nurses.organizationId, patient.organizationId!));
+  } else if (organizationId) {
+    nurseConditions.push(eq(nurses.organizationId, organizationId));
+  }
+
+  const nurse = await db.select({ id: nurses.id }).from(nurses).where(and(...nurseConditions)).limit(1);
   if (nurse.length === 0) {
     throw { status: 404, message: "Perawat tidak ditemukan", code: "NURSE_NOT_FOUND" };
   }
@@ -359,7 +372,7 @@ export const assignPatient = async (patientId: string, nurseId: string, assigned
     changes: { nurseId },
   });
 
-  return getPatientById(patientId, assignedBy ? { id: assignedBy, email: "", role: "admin" } : undefined);
+  return getPatientById(patientId, assignedBy ? { id: assignedBy, email: "", role: isSuperAdmin ? "super_admin" : "admin" } : undefined);
 };
 
 export const deactivatePatient = async (patientId: string, user?: AccessUser) => {
