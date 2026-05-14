@@ -35,7 +35,7 @@ export const getNurse = async (req: AuthRequest, res: Response) => {
 
 export const createNurse = async (req: AuthRequest, res: Response) => {
   try {
-    const data = await nurseService.createNurse(req.body, req.user?.id);
+    const data = await nurseService.createNurse(req.body, req.user);
     res.status(201).json({ status: "berhasil", data, message: "Akun perawat berhasil dibuat" });
   } catch (error) {
     sendError(res, error);

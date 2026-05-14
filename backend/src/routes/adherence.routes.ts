@@ -34,7 +34,7 @@ router.use(authenticateToken);
  *       403:
  *         description: Hanya admin yang dapat melihat statistik aggregate
  */
-router.get("/aggregate", authorizeRoles("admin"), adherenceController.getAggregateAdherence);
+router.get("/aggregate", authorizeRoles("admin", "super_admin"), adherenceController.getAggregateAdherence);
 
 /**
  * @swagger

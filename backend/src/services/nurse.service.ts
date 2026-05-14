@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import { and, count, desc, eq, ilike, or } from "drizzle-orm";
 import { db } from "../db";
-import { nurses, patientNurseAssignments, users } from "../db/schema";
+import { nurses, organizations, patientNurseAssignments, users } from "../db/schema";
 import { AUTH_CONSTANTS } from "../types/auth.types";
 import { NurseCreateDTO, NurseListQuery, NurseUpdateDTO } from "../types/nurse.types";
 import { AccessUser, ensureOrganizationIdForUser, getOrganizationIdForUser } from "./access-control.service";
@@ -143,11 +143,22 @@ export const getNurseById = async (nurseId: string, user?: AccessUser) => {
   return { ...nurse, assignedPatients: assignedRows[0]?.total || 0 };
 };
 
-export const createNurse = async (dto: NurseCreateDTO, createdBy?: string) => {
-  const organizationId = createdBy ? await ensureOrganizationIdForUser(createdBy) : null;
+export const createNurse = async (dto: NurseCreateDTO, user?: AccessUser) => {
+  const organizationId = user?.role === "super_admin"
+    ? dto.organizationId || null
+    : user?.id
+      ? await ensureOrganizationIdForUser(user.id)
+      : null;
 
   if (!organizationId) {
-    throw { status: 403, message: "Admin belum terhubung ke organisasi", code: "ORGANIZATION_REQUIRED" };
+    throw { status: 403, message: "Organisasi wajib diisi untuk membuat akun perawat", code: "ORGANIZATION_REQUIRED" };
+  }
+
+  if (user?.role === "super_admin") {
+    const organization = await db.select({ id: organizations.id }).from(organizations).where(eq(organizations.id, organizationId)).limit(1);
+    if (organization.length === 0) {
+      throw { status: 404, message: "Organisasi tidak ditemukan", code: "ORGANIZATION_NOT_FOUND" };
+    }
   }
 
   const existingUser = await db
