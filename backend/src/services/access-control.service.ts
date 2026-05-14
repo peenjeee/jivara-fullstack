@@ -86,7 +86,7 @@ export const getAssignedPatientIdsForNurse = async (nurseId: string) => {
 
 export const getAccessiblePatientIds = async (user?: AccessUser) => {
   if (!user) return [];
-  if (user.role === "super_admin") return null;
+  if (user.role === "super_admin" || user.role === "superadmin") return null;
 
   if (user.role === "admin") {
     const organizationId = await getOrganizationIdForUser(user.id);

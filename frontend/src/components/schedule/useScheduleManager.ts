@@ -26,6 +26,8 @@ export function useScheduleManager(initialPatientName: string) {
   const [editingSchedule, setEditingSchedule] = useState<MedicationScheduleRecord | null>(null);
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [returnToDetailPatientId, setReturnToDetailPatientId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [processingAction, setProcessingAction] = useState<string | null>(null);
   const deferredSearch = useDeferredValue(search);
 
   useEffect(() => {
@@ -41,6 +43,9 @@ export function useScheduleManager(initialPatientName: string) {
         if (!isMounted) return;
         setSchedules([]);
         setPatients([]);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
       });
 
     return () => {
@@ -141,27 +146,37 @@ export function useScheduleManager(initialPatientName: string) {
       return;
     }
     if (action === "toggle") {
+      const actionKey = `toggle-${schedule.id}`;
+      if (processingAction) return;
+      setProcessingAction(actionKey);
       try {
         const updatedSchedule = await setScheduleActiveViaApi(schedule, schedule.status === "Nonaktif", patients);
         setSchedules((currentSchedules) => currentSchedules.map((currentSchedule) => currentSchedule.id === schedule.id ? updatedSchedule : currentSchedule));
       } catch {
         showError("Gagal mengubah status jadwal obat dari API.");
         return;
+      } finally {
+        setProcessingAction(null);
       }
       showToast(schedule.status === "Nonaktif" ? "Jadwal berhasil diaktifkan." : "Jadwal berhasil dinonaktifkan.");
       return;
     }
     if (action !== "delete") return;
+    const actionKey = `delete-${schedule.id}`;
+    if (processingAction) return;
 
     const result = await showConfirm("Hapus jadwal obat?", `Jadwal ${schedule.medicineName} untuk ${schedule.patientName} akan dihapus.`, "Ya, Hapus");
     if (!result.isConfirmed) return;
 
+    setProcessingAction(actionKey);
     try {
       await deactivateScheduleViaApi(schedule.id);
       setSchedules((currentSchedules) => currentSchedules.filter((currentSchedule) => currentSchedule.id !== schedule.id));
     } catch {
       showError("Gagal menghapus jadwal obat dari API.");
       return;
+    } finally {
+      setProcessingAction(null);
     }
 
     showToast("Jadwal obat berhasil dihapus.");
@@ -186,10 +201,12 @@ export function useScheduleManager(initialPatientName: string) {
     handleScheduleAction,
     handleSearchChange,
     isAddModalOpen,
+    isLoading,
     medicineCountByPatient,
     paginatedGroups,
     patientGroups,
     patients,
+    processingAction,
     resetFilters,
     search,
     selectedGroup,

@@ -6,6 +6,7 @@ import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import Button from "@/components/ui/Button";
 import PatientPagination from "@/components/patients/PatientPagination";
+import { SummaryCardsSkeleton, TableDataSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import ScheduleDetailModal from "./ScheduleDetailModal";
 import ScheduleModal from "./ScheduleModal";
@@ -32,7 +33,7 @@ export default function SchedulePage({ initialPatientName = "", readOnly = false
         )}
       />
 
-      <SummaryCardGrid stats={schedule.summaryStats} />
+      {schedule.isLoading ? <SummaryCardsSkeleton /> : <SummaryCardGrid stats={schedule.summaryStats} />}
 
       <motion.div
         className="mt-6"
@@ -40,7 +41,7 @@ export default function SchedulePage({ initialPatientName = "", readOnly = false
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: 0.32 }}
       >
-        <ScheduleToolbar search={schedule.search} activeFilter={schedule.activeFilter} hasActiveFilters={Boolean(schedule.search || schedule.activeFilter !== "all")} onSearchChange={schedule.handleSearchChange} onFilterChange={schedule.handleFilterChange} onReset={schedule.resetFilters} />
+        {schedule.isLoading ? <ToolbarSkeleton /> : <ScheduleToolbar search={schedule.search} activeFilter={schedule.activeFilter} hasActiveFilters={Boolean(schedule.search || schedule.activeFilter !== "all")} onSearchChange={schedule.handleSearchChange} onFilterChange={schedule.handleFilterChange} onReset={schedule.resetFilters} />}
       </motion.div>
 
       <motion.div
@@ -49,21 +50,12 @@ export default function SchedulePage({ initialPatientName = "", readOnly = false
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.4 }}
       >
-        <ScheduleTable
-          groups={schedule.paginatedGroups}
-          onViewDetail={(group) => schedule.setSelectedPatientId(group.patientId)}
-          onAddMedicine={(group) => schedule.setAddMedicinePatientId(group.patientId)}
-          readOnly={readOnly}
-          emptyMessage="Tidak ada data jadwal."
-        />
-        <PatientPagination
-          currentPage={schedule.currentPage}
-          totalPages={schedule.totalPages}
-          totalItems={schedule.patientGroups.length}
-          pageSize={10}
-          itemLabel="pasien"
-          onPageChange={schedule.setCurrentPage}
-        />
+        {schedule.isLoading ? <TableDataSkeleton /> : (
+          <>
+            <ScheduleTable groups={schedule.paginatedGroups} onViewDetail={(group) => schedule.setSelectedPatientId(group.patientId)} onAddMedicine={(group) => schedule.setAddMedicinePatientId(group.patientId)} readOnly={readOnly} emptyMessage="Tidak ada data jadwal." />
+            <PatientPagination currentPage={schedule.currentPage} totalPages={schedule.totalPages} totalItems={schedule.patientGroups.length} pageSize={10} itemLabel="pasien" onPageChange={schedule.setCurrentPage} />
+          </>
+        )}
       </motion.div>
 
       {!readOnly && <ScheduleModal isOpen={schedule.isAddModalOpen} patients={schedule.patients} medicineIndexOffsetByPatient={schedule.medicineCountByPatient} onClose={() => schedule.setIsAddModalOpen(false)} onSubmit={schedule.handleAddSchedule} />}
@@ -85,7 +77,7 @@ export default function SchedulePage({ initialPatientName = "", readOnly = false
         onClose={schedule.closeEditSchedule}
         onSubmit={schedule.handleEditSchedule}
       />
-      <ScheduleDetailModal group={schedule.selectedGroup} readOnly={readOnly} onClose={() => schedule.setSelectedPatientId(null)} onAction={schedule.handleScheduleAction} />
+      <ScheduleDetailModal group={schedule.selectedGroup} readOnly={readOnly} processingAction={schedule.processingAction} onClose={() => schedule.setSelectedPatientId(null)} onAction={schedule.handleScheduleAction} />
     </DashboardPageShell>
   );
 }

@@ -13,6 +13,7 @@ export interface PatientRecord {
   readonly adherence: number;
   readonly avatar: string;
   readonly image?: string;
+  readonly assignedNurseId?: string;
 }
 
 const formatToday = () =>

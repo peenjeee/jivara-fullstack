@@ -50,7 +50,7 @@ describe("nurse management feature", () => {
     vi.mocked(showToast).mockClear();
     vi.mocked(showWarning).mockClear();
     useAuthStore.setState({ user: { id: "admin-1", fullName: "Admin", email: "admin@test.local", role: "admin", accountStatus: "active", age: 30 }, isAuthenticated: true, hasHydrated: true });
-    useNurseStore.setState({ nurses: [], assignments: {} });
+    useNurseStore.setState({ nurses: [] });
   });
 
   it("loads nurses, searches, and opens detail", async () => {

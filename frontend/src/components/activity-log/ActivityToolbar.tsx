@@ -26,6 +26,7 @@ interface ActivityToolbarProps {
   readonly category: ActivityCategory | "all";
   readonly nurseId?: string;
   readonly nurses?: readonly NurseRecord[];
+  readonly showNurseFilter?: boolean;
   readonly date: string;
   readonly hasActiveFilters: boolean;
   readonly onSearchChange: (value: string) => void;
@@ -36,10 +37,12 @@ interface ActivityToolbarProps {
   readonly onReset: () => void;
 }
 
-export default function ActivityToolbar({ search, quickFilter, category, nurseId = "all", nurses = [], date, hasActiveFilters, onSearchChange, onQuickFilterChange, onCategoryChange, onNurseChange, onDateChange, onReset }: ActivityToolbarProps) {
+export default function ActivityToolbar({ search, quickFilter, category, nurseId = "all", nurses = [], showNurseFilter = true, date, hasActiveFilters, onSearchChange, onQuickFilterChange, onCategoryChange, onNurseChange, onDateChange, onReset }: ActivityToolbarProps) {
+  const gridClass = showNurseFilter ? "lg:grid-cols-[1fr_220px_220px_180px_auto]" : "lg:grid-cols-[1fr_220px_180px_auto]";
+
   return (
     <ToolbarCard>
-      <div className="grid gap-3 lg:grid-cols-[1fr_220px_220px_180px_auto] lg:items-center">
+      <div className={`grid gap-3 lg:items-center ${gridClass}`}>
         <SearchField id="activitySearch" value={search} placeholder="Cari aktivitas ..." onChange={onSearchChange} />
 
         <SelectField
@@ -50,13 +53,15 @@ export default function ActivityToolbar({ search, quickFilter, category, nurseId
           onChange={onCategoryChange}
         />
 
-        <SelectField
-          id="activityNurse"
-          value={nurseId}
-          options={[{ label: "Semua perawat", value: "all" }, ...nurses.map((nurse) => ({ label: nurse.fullName, value: nurse.id }))]}
-          className={FORM_PILL_INPUT_CLASS}
-          onChange={onNurseChange}
-        />
+        {showNurseFilter && (
+          <SelectField
+            id="activityNurse"
+            value={nurseId}
+            options={[{ label: "Semua perawat", value: "all" }, ...nurses.map((nurse) => ({ label: nurse.fullName, value: nurse.id }))]}
+            className={FORM_PILL_INPUT_CLASS}
+            onChange={onNurseChange}
+          />
+        )}
 
         <DatePickerField id="activityDate" value={date} popoverAlign="right" className={FORM_PILL_INPUT_CLASS} onChange={onDateChange} />
 

@@ -39,7 +39,7 @@ describe("patient management feature", () => {
     vi.mocked(showConfirm).mockReset();
     vi.mocked(showError).mockClear();
     vi.mocked(showToast).mockClear();
-    useNurseStore.setState({ nurses: [], assignments: {} });
+    useNurseStore.setState({ nurses: [] });
   });
 
   it("loads, searches, and opens patient detail", async () => {

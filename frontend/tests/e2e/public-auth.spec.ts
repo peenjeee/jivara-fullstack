@@ -49,7 +49,7 @@ test("login success stores auth and redirects", async ({ page }) => {
   await gotoApp(page, "/login?callbackUrl=/dashboard");
   await waitForHydration(page);
   await page.getByLabel(/email/i).fill("nurse@test.local");
-  await page.getByLabel(/kata sandi/i).fill("secret123");
+  await page.getByLabel(/^kata sandi/i).fill("secret123");
   await page.getByRole("button", { name: /masuk/i }).click();
 
   await expect(page).toHaveURL(/\/dashboard/);

@@ -6,6 +6,7 @@ import { AlertTriangle, Bell, CheckCheck, ClipboardList } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import Button from "@/components/ui/Button";
+import { ActivityDataSkeleton, SummaryCardsSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import { FoodScanDetailModal } from "@/components/food-scan";
 import PatientMedicineDetailModal from "@/components/schedule/PatientMedicineDetailModal";
@@ -40,6 +41,7 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
   const [selectedSchedule, setSelectedSchedule] = useState<MedicationScheduleRecord | null>(null);
   const [schedules, setSchedules] = useState<MedicationScheduleRecord[]>([]);
   const [selectedFoodScanId, setSelectedFoodScanId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const deferredSearch = useDeferredValue(search);
   const todayKey = getDateKey(new Date());
 
@@ -56,6 +58,9 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
         if (!isMounted) return;
         setActivities([]);
         setSchedules([]);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
       });
 
     return () => {
@@ -138,7 +143,7 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
         )}
       />
 
-      <SummaryCardGrid stats={summaryStats} />
+      {isLoading ? <SummaryCardsSkeleton /> : <SummaryCardGrid stats={summaryStats} />}
 
       <motion.div
         className="mt-6"
@@ -146,7 +151,7 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: 0.32 }}
       >
-        <PatientActivityToolbar
+        {isLoading ? <ToolbarSkeleton /> : <PatientActivityToolbar
           search={search}
           quickFilter={quickFilter}
           category={category}
@@ -155,11 +160,11 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
           onQuickFilterChange={setQuickFilter}
           onCategoryChange={setCategory}
           onReset={resetFilters}
-        />
+        />}
       </motion.div>
 
       <div className="mt-6">
-        <PatientActivityCalendar month={visibleMonth} activities={filteredActivities} onMonthChange={setVisibleMonth} onViewDetail={viewActivityDetail} />
+        {isLoading ? <ActivityDataSkeleton rows={6} /> : <PatientActivityCalendar month={visibleMonth} activities={filteredActivities} onMonthChange={setVisibleMonth} onViewDetail={viewActivityDetail} />}
       </div>
 
       <ActivityDetailModal activity={selectedActivity} useScheduleQuery={false} onClose={() => setSelectedActivity(null)} onViewFoodScan={viewFoodScan} onViewSchedule={viewSchedule} />

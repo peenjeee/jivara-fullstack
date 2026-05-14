@@ -8,6 +8,7 @@ import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import Button from "@/components/ui/Button";
 import DatePickerField from "@/components/ui/DatePickerField";
 import FilterPills from "@/components/ui/FilterPills";
+import { ActivityDataSkeleton, SummaryCardsSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
 import SearchField from "@/components/ui/SearchField";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import ToolbarCard from "@/components/ui/ToolbarCard";
@@ -44,6 +45,7 @@ export default function SuperAdminActivityLogPage() {
   const [date, setDate] = useState("");
   const [visibleCount, setVisibleCount] = useState(pageSize);
   const [selectedActivity, setSelectedActivity] = useState<ActivityLogRecord | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const deferredSearch = useDeferredValue(search);
 
   useEffect(() => {
@@ -54,6 +56,9 @@ export default function SuperAdminActivityLogPage() {
       })
       .catch(() => {
         if (isMounted) setActivities([]);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
       });
 
     return () => {
@@ -74,9 +79,9 @@ export default function SuperAdminActivityLogPage() {
   }, [activities, date, deferredSearch, filter]);
 
   const stats = [
-    { label: "Total Aktivitas", value: String(activities.length), tone: "neutral" as const, color: "pine" as const, icon: ClipboardList },
-    { label: "Approval Masuk", value: String(activities.filter((activity) => activity.title === "Pengajuan admin masuk").length), tone: "safe" as const, color: "leaf" as const, icon: Clock3 },
-    { label: "Diproses Hari Ini", value: String(activities.filter((activity) => getActivityDateKey(activity.timestamp) === todayKey && activity.title !== "Pengajuan admin masuk").length), tone: "safe" as const, color: "lime" as const, icon: CheckCircle2 },
+    { label: "Total Semua Aktivitas", value: String(activities.length), tone: "neutral" as const, color: "pine" as const, icon: ClipboardList },
+    { label: "Approval Akun Masuk", value: String(activities.filter((activity) => activity.title === "Pengajuan admin masuk").length), tone: "safe" as const, color: "leaf" as const, icon: Clock3 },
+    { label: "Sudah Diproses Hari Ini", value: String(activities.filter((activity) => getActivityDateKey(activity.timestamp) === todayKey && activity.title !== "Pengajuan admin masuk").length), tone: "safe" as const, color: "lime" as const, icon: CheckCircle2 },
   ];
 
   const hasActiveFilters = Boolean(search || date || filter !== "all");
@@ -89,23 +94,23 @@ export default function SuperAdminActivityLogPage() {
   };
 
   return (
-    <DashboardPageShell>
+      <DashboardPageShell>
       <DashboardPageHeader title="Log Aktivitas" />
-      <SummaryCardGrid stats={stats} />
+      {isLoading ? <SummaryCardsSkeleton /> : <SummaryCardGrid stats={stats} />}
 
       <motion.div className="mt-6" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: 0.32 }}>
-        <ToolbarCard>
+        {isLoading ? <ToolbarSkeleton /> : <ToolbarCard>
           <div className="grid gap-3 lg:grid-cols-[1fr_190px_auto] lg:items-center">
-            <SearchField id="superAdminActivitySearch" value={search} placeholder="Cari aktivitas approval ..." onChange={(value) => { setSearch(value); setVisibleCount(pageSize); }} />
+            <SearchField id="superAdminActivitySearch" value={search} placeholder="Cari aktivitas ..." onChange={(value) => { setSearch(value); setVisibleCount(pageSize); }} />
             <DatePickerField id="superAdminActivityDate" value={date} popoverAlign="right" className={FORM_PILL_INPUT_CLASS} onChange={(value) => { setDate(value); setVisibleCount(pageSize); }} />
             {hasActiveFilters && <Button type="button" size="sm" variant="outline" onClick={resetFilters} className="w-full lg:w-auto">Reset</Button>}
           </div>
           <FilterPills options={filters} activeValue={filter} onChange={(value) => { setFilter(value); setVisibleCount(pageSize); }} className="mt-4" />
-        </ToolbarCard>
+        </ToolbarCard>}
       </motion.div>
 
       <motion.div className="mt-6" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.4 }}>
-        <ActivityFeed activities={filteredActivities} visibleCount={visibleCount} readOnly onLoadMore={() => setVisibleCount((count) => count + pageSize)} onMarkRead={() => {}} onViewDetail={setSelectedActivity} />
+        {isLoading ? <ActivityDataSkeleton /> : <ActivityFeed activities={filteredActivities} visibleCount={visibleCount} readOnly onLoadMore={() => setVisibleCount((count) => count + pageSize)} onMarkRead={() => {}} onViewDetail={setSelectedActivity} />}
       </motion.div>
 
       <ActivityDetailModal activity={selectedActivity} onClose={() => setSelectedActivity(null)} />

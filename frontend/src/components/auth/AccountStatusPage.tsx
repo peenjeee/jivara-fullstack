@@ -107,7 +107,20 @@ export default function AccountStatusPage() {
     void Promise.resolve().then(() => refreshStatus(false));
   }, [hasAuthHydrated, refreshStatus, user]);
 
-  if (!hasAuthHydrated || !user || user.role !== "admin" || !hasCheckedStatus || (statusCheckSucceeded && (user.accountStatus ?? "active") === "active")) return null;
+  if (!hasAuthHydrated || !user || user.role !== "admin" || (statusCheckSucceeded && (user.accountStatus ?? "active") === "active")) return null;
+
+  if (!hasCheckedStatus) {
+    return (
+      <AuthCard title="Status Akun">
+        <div className="space-y-4 text-center">
+          <div className="mx-auto h-16 w-16 animate-pulse rounded-3xl bg-line/70" />
+          <div className="mx-auto h-7 w-44 animate-pulse rounded-xl bg-line/70" />
+          <div className="mx-auto h-4 w-64 max-w-full animate-pulse rounded-xl bg-line/60" />
+          <div className="h-11 w-full animate-pulse rounded-full bg-line/60" />
+        </div>
+      </AuthCard>
+    );
+  }
 
   return (
     <AuthCard

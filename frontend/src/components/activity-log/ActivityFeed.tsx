@@ -37,7 +37,7 @@ export default function ActivityFeed({ activities, visibleCount, onLoadMore, onM
           </div>
           <div className="space-y-4 border-l-2 border-line pl-4 sm:pl-6">
             {group.items.map((activity, index) => (
-              <ActivityFeedItem key={activity.id} activity={activity} index={index} readOnly={readOnly} onMarkRead={onMarkRead} onViewDetail={onViewDetail} />
+              <ActivityFeedItem key={`${activity.category}-${activity.id}-${index}`} activity={activity} index={index} readOnly={readOnly} onMarkRead={onMarkRead} onViewDetail={onViewDetail} />
             ))}
           </div>
         </div>

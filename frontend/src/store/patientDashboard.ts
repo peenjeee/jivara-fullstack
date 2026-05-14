@@ -2,9 +2,11 @@ import { create } from "zustand";
 import type { FoodScanRecord } from "@/lib/mocks/foodScans";
 
 interface PatientDashboardState {
+  readonly patientId: string | null;
   readonly lastScan: FoodScanRecord | null;
   readonly confirmedMedicineIds: readonly string[];
   readonly confirmedScheduleDates: Readonly<Record<string, readonly string[]>>;
+  readonly setPatientId: (patientId: string | null) => void;
   readonly setLastScan: (scan: FoodScanRecord) => void;
   readonly setConfirmedScheduleDates: (dates: Readonly<Record<string, readonly string[]>>) => void;
   readonly confirmMedicine: (medicineId: string) => void;
@@ -13,9 +15,11 @@ interface PatientDashboardState {
 }
 
 export const usePatientDashboardStore = create<PatientDashboardState>()((set) => ({
+  patientId: null,
   lastScan: null,
   confirmedMedicineIds: [],
   confirmedScheduleDates: {},
+  setPatientId: (patientId) => set({ patientId }),
   setLastScan: (scan) => set({ lastScan: scan }),
   setConfirmedScheduleDates: (dates) => set({ confirmedScheduleDates: dates }),
   confirmMedicine: (medicineId) =>
@@ -39,5 +43,5 @@ export const usePatientDashboardStore = create<PatientDashboardState>()((set) =>
         },
       };
     }),
-  resetPatientDashboardState: () => set({ lastScan: null, confirmedMedicineIds: [], confirmedScheduleDates: {} }),
+  resetPatientDashboardState: () => set({ patientId: null, lastScan: null, confirmedMedicineIds: [], confirmedScheduleDates: {} }),
 }));

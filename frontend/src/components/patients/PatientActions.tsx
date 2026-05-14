@@ -7,6 +7,7 @@ export type PatientAction = "view" | "edit" | "delete";
 interface PatientActionsProps {
   readonly patient: PatientRecord;
   readonly actions?: readonly PatientAction[];
+  readonly processingAction?: string | null;
   readonly onAction?: (action: PatientAction, patient: PatientRecord) => void;
 }
 
@@ -16,7 +17,9 @@ const actionConfig = {
   delete: { label: "Hapus", icon: Trash2, tone: "delete" },
 } as const;
 
-export default function PatientActions({ patient, actions = ["view"], onAction }: PatientActionsProps) {
+export default function PatientActions({ patient, actions = ["view"], processingAction = null, onAction }: PatientActionsProps) {
+  const isProcessing = Boolean(processingAction);
+
   return (
     <div className="flex items-center justify-end gap-0.5">
       {actions.map((action) => {
@@ -29,6 +32,8 @@ export default function PatientActions({ patient, actions = ["view"], onAction }
             label={`${config.label} ${patient.name}`}
             tone={config.tone}
             size="sm"
+            loading={processingAction === `${action}-${patient.id}`}
+            disabled={isProcessing}
             onClick={() => onAction?.(action, patient)}
           >
             <Icon size={16} />

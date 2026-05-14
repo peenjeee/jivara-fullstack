@@ -2,7 +2,6 @@
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import { getNurseByPatientId } from "@/helpers/nurses";
 import type { PatientRecord } from "@/lib/mocks/patients";
 import { createPatientViaApi, deactivatePatientViaApi, getPatientsFromApi, updatePatientViaApi } from "@/lib/patientApi";
 import { showConfirm, showError, showToast } from "@/lib/swal";
@@ -21,13 +20,14 @@ const getApiErrorMessage = (error: unknown) => {
 
 export function usePatientList(onViewPatient: (patientId: string) => void) {
   const nurses = useNurseStore((state) => state.nurses);
-  const assignments = useNurseStore((state) => state.assignments);
   const [patientRecords, setPatientRecords] = useState<PatientRecord[]>([]);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<PatientFilter>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingPatient, setEditingPatient] = useState<PatientRecord | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [processingAction, setProcessingAction] = useState<string | null>(null);
   const deferredSearch = useDeferredValue(search);
 
   useEffect(() => {
@@ -39,6 +39,9 @@ export function usePatientList(onViewPatient: (patientId: string) => void) {
       })
       .catch(() => {
         if (isMounted) setPatientRecords([]);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
       });
 
     return () => {
@@ -57,7 +60,7 @@ export function usePatientList(onViewPatient: (patientId: string) => void) {
 
   const totalPages = Math.max(1, Math.ceil(filteredPatients.length / pageSize));
   const paginatedPatients = filteredPatients.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  const assignedNurseByPatientId = useMemo(() => Object.fromEntries(patientRecords.map((patient) => [patient.id, getNurseByPatientId(nurses, assignments, patient.id)?.fullName ?? "Belum ditugaskan"])), [assignments, nurses, patientRecords]);
+  const assignedNurseByPatientId = useMemo(() => Object.fromEntries(patientRecords.map((patient) => [patient.id, nurses.find((nurse) => nurse.id === patient.assignedNurseId)?.fullName ?? "Belum ditugaskan"])), [nurses, patientRecords]);
 
   const setPage = (page: number) => setCurrentPage(Math.min(Math.max(page, 1), totalPages));
   const handleSearchChange = (value: string) => {
@@ -108,15 +111,20 @@ export function usePatientList(onViewPatient: (patientId: string) => void) {
     if (action === "edit") setEditingPatient(patient);
 
     if (action === "delete") {
+      const actionKey = `delete-${patient.id}`;
+      if (processingAction) return;
       const result = await showConfirm("Hapus pasien?", `Data ${patient.name} akan dihapus dari daftar pasien.`, "Ya, Hapus");
       if (!result.isConfirmed) return;
 
+      setProcessingAction(actionKey);
       try {
         await deactivatePatientViaApi(patient.id);
         setPatientRecords((currentPatients) => currentPatients.filter((currentPatient) => currentPatient.id !== patient.id));
       } catch (error) {
         showError(getApiErrorMessage(error) || "Gagal menghapus pasien dari API.");
         return;
+      } finally {
+        setProcessingAction(null);
       }
 
       showToast("Pasien berhasil dihapus.");
@@ -135,7 +143,9 @@ export function usePatientList(onViewPatient: (patientId: string) => void) {
     handlePatientAction,
     handleSearchChange,
     isAddModalOpen,
+    isLoading,
     paginatedPatients,
+    processingAction,
     resetFilters,
     search,
     setCurrentPage: setPage,

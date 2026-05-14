@@ -87,7 +87,9 @@ export const authorizeRoles = (...roles: string[]) => {
       });
     }
 
-    if (!roles.includes(req.user.role)) {
+    const userRole = req.user.role === "superadmin" ? "super_admin" : req.user.role;
+
+    if (!roles.includes(userRole)) {
       return res.status(403).json({
         status: "gagal",
         message: "Anda tidak memiliki izin untuk mengakses sumber daya ini",

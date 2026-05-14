@@ -24,7 +24,7 @@ export interface AddPatientValues {
 interface AddPatientFormProps {
   readonly initialValues?: Partial<AddPatientValues>;
   readonly mode?: "add" | "edit";
-  readonly onSubmit: (values: AddPatientValues) => void;
+  readonly onSubmit: (values: AddPatientValues) => void | Promise<void>;
   readonly onCancel: () => void;
 }
 
@@ -67,13 +67,15 @@ export default function AddPatientForm({ initialValues, mode = "add", onSubmit }
   const [email, setEmail] = useState(initialValues?.email ?? "");
   const [password, setPassword] = useState(initialValues?.password ?? "");
   const [address, setAddress] = useState(initialValues?.address ?? "");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const updatePhone = (value: string) => {
     setPhone(value.replace(/\D/g, ""));
   };
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
+    if (isSubmitting) return;
 
     const trimmedFullName = fullName.trim();
     const trimmedAge = age.trim();
@@ -108,15 +110,12 @@ export default function AddPatientForm({ initialValues, mode = "add", onSubmit }
       return;
     }
 
-    onSubmit({
-      fullName: trimmedFullName,
-      age: numericAge,
-      gender,
-      phone: trimmedPhone,
-      email: trimmedEmail,
-      password: trimmedPassword,
-      address: trimmedAddress,
-    });
+    setIsSubmitting(true);
+    try {
+      await onSubmit({ fullName: trimmedFullName, age: numericAge, gender, phone: trimmedPhone, email: trimmedEmail, password: trimmedPassword, address: trimmedAddress });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -175,7 +174,7 @@ export default function AddPatientForm({ initialValues, mode = "add", onSubmit }
       </FormSection>
 
       <FormStickyActions>
-        <Button type="submit" icon={<UserPlus size={18} />}>
+        <Button type="submit" icon={<UserPlus size={18} />} loading={isSubmitting}>
           {mode === "add" ? "Simpan Pasien" : "Simpan Perubahan"}
         </Button>
       </FormStickyActions>

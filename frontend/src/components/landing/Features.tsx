@@ -39,7 +39,7 @@ export default function Features() {
             transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.25 }}
           >
             <motion.h2
-              className="mx-auto mt-2 mb-[52px] max-w-[820px] font-display text-[28px] md:text-[45px] font-extrabold leading-[1.3] md:leading-[1.12] cursor-default"
+              className="mx-auto mt-2 max-w-[820px] font-display text-[28px] md:text-[45px] font-extrabold leading-[1.3] md:leading-[1.12] cursor-default"
               whileHover={{ scale: 1.02, y: -5 }}
               transition={{ type: "spring", stiffness: 400, damping: 25 }}
             >
@@ -47,6 +47,7 @@ export default function Features() {
             </motion.h2>
           </motion.div>
           <motion.div
+            className="mx-auto max-w-[960px] pt-4 md:pt-6"
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.3 }}

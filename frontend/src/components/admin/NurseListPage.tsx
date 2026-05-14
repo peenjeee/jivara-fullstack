@@ -10,6 +10,7 @@ import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import Button from "@/components/ui/Button";
 import FilterPills from "@/components/ui/FilterPills";
 import IconActionButton from "@/components/ui/IconActionButton";
+import { TableDataSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
 import SearchField from "@/components/ui/SearchField";
 import ToolbarCard from "@/components/ui/ToolbarCard";
 import PatientPagination from "@/components/patients/PatientPagination";
@@ -50,6 +51,8 @@ export default function NurseListPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingNurse, setEditingNurse] = useState<NurseRecord | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [processingAction, setProcessingAction] = useState<string | null>(null);
   const deferredSearch = useDeferredValue(search);
 
   useEffect(() => {
@@ -68,6 +71,9 @@ export default function NurseListPage() {
       })
       .catch(() => {
         if (isMounted) setNurses([]);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
       });
 
     return () => {
@@ -119,10 +125,13 @@ export default function NurseListPage() {
   };
 
   const handleToggleStatus = async (nurse: NurseRecord) => {
+    const actionKey = `toggle-${nurse.id}`;
+    if (processingAction) return;
     const nextStatus = nurse.status === "Aktif" ? "Nonaktif" : "Aktif";
     const result = await showConfirm(`${nextStatus}kan perawat?`, `${nurse.fullName} akan berubah status menjadi ${nextStatus}.`, `Ya, ${nextStatus}kan`);
     if (!result.isConfirmed) return;
 
+    setProcessingAction(actionKey);
     try {
       const updatedNurse = await updateNurseViaApi(nurse.id, {
         fullName: nurse.fullName,
@@ -137,12 +146,16 @@ export default function NurseListPage() {
       const message = getApiErrorMessage(error);
       showError(message || "Gagal mengubah status perawat dari API.");
       return;
+    } finally {
+      setProcessingAction(null);
     }
 
     showToast(`Status perawat menjadi ${nextStatus}.`);
   };
 
   const handleDelete = async (nurse: NurseRecord) => {
+    const actionKey = `delete-${nurse.id}`;
+    if (processingAction) return;
     const assignedCount = nurse.assignedPatients ?? 0;
     if (assignedCount > 0) {
       showWarning(`${nurse.fullName} masih menangani ${assignedCount} pasien. Reassign pasien terlebih dahulu sebelum menghapus perawat.`, "Tidak Bisa Dihapus");
@@ -152,6 +165,7 @@ export default function NurseListPage() {
     const result = await showConfirm("Hapus perawat?", `Data ${nurse.fullName} akan dihapus dari daftar perawat.`, "Ya, Hapus");
     if (!result.isConfirmed) return;
 
+    setProcessingAction(actionKey);
     try {
       await deactivateNurseViaApi(nurse.id);
       setNurses(nurses.map((item) => item.id === nurse.id ? { ...item, status: "Nonaktif" } : item));
@@ -159,6 +173,8 @@ export default function NurseListPage() {
       const message = getApiErrorMessage(error);
       showError(message || "Gagal menonaktifkan perawat dari API.");
       return;
+    } finally {
+      setProcessingAction(null);
     }
 
     showToast("Perawat berhasil dihapus.");
@@ -178,16 +194,17 @@ export default function NurseListPage() {
       />
 
       <motion.div className="mt-6" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}>
-        <ToolbarCard>
+        {isLoading ? <ToolbarSkeleton /> : <ToolbarCard>
           <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
             <SearchField id="nurseSearch" value={search} placeholder="Cari perawat ..." onChange={(value) => { setSearch(value); setCurrentPage(1); }} />
             {(search || filter !== "all") && <Button type="button" size="sm" variant="outline" onClick={resetFilters}>Reset</Button>}
           </div>
           <FilterPills options={filters} activeValue={filter} onChange={(value) => { setFilter(value); setCurrentPage(1); }} className="mt-4" />
-        </ToolbarCard>
+        </ToolbarCard>}
       </motion.div>
 
       <motion.section className="mt-6 overflow-hidden rounded-3xl bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)]" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.18 }}>
+        {isLoading ? <TableDataSkeleton /> : <>
         <div className="hidden overflow-x-auto sm:block" data-lenis-prevent>
           <table className="w-full text-left">
             <thead className="bg-surface text-xs font-extrabold uppercase tracking-[0.08em] text-muted">
@@ -201,16 +218,16 @@ export default function NurseListPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {paginatedNurses.map((nurse) => {
+              {paginatedNurses.map((nurse, index) => {
                 const assignedCount = nurse.assignedPatients ?? 0;
                 return (
-                  <tr key={nurse.id} className="transition-colors hover:bg-surface/60">
+                  <tr key={`nurse-row-${nurse.id}-${index}`} className="transition-colors hover:bg-surface/60">
                     <td className="px-5 py-4"><NurseIdentity nurse={nurse} /></td>
                     <td className="px-5 py-4 text-sm font-bold text-muted"><span className="block text-text-main">{nurse.email}</span>{nurse.phone}</td>
                     <td className="px-5 py-4 text-sm font-bold text-muted">{nurse.gender}</td>
                     <td className="px-5 py-4 text-sm font-extrabold text-text-main">{assignedCount}</td>
                     <td className="px-5 py-4"><NurseStatusBadge status={nurse.status} /></td>
-                    <td className="px-5 py-4"><NurseActions nurse={nurse} onView={() => router.push(`/nurses/${encodeURIComponent(nurse.id)}`)} onEdit={() => setEditingNurse(nurse)} onToggle={() => handleToggleStatus(nurse)} onDelete={() => handleDelete(nurse)} /></td>
+                    <td className="px-5 py-4"><NurseActions nurse={nurse} processingAction={processingAction} onView={() => router.push(`/nurses/${encodeURIComponent(nurse.id)}`)} onEdit={() => setEditingNurse(nurse)} onToggle={() => handleToggleStatus(nurse)} onDelete={() => handleDelete(nurse)} /></td>
                   </tr>
                 );
               })}
@@ -226,13 +243,13 @@ export default function NurseListPage() {
         </div>
 
         <div className="divide-y divide-line sm:hidden">
-          {paginatedNurses.map((nurse) => {
+          {paginatedNurses.map((nurse, index) => {
             const assignedCount = nurse.assignedPatients ?? 0;
             return (
-              <article key={nurse.id} className="p-5">
+              <article key={`nurse-card-${nurse.id}-${index}`} className="p-5">
                 <div className="flex items-start justify-between gap-4">
                   <NurseIdentity nurse={nurse} />
-                  <NurseActions nurse={nurse} onView={() => router.push(`/nurses/${encodeURIComponent(nurse.id)}`)} onEdit={() => setEditingNurse(nurse)} onToggle={() => handleToggleStatus(nurse)} onDelete={() => handleDelete(nurse)} />
+                  <NurseActions nurse={nurse} processingAction={processingAction} onView={() => router.push(`/nurses/${encodeURIComponent(nurse.id)}`)} onEdit={() => setEditingNurse(nurse)} onToggle={() => handleToggleStatus(nurse)} onDelete={() => handleDelete(nurse)} />
                 </div>
                 <div className="mt-4 flex flex-wrap items-center gap-2 text-xs font-extrabold text-muted">
                   <NurseStatusBadge status={nurse.status} />
@@ -256,6 +273,7 @@ export default function NurseListPage() {
           itemLabel="perawat"
           onPageChange={(page) => setCurrentPage(Math.min(Math.max(page, 1), totalPages))}
         />
+        </>}
       </motion.section>
 
       <NurseModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSubmit={handleAddNurse} />
@@ -276,13 +294,15 @@ function NurseIdentity({ nurse }: { readonly nurse: NurseRecord }) {
   );
 }
 
-function NurseActions({ nurse, onView, onEdit, onToggle, onDelete }: { readonly nurse: NurseRecord; readonly onView: () => void; readonly onEdit: () => void; readonly onToggle: () => void; readonly onDelete: () => void }) {
+function NurseActions({ nurse, processingAction, onView, onEdit, onToggle, onDelete }: { readonly nurse: NurseRecord; readonly processingAction: string | null; readonly onView: () => void; readonly onEdit: () => void; readonly onToggle: () => void; readonly onDelete: () => void }) {
+  const isProcessing = Boolean(processingAction);
+
   return (
     <div className="flex items-center justify-end gap-0.5">
-      <IconActionButton label={`Lihat detail ${nurse.fullName}`} tone="primary" size="sm" onClick={onView}><Eye size={16} /></IconActionButton>
-      <IconActionButton label={`Edit ${nurse.fullName}`} tone="warning" size="sm" onClick={onEdit}><Edit3 size={16} /></IconActionButton>
-      <IconActionButton label={`${nurse.status === "Aktif" ? "Nonaktifkan" : "Aktifkan"} ${nurse.fullName}`} tone="blue" size="sm" onClick={onToggle}><Power size={16} /></IconActionButton>
-      <IconActionButton label={`Hapus ${nurse.fullName}`} tone="delete" size="sm" onClick={onDelete}><Trash2 size={16} /></IconActionButton>
+      <IconActionButton label={`Lihat detail ${nurse.fullName}`} tone="primary" size="sm" disabled={isProcessing} onClick={onView}><Eye size={16} /></IconActionButton>
+      <IconActionButton label={`Edit ${nurse.fullName}`} tone="warning" size="sm" disabled={isProcessing} onClick={onEdit}><Edit3 size={16} /></IconActionButton>
+      <IconActionButton label={`${nurse.status === "Aktif" ? "Nonaktifkan" : "Aktifkan"} ${nurse.fullName}`} tone="blue" size="sm" loading={processingAction === `toggle-${nurse.id}`} disabled={isProcessing} onClick={onToggle}><Power size={16} /></IconActionButton>
+      <IconActionButton label={`Hapus ${nurse.fullName}`} tone="delete" size="sm" loading={processingAction === `delete-${nurse.id}`} disabled={isProcessing} onClick={onDelete}><Trash2 size={16} /></IconActionButton>
     </div>
   );
 }

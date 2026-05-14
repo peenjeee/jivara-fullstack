@@ -10,12 +10,13 @@ interface PatientTableProps {
   readonly showViewAll?: boolean;
   readonly actions?: readonly PatientAction[];
   readonly onAction?: (action: PatientAction, patient: PatientRecord) => void;
+  readonly processingAction?: string | null;
   readonly embedded?: boolean;
   readonly emptyMessage?: string;
   readonly assignedNurseByPatientId?: Readonly<Record<string, string>>;
 }
 
-export default function PatientTable({ patients, title, showViewAll = false, actions = ["view"], onAction, embedded = false, emptyMessage = "Tidak ada data yang tersedia.", assignedNurseByPatientId }: PatientTableProps) {
+export default function PatientTable({ patients, title, showViewAll = false, actions = ["view"], onAction, processingAction = null, embedded = false, emptyMessage = "Tidak ada data yang tersedia.", assignedNurseByPatientId }: PatientTableProps) {
   const isEmpty = patients.length === 0;
   const showAssignedNurse = Boolean(assignedNurseByPatientId);
 
@@ -58,8 +59,8 @@ export default function PatientTable({ patients, title, showViewAll = false, act
                 </td>
               </tr>
             ) : (
-              patients.map((patient) => (
-                <tr key={patient.id} className="transition-colors hover:bg-surface/60">
+              patients.map((patient, index) => (
+                <tr key={`patient-row-${patient.id}-${index}`} className="transition-colors hover:bg-surface/60">
                   <td className="px-3 py-4 lg:px-5">
                     <PatientIdentity patient={patient} />
                   </td>
@@ -68,7 +69,7 @@ export default function PatientTable({ patients, title, showViewAll = false, act
                   <td className="px-3 py-4 text-sm font-bold text-muted lg:px-5">{patient.lastVisit}</td>
                   <td className="px-3 py-4 lg:px-5"><PatientAdherence value={patient.adherence} /></td>
                   {showAssignedNurse && <td className="px-3 py-4 text-sm font-bold text-muted lg:px-5">{assignedNurseByPatientId?.[patient.id] ?? "Belum ditugaskan"}</td>}
-                  <td className="px-3 py-4 lg:px-5"><PatientActions patient={patient} actions={actions} onAction={onAction} /></td>
+                  <td className="px-3 py-4 lg:px-5"><PatientActions patient={patient} actions={actions} processingAction={processingAction} onAction={onAction} /></td>
                 </tr>
               ))
             )}
@@ -80,14 +81,14 @@ export default function PatientTable({ patients, title, showViewAll = false, act
         {isEmpty ? (
           <p className="px-5 py-12 text-center text-sm font-bold text-muted">{emptyMessage}</p>
         ) : (
-          patients.map((patient) => (
-            <article key={patient.id} className="p-5">
+          patients.map((patient, index) => (
+            <article key={`patient-card-${patient.id}-${index}`} className="p-5">
               <div className="flex items-start justify-between gap-4">
                 <PatientIdentity patient={patient} />
-                <PatientActions patient={patient} actions={actions} onAction={onAction} />
+                <PatientActions patient={patient} actions={actions} processingAction={processingAction} onAction={onAction} />
               </div>
               <div className="mt-4 grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 text-sm font-bold text-muted">
-                <span>{patient.age} tahun</span>
+                <span>{patient.gender}</span>
                 <span>{patient.lastVisit}</span>
                 <PatientStatusBadge status={patient.status} />
                 <PatientAdherence value={patient.adherence} />
@@ -113,7 +114,7 @@ function PatientIdentity({ patient }: { readonly patient: PatientRecord }) {
       )}
       <div className="min-w-0">
         <p className="break-words font-extrabold leading-tight text-text-main">{patient.name}</p>
-        <p className="mt-0.5 text-sm font-semibold text-muted">{patient.age} tahun</p>
+        <p className="mt-0.5 text-sm font-semibold text-muted">{patient.gender}</p>
       </div>
     </div>
   );

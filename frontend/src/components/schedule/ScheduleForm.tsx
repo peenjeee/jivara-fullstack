@@ -39,7 +39,7 @@ interface ScheduleFormProps {
   readonly patientLocked?: boolean;
   readonly medicineIndexOffset?: number;
   readonly medicineIndexOffsetByPatient?: Readonly<Record<string, number>>;
-  readonly onSubmit: (values: ScheduleFormValues) => void;
+  readonly onSubmit: (values: ScheduleFormValues) => void | Promise<void>;
   readonly onCancel: () => void;
 }
 
@@ -141,10 +141,12 @@ export default function ScheduleForm({ patients, initialValues, mode = "add", pa
   const values = initialValues ?? emptyValues;
   const [medicineKeys, setMedicineKeys] = useState(() => values.medicines.map((_, index) => index));
   const [selectedPatientId, setSelectedPatientId] = useState(values.patientId);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const canManageBlocks = mode === "add";
   const displayIndexOffset = patientLocked ? medicineIndexOffset : medicineIndexOffsetByPatient[selectedPatientId] ?? 0;
 
-  const handleSubmit = (formData: FormData) => {
+  const handleSubmit = async (formData: FormData) => {
+    if (isSubmitting) return;
     const patientId = String(formData.get("patientId") ?? "");
     const medicines = medicineKeys.map((key) => ({
       medicineName: String(formData.get(`medicineName-${key}`) ?? "").trim(),
@@ -168,7 +170,12 @@ export default function ScheduleForm({ patients, initialValues, mode = "add", pa
       return;
     }
 
-    onSubmit({ patientId, medicines });
+    setIsSubmitting(true);
+    try {
+      await onSubmit({ patientId, medicines });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const addMedicineBlock = () => {
@@ -217,7 +224,7 @@ export default function ScheduleForm({ patients, initialValues, mode = "add", pa
       )}
 
       <FormStickyActions>
-        <Button size="sm" type="submit">
+        <Button size="sm" type="submit" loading={isSubmitting}>
           {mode === "edit" ? "Simpan Obat" : "Simpan Jadwal"}
         </Button>
       </FormStickyActions>

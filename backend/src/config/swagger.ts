@@ -44,4 +44,15 @@ const options: swaggerJsdoc.Options = {
   apis: ['./src/app.ts', './src/routes/*.ts'], // Path ke dokumentasi API
 };
 
-export const swaggerSpec = swaggerJsdoc(options);
+const spec = swaggerJsdoc(options) as { paths?: Record<string, unknown> };
+
+if (spec.paths) {
+  spec.paths = Object.fromEntries(
+    Object.entries(spec.paths).map(([path, value]) => [
+      path.startsWith('/api/') ? path.replace('/api/', '/api/v1/') : path,
+      value,
+    ]),
+  );
+}
+
+export const swaggerSpec = spec;

@@ -2,6 +2,7 @@ import { AlertTriangle, CalendarClock, CheckCircle2, UserRound, UsersRound } fro
 import type { SummaryCardItem } from "@/components/ui/SummaryCard";
 import api from "@/lib/axios";
 import type { PatientRecord, PatientStatus } from "@/lib/mocks/patients";
+import { getNursesFromApi } from "@/lib/nurseApi";
 
 interface PatientListResponse {
   id: string;
@@ -97,23 +98,26 @@ export const getNurseDashboardData = async (): Promise<NurseDashboardData> => {
 
   return {
     stats: [
-      { label: "Total Pasien", value: String(totalPatients), helper: "", tone: "safe", color: "pine", icon: UsersRound },
-      { label: "Peringatan Kritis", value: String(criticalAlerts), helper: warningAlerts > 0 ? `${warningAlerts} peringatan aktif` : "", tone: criticalAlerts > 0 ? "critical" : "safe", color: "lime", icon: AlertTriangle },
-      { label: "Kepatuhan Keseluruhan", value: criticalAlerts > 0 ? "Perlu dicek" : "Stabil", helper: "Berdasarkan alert aktif", tone: criticalAlerts > 0 ? "warning" : "safe", color: "leaf", icon: CheckCircle2, progress: criticalAlerts > 0 ? 67 : 90 },
+      { label: "Total Pasien Saya", value: String(totalPatients), helper: "", tone: "safe", color: "pine", icon: UsersRound },
+      { label: "Peringatan Pasien Kritis", value: String(criticalAlerts), helper: warningAlerts > 0 ? `${warningAlerts} peringatan aktif` : "", tone: criticalAlerts > 0 ? "critical" : "safe", color: "lime", icon: AlertTriangle },
+      { label: "Kepatuhan Pasien Keseluruhan", value: criticalAlerts > 0 ? "Perlu dicek" : "Stabil", helper: "Berdasarkan alert aktif", tone: criticalAlerts > 0 ? "warning" : "safe", color: "leaf", icon: CheckCircle2, progress: criticalAlerts > 0 ? 67 : 90 },
     ],
     patients,
   };
 };
 
 export const getAdminDashboardStats = async (): Promise<AdminDashboardStatsData> => {
-  const response = await api.get<{ data: AggregateAdherenceResponse }>("/adherence/aggregate", { params: { period: "30d" } });
+  const [response, nurses] = await Promise.all([
+    api.get<{ data: AggregateAdherenceResponse }>("/adherence/aggregate", { params: { period: "30d" } }),
+    getNursesFromApi(),
+  ]);
   const aggregate = response.data.data;
 
   return {
     stats: [
-      { label: "Total Perawat", value: "-", tone: "neutral", color: "pine", icon: UsersRound },
-      { label: "Total Pasien", value: String(aggregate.totalActivePatients), tone: "safe", color: "leaf", icon: UserRound },
-      { label: "Jadwal Aktif", value: String(aggregate.totalScheduled), tone: "neutral", color: "lime", icon: CalendarClock },
+      { label: "Total Perawat Saya", value: String(nurses.length), tone: "neutral", color: "pine", icon: UsersRound },
+      { label: "Total Pasien Saya", value: String(aggregate.totalActivePatients), tone: "safe", color: "leaf", icon: UserRound },
+      { label: "Jadwal Pasien Aktif", value: String(aggregate.totalScheduled), tone: "neutral", color: "lime", icon: CalendarClock },
     ],
   };
 };

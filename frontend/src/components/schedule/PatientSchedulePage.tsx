@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlarmClock, CalendarClock, CheckCircle2 } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
+import { ActivityDataSkeleton, SummaryCardsSkeleton } from "@/components/ui/PageSkeletons";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import type { SummaryCardItem } from "@/components/ui/SummaryCard";
 import { getDateKey, getMonthStart, getSchedulesForDate, isSameDate } from "@/helpers/patientSchedule";
@@ -22,8 +23,10 @@ export default function PatientSchedulePage() {
   const lastScan = usePatientDashboardStore((state) => state.lastScan);
   const confirmedScheduleDates = usePatientDashboardStore((state) => state.confirmedScheduleDates);
   const setConfirmedScheduleDates = usePatientDashboardStore((state) => state.setConfirmedScheduleDates);
+  const setPatientId = usePatientDashboardStore((state) => state.setPatientId);
   const confirmScheduleForDate = usePatientDashboardStore((state) => state.confirmScheduleForDate);
   const [patientSchedules, setPatientSchedules] = useState<MedicationScheduleRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
@@ -31,19 +34,24 @@ export default function PatientSchedulePage() {
     getPatientDashboardData()
       .then((data) => {
         if (!isMounted) return;
+        setPatientId(data.patient.id);
         setPatientSchedules(data.schedules);
         setConfirmedScheduleDates(getConfirmedScheduleDates(data.medicationLogs));
       })
       .catch(() => {
         if (!isMounted) return;
+        setPatientId(null);
         setPatientSchedules([]);
         setConfirmedScheduleDates({});
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
       });
 
     return () => {
       isMounted = false;
     };
-  }, [setConfirmedScheduleDates]);
+  }, [setConfirmedScheduleDates, setPatientId]);
   const schedulesForSelectedDate = useMemo(() => getSchedulesForDate(patientSchedules, selectedDate), [patientSchedules, selectedDate]);
   const selectedDateKey = getDateKey(selectedDate);
   const confirmedScheduleIds = confirmedScheduleDates[selectedDateKey] ?? [];
@@ -62,7 +70,7 @@ export default function PatientSchedulePage() {
     },
     {
       label: "Total Selesai",
-      value: String(completedScheduleCount),
+      value: `${completedScheduleCount}/${activeSchedules.length}`,
       tone: "safe",
       color: "leaf",
       icon: CheckCircle2,
@@ -110,33 +118,33 @@ export default function PatientSchedulePage() {
   return (
     <DashboardPageShell>
       <DashboardPageHeader title="Jadwal Obat" />
-      <SummaryCardGrid stats={scheduleStats} />
+      {isLoading ? <SummaryCardsSkeleton /> : <SummaryCardGrid stats={scheduleStats} />}
+
+      <div className="mt-6 space-y-6">
+        {isLoading ? <ActivityDataSkeleton rows={3} /> : <PatientDailyMedicineList
+          selectedDate={selectedDate}
+          schedules={schedulesForSelectedDate}
+          canConfirm={Boolean(lastScan)}
+          confirmedScheduleIds={confirmedScheduleIds}
+          onConfirm={(schedule) => handleConfirmSchedule(schedule.id)}
+        />}
+      </div>
 
       <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(340px,0.72fr)]">
-        <PatientMedicationCalendar
+        {isLoading ? <ActivityDataSkeleton rows={6} /> : <PatientMedicationCalendar
           month={visibleMonth}
           selectedDate={selectedDate}
           schedules={patientSchedules}
           confirmedScheduleDates={confirmedScheduleDates}
           onMonthChange={setVisibleMonth}
           onDateSelect={handleDateSelect}
-        />
-        <PatientScheduleDaySummary
+        />}
+        {isLoading ? <ActivityDataSkeleton rows={4} /> : <PatientScheduleDaySummary
           selectedDate={selectedDate}
           schedulesForDate={schedulesForSelectedDate}
           allSchedules={patientSchedules}
           confirmedScheduleDates={confirmedScheduleDates}
-        />
-      </div>
-
-      <div className="mt-6 space-y-6">
-        <PatientDailyMedicineList
-          selectedDate={selectedDate}
-          schedules={schedulesForSelectedDate}
-          canConfirm={Boolean(lastScan)}
-          confirmedScheduleIds={confirmedScheduleIds}
-          onConfirm={(schedule) => handleConfirmSchedule(schedule.id)}
-        />
+        />}
       </div>
     </DashboardPageShell>
   );

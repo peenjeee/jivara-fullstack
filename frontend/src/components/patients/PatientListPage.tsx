@@ -6,6 +6,7 @@ import { Plus } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import Button from "@/components/ui/Button";
+import { TableDataSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
 import AddPatientModal from "./AddPatientModal";
 import PatientPagination from "./PatientPagination";
 import PatientTable from "./PatientTable";
@@ -37,14 +38,14 @@ export default function PatientListPage({ mode = "manage" }: PatientListPageProp
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
       >
-        <PatientToolbar
+        {patientList.isLoading ? <ToolbarSkeleton /> : <PatientToolbar
           search={patientList.search}
           activeFilter={patientList.activeFilter}
           hasActiveFilters={Boolean(patientList.search || patientList.activeFilter !== "all")}
           onSearchChange={patientList.handleSearchChange}
           onFilterChange={patientList.handleFilterChange}
           onReset={patientList.resetFilters}
-        />
+        />}
       </motion.div>
 
       <motion.div
@@ -53,14 +54,12 @@ export default function PatientListPage({ mode = "manage" }: PatientListPageProp
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.18 }}
       >
-        <PatientTable patients={patientList.paginatedPatients} actions={mode === "readonly" ? ["view"] : ["view", "edit", "delete"]} onAction={patientList.handlePatientAction} embedded emptyMessage="Tidak ada data pasien." assignedNurseByPatientId={mode === "readonly" ? patientList.assignedNurseByPatientId : undefined} />
-        <PatientPagination
-          currentPage={patientList.currentPage}
-          totalPages={patientList.totalPages}
-          totalItems={patientList.filteredPatients.length}
-          pageSize={10}
-          onPageChange={patientList.setCurrentPage}
-        />
+        {patientList.isLoading ? <TableDataSkeleton /> : (
+          <>
+            <PatientTable patients={patientList.paginatedPatients} actions={mode === "readonly" ? ["view"] : ["view", "edit", "delete"]} processingAction={patientList.processingAction} onAction={patientList.handlePatientAction} embedded emptyMessage="Tidak ada data pasien." assignedNurseByPatientId={mode === "readonly" ? patientList.assignedNurseByPatientId : undefined} />
+            <PatientPagination currentPage={patientList.currentPage} totalPages={patientList.totalPages} totalItems={patientList.filteredPatients.length} pageSize={10} onPageChange={patientList.setCurrentPage} />
+          </>
+        )}
       </motion.div>
       {mode === "manage" && <AddPatientModal isOpen={patientList.isAddModalOpen} onClose={() => patientList.setIsAddModalOpen(false)} onSubmit={patientList.handleAddPatient} />}
       <AddPatientModal

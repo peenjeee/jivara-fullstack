@@ -34,10 +34,10 @@ export default function AdminApprovalsPage() {
   const approvals = useAdminApprovals(hasAuthHydrated && role === "super_admin");
 
   const stats = [
-    { label: "Menunggu", value: String(approvals.summary.pending), tone: approvals.summary.pending ? "critical" as const : "safe" as const, color: "lime" as const, icon: Clock3 },
-    { label: "Diterima", value: String(approvals.summary.active), tone: "safe" as const, color: "leaf" as const, icon: CheckCircle2 },
-    { label: "Tolak", value: String(approvals.summary.rejected), tone: approvals.summary.rejected ? "critical" as const : "neutral" as const, color: "danger" as const, icon: Ban },
-    { label: "Suspend", value: String(approvals.summary.suspended), tone: approvals.summary.suspended ? "critical" as const : "neutral" as const, color: "pine" as const, icon: PauseCircle },
+    { label: "Menunggu Diterima", value: String(approvals.summary.pending), tone: approvals.summary.pending ? "critical" as const : "safe" as const, color: "lime" as const, icon: Clock3 },
+    { label: "Akun Diterima", value: String(approvals.summary.active), tone: "safe" as const, color: "leaf" as const, icon: CheckCircle2 },
+    { label: "Akun Ditolak", value: String(approvals.summary.rejected), tone: approvals.summary.rejected ? "critical" as const : "neutral" as const, color: "danger" as const, icon: Ban },
+    { label: "Akun Disuspend", value: String(approvals.summary.suspended), tone: approvals.summary.suspended ? "critical" as const : "neutral" as const, color: "pine" as const, icon: PauseCircle },
   ];
 
   useEffect(() => {
@@ -58,7 +58,7 @@ export default function AdminApprovalsPage() {
       <motion.div className="mt-6" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: 0.12 }}>
         <ToolbarCard>
           <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
-            <SearchField id="adminApprovalSearch" value={approvals.search} placeholder="Cari admin ..." onChange={(value) => { approvals.setSearch(value); approvals.setCurrentPage(1); }} />
+            <SearchField id="adminApprovalSearch" value={approvals.search} placeholder="Cari akun admin ..." onChange={(value) => { approvals.setSearch(value); approvals.setCurrentPage(1); }} />
             {(approvals.search || approvals.filter !== "pending") && <Button type="button" size="sm" variant="outline" onClick={approvals.resetFilters}>Reset</Button>}
           </div>
           <FilterPills options={approvalFilters} activeValue={approvals.filter} onChange={(value) => { approvals.setFilter(value); approvals.setCurrentPage(1); }} className="mt-4" />
@@ -101,8 +101,8 @@ function ApprovalList({ approvals, activeFilter, processingId, onApprove, onActi
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
-            {approvals.map((user) => (
-              <tr key={user.id} className="transition-colors hover:bg-surface/60">
+            {approvals.map((user, index) => (
+              <tr key={`approval-row-${user.id}-${index}`} className="transition-colors hover:bg-surface/60">
                 <td className="px-5 py-4 font-extrabold text-text-main">{user.fullName}</td>
                 <td className="px-5 py-4 text-sm font-bold text-muted"><span className="block text-text-main">{user.email}</span>{user.phone ?? "-"}</td>
                 <td className="px-5 py-4"><AccountStatusBadge status={user.accountStatus} /></td>
@@ -115,8 +115,8 @@ function ApprovalList({ approvals, activeFilter, processingId, onApprove, onActi
       </div>
 
       <div className="divide-y divide-line sm:hidden">
-        {approvals.map((user) => (
-          <article key={user.id} className="p-5">
+        {approvals.map((user, index) => (
+          <article key={`approval-card-${user.id}-${index}`} className="p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="break-words font-display text-xl font-extrabold tracking-[-0.04em] text-text-main">{user.fullName}</h2>
               <AccountStatusBadge status={user.accountStatus} />
@@ -152,7 +152,7 @@ function ApprovalActions({ user, processingId, onApprove, onActivate, onSuspend,
   if ((user.accountStatus ?? "active") === "active") {
     return (
       <div className="flex flex-wrap gap-2 sm:justify-end">
-        <IconActionButton label={`Suspend ${user.fullName}`} tone="warning" disabled={processingId === user.id} onClick={() => onSuspend(user)}><PauseCircle size={16} /></IconActionButton>
+        <IconActionButton label={`Suspend ${user.fullName}`} tone="warning" loading={processingId === user.id} disabled={Boolean(processingId)} onClick={() => onSuspend(user)}><PauseCircle size={16} /></IconActionButton>
       </div>
     );
   }
@@ -160,7 +160,7 @@ function ApprovalActions({ user, processingId, onApprove, onActivate, onSuspend,
   if (user.accountStatus === "suspended") {
     return (
       <div className="flex flex-wrap gap-2 sm:justify-end">
-        <IconActionButton label={`Aktifkan kembali ${user.fullName}`} tone="blue" disabled={processingId === user.id} onClick={() => onActivate(user)}><Power size={16} /></IconActionButton>
+        <IconActionButton label={`Aktifkan kembali ${user.fullName}`} tone="blue" loading={processingId === user.id} disabled={Boolean(processingId)} onClick={() => onActivate(user)}><Power size={16} /></IconActionButton>
       </div>
     );
   }
@@ -168,7 +168,7 @@ function ApprovalActions({ user, processingId, onApprove, onActivate, onSuspend,
   if (user.accountStatus === "rejected") {
     return (
       <div className="flex flex-wrap gap-2 sm:justify-end">
-        <IconActionButton label={`Pulihkan ${user.fullName}`} tone="warning" disabled={processingId === user.id} onClick={() => onRestore(user)}><RotateCcw size={16} /></IconActionButton>
+        <IconActionButton label={`Pulihkan ${user.fullName}`} tone="warning" loading={processingId === user.id} disabled={Boolean(processingId)} onClick={() => onRestore(user)}><RotateCcw size={16} /></IconActionButton>
       </div>
     );
   }
@@ -179,8 +179,8 @@ function ApprovalActions({ user, processingId, onApprove, onActivate, onSuspend,
 
   return (
     <div className="flex flex-wrap gap-2 sm:justify-end">
-      <IconActionButton label={`Setujui ${user.fullName}`} tone="primary" disabled={processingId === user.id} onClick={() => onApprove(user)}><CheckCircle2 size={17} /></IconActionButton>
-      <IconActionButton label={`Tolak ${user.fullName}`} tone="danger" disabled={processingId === user.id} onClick={() => onReject(user)}><XCircle size={17} /></IconActionButton>
+      <IconActionButton label={`Setujui ${user.fullName}`} tone="primary" loading={processingId === user.id} disabled={Boolean(processingId)} onClick={() => onApprove(user)}><CheckCircle2 size={17} /></IconActionButton>
+      <IconActionButton label={`Tolak ${user.fullName}`} tone="danger" disabled={Boolean(processingId)} onClick={() => onReject(user)}><XCircle size={17} /></IconActionButton>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { BellRing, Pill, ShieldCheck } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
+import { SummaryCardsSkeleton } from "@/components/ui/PageSkeletons";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import type { SummaryCardItem } from "@/components/ui/SummaryCard";
 import type { PatientRecord } from "@/lib/mocks/patients";
@@ -26,9 +27,11 @@ const initialPatient: PatientRecord = {
 
 export default function PatientDashboardPage() {
   const lastScan = usePatientDashboardStore((state) => state.lastScan);
+  const setPatientId = usePatientDashboardStore((state) => state.setPatientId);
   const { isSplashFinished } = useSplashScreen();
   const [patient, setPatient] = useState<PatientRecord>(initialPatient);
   const [patientSchedules, setPatientSchedules] = useState<MedicationScheduleRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
@@ -37,18 +40,23 @@ export default function PatientDashboardPage() {
       .then((data) => {
         if (!isMounted) return;
         setPatient(data.patient);
+        setPatientId(data.patient.id);
         setPatientSchedules(data.schedules);
       })
       .catch(() => {
         if (!isMounted) return;
         setPatient(initialPatient);
+        setPatientId(null);
         setPatientSchedules([]);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
       });
 
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [setPatientId]);
 
   if (!isSplashFinished) return null;
 
@@ -84,7 +92,7 @@ export default function PatientDashboardPage() {
   return (
     <DashboardPageShell>
       <DashboardPageHeader title={`${greeting}, ${patient.name}`} />
-      <SummaryCardGrid stats={stats} />
+      {isLoading ? <SummaryCardsSkeleton /> : <SummaryCardGrid stats={stats} />}
 
       <div className="mt-6 space-y-6">
         <PatientAdherenceHeatmap adherence={patient.adherence} />

@@ -59,11 +59,30 @@ const mapFormValuesToPayload = (values: NurseFormValues) => ({
   ...(values.password ? { password: values.password } : {}),
 });
 
-export const getNursesFromApi = async (): Promise<NurseRecord[]> => {
-  const response = await api.get<PaginatedResponse<NurseResponse>>("/nurses", { params: { limit: 100 } });
-  const nurses = response.data.data.map(mapNurse);
+let nursesCache: { data: NurseRecord[]; expiresAt: number } | null = null;
+let nursesRequest: Promise<NurseRecord[]> | null = null;
 
-  return nurses;
+export const clearNursesCache = () => {
+  nursesCache = null;
+  nursesRequest = null;
+};
+
+export const getNursesFromApi = async (): Promise<NurseRecord[]> => {
+  const now = Date.now();
+  if (nursesCache && nursesCache.expiresAt > now) return nursesCache.data;
+  if (nursesRequest) return nursesRequest;
+
+  nursesRequest = api.get<PaginatedResponse<NurseResponse>>("/nurses", { params: { limit: 100 } })
+    .then((response) => {
+      const nurses = response.data.data.map(mapNurse);
+      nursesCache = { data: nurses, expiresAt: Date.now() + 30_000 };
+      return nurses;
+    })
+    .finally(() => {
+      nursesRequest = null;
+    });
+
+  return nursesRequest;
 };
 
 const resolveNurseId = async (nurseId: string, values?: Pick<NurseFormValues, "email" | "phone">) => {
@@ -84,6 +103,7 @@ const resolveNurseId = async (nurseId: string, values?: Pick<NurseFormValues, "e
 export const createNurseViaApi = async (values: NurseFormValues): Promise<NurseRecord> => {
   const response = await api.post<SingleNurseResponse<NurseResponse>>("/nurses", mapFormValuesToPayload(values));
   const createdNurse = mapNurse(response.data.data);
+  clearNursesCache();
 
   if (values.status === "Nonaktif") {
     const inactiveResponse = await api.put<SingleNurseResponse<NurseResponse>>(
@@ -99,10 +119,12 @@ export const createNurseViaApi = async (values: NurseFormValues): Promise<NurseR
 export const updateNurseViaApi = async (nurseId: string, values: NurseFormValues): Promise<NurseRecord> => {
   const resolvedNurseId = await resolveNurseId(nurseId, values);
   const response = await api.put<SingleNurseResponse<NurseResponse>>(`/nurses/${encodeURIComponent(resolvedNurseId)}`, mapFormValuesToPayload(values));
+  clearNursesCache();
   return { ...mapNurse(response.data.data), temporaryPassword: values.password ? true : false };
 };
 
 export const deactivateNurseViaApi = async (nurseId: string) => {
   const resolvedNurseId = await resolveNurseId(nurseId);
   await api.delete(`/nurses/${encodeURIComponent(resolvedNurseId)}`);
+  clearNursesCache();
 };

@@ -8,7 +8,7 @@ interface AddPatientModalProps {
   readonly initialValues?: Partial<AddPatientValues>;
   readonly mode?: "add" | "edit";
   readonly onClose: () => void;
-  readonly onSubmit: (values: AddPatientValues) => void;
+  readonly onSubmit: (values: AddPatientValues) => void | Promise<void>;
 }
 
 export default function AddPatientModal({ isOpen, initialValues, mode = "add", onClose, onSubmit }: AddPatientModalProps) {

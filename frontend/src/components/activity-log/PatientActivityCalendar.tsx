@@ -126,7 +126,7 @@ function CalendarDayCell({ day, index, isOverflowOpen, onToggleOverflow, onViewD
       </div>
 
       <div className="space-y-1">
-        {visibleActivities.map((activity) => <ActivityCalendarChip key={activity.id} activity={activity} onViewDetail={onViewDetail} />)}
+        {visibleActivities.map((activity, activityIndex) => <ActivityCalendarChip key={`${day.dateKey}-${activity.category}-${activity.id}-${activityIndex}`} activity={activity} onViewDetail={onViewDetail} />)}
 
         {overflowActivities.length > 0 && (
           <div className="relative">
@@ -144,7 +144,7 @@ function CalendarDayCell({ day, index, isOverflowOpen, onToggleOverflow, onViewD
                 transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
               >
                 <div className="space-y-1">
-                  {overflowActivities.map((activity) => <ActivityOverflowItem key={activity.id} activity={activity} onViewDetail={onViewDetail} />)}
+                  {overflowActivities.map((activity, activityIndex) => <ActivityOverflowItem key={`${day.dateKey}-overflow-${activity.category}-${activity.id}-${activityIndex}`} activity={activity} onViewDetail={onViewDetail} />)}
                 </div>
               </motion.div>
               )}

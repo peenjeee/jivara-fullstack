@@ -4,22 +4,20 @@ import { useState, type FormEvent } from "react";
 import { Home, Mail, Phone, Save, User } from "lucide-react";
 import AuthInput from "@/components/ui/AuthInput";
 import Button from "@/components/ui/Button";
-import { patients } from "@/lib/mocks/patients";
 import { updateProfileViaApi } from "@/lib/profileApi";
 import { showToast, showWarning } from "@/lib/swal";
 import { useAuthStore } from "@/store/auth";
 
-const mockPatient = patients[0];
 const numericPhone = (value: string | null | undefined) => (value ?? "").replace(/\D/g, "");
 
 export default function PatientProfileSettingsForm() {
   const { user, setAuth } = useAuthStore();
-  const [fullName, setFullName] = useState(user?.fullName ?? mockPatient.name);
-  const [phone, setPhone] = useState(numericPhone(user?.phone ?? mockPatient.phone));
-  const [address, setAddress] = useState(user?.address ?? mockPatient.address ?? "");
-  const email = user?.email ?? mockPatient.email ?? "Belum tersedia";
-  const age = user?.age || mockPatient.age;
-  const gender = user?.gender ?? mockPatient.gender;
+  const [fullName, setFullName] = useState(user?.fullName ?? "");
+  const [phone, setPhone] = useState(numericPhone(user?.phone));
+  const [address, setAddress] = useState(user?.address ?? "");
+  const email = user?.email ?? "Belum tersedia";
+  const age = user?.age ?? 0;
+  const gender = user?.gender ?? "Belum tersedia";
   const [isSaving, setIsSaving] = useState(false);
 
   const updatePhone = (value: string) => {

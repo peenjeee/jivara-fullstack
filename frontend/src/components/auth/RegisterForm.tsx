@@ -79,7 +79,7 @@ export default function RegisterForm() {
       footer={
         <p className="text-muted font-body">
           Sudah punya akun?{" "}
-          <Link href="/login" prefetch className="font-bold underline hover-text-primary transition-colors hover:text-primary-dark">
+          <Link href="/login" prefetch className="font-bold !text-primary underline transition-colors hover:!text-primary-dark">
             Masuk
           </Link>
         </p>

@@ -142,6 +142,7 @@ const mapPatient = (patient: PatientListResponse, adherence = 100): PatientRecor
   lastVisit: formatDate(patient.createdAt),
   adherence,
   avatar: getInitials(patient.fullName || patient.user?.fullName || "-"),
+  assignedNurseId: patient.assignedNurseId ?? undefined,
 });
 
 const mapMedication = (patient: PatientRecord, medication: NonNullable<PatientDetailResponse["activeMedications"]>[number]): MedicationScheduleRecord => {

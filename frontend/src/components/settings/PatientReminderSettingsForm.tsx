@@ -3,12 +3,14 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Save } from "lucide-react";
 import Button from "@/components/ui/Button";
+import { FormDataSkeleton } from "@/components/ui/PageSkeletons";
 import { enableMedicationPushNotifications, getMedicationPushPreference, setMedicationPushPreference } from "@/lib/pushNotifications";
 import { showToast } from "@/lib/swal";
 import ToggleRow from "./ToggleRow";
 
 export default function PatientReminderSettingsForm() {
   const [medicineReminder, setMedicineReminder] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -20,6 +22,9 @@ export default function PatientReminderSettingsForm() {
       })
       .catch(() => {
         if (isMounted) setMedicineReminder(false);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
       });
 
     return () => {
@@ -47,7 +52,7 @@ export default function PatientReminderSettingsForm() {
     }
   };
 
-  return (
+  return isLoading ? <FormDataSkeleton /> : (
     <form onSubmit={handleSubmit} className="space-y-4" noValidate>
       <ToggleRow
         id="medicineReminder"
@@ -57,7 +62,7 @@ export default function PatientReminderSettingsForm() {
         onChange={setMedicineReminder}
       />
       <div className="flex justify-end pt-2">
-        <Button type="submit" icon={<Save size={18} />} disabled={isSaving}>{isSaving ? "Menyimpan..." : "Simpan"}</Button>
+        <Button type="submit" icon={<Save size={18} />} loading={isSaving}>Simpan</Button>
       </div>
     </form>
   );

@@ -4,17 +4,18 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "motion/react";
 import { getUnreadActivityCount } from "@/helpers/activityLogs";
-import { patients } from "@/lib/mocks/patients";
 import { useActivityLogStore } from "@/store/activityLog";
 import { useAuthStore } from "@/store/auth";
+import { usePatientDashboardStore } from "@/store/patientDashboard";
 import { getDashboardBottomNavItems, getDashboardRole, isAdminDashboardRole } from "./navigation";
 
 export default function DashboardBottomNav() {
   const pathname = usePathname();
   const userRole = useAuthStore((state) => state.user?.role);
+  const patientId = usePatientDashboardStore((state) => state.patientId);
   const hasAuthHydrated = useAuthStore((state) => state.hasHydrated);
   const dashboardRole = getDashboardRole(userRole);
-  const unreadActivityCount = useActivityLogStore((state) => isAdminDashboardRole(dashboardRole) ? 0 : getUnreadActivityCount(state.activities, dashboardRole === "patient" ? patients[0].id : undefined));
+  const unreadActivityCount = useActivityLogStore((state) => isAdminDashboardRole(dashboardRole) ? 0 : getUnreadActivityCount(state.activities, dashboardRole === "patient" ? patientId ?? undefined : undefined));
   const bottomNavItems = getDashboardBottomNavItems(dashboardRole);
   const columnCount = bottomNavItems.length;
 

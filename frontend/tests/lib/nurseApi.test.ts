@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import api from "@/lib/axios";
-import { createNurseViaApi, deactivateNurseViaApi, getNursesFromApi, updateNurseViaApi } from "@/lib/nurseApi";
+import { clearNursesCache, createNurseViaApi, deactivateNurseViaApi, getNursesFromApi, updateNurseViaApi } from "@/lib/nurseApi";
 import type { NurseFormValues } from "@/store/nurses";
 
 vi.mock("@/lib/axios", () => ({
@@ -25,6 +25,7 @@ describe("nurseApi", () => {
     mockedPost.mockReset();
     mockedPut.mockReset();
     mockedDelete.mockReset();
+    clearNursesCache();
   });
 
   it("maps nurse list response", async () => {

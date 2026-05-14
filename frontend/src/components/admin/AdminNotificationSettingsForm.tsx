@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Save } from "lucide-react";
 import Button from "@/components/ui/Button";
+import { FormDataSkeleton } from "@/components/ui/PageSkeletons";
 import { getUserNotificationPreferenceFromApi, updateUserNotificationPreferenceViaApi, type UserNotificationPreferenceKey } from "@/lib/notificationSettingsApi";
 import { showToast } from "@/lib/swal";
 import { useAuthStore } from "@/store/auth";
@@ -13,6 +14,7 @@ export default function AdminNotificationSettingsForm() {
   const isSuperAdmin = role === "super_admin";
   const preferenceKey: UserNotificationPreferenceKey = isSuperAdmin ? "super_admin_approval" : "admin_critical_activity";
   const [notificationEnabled, setNotificationEnabled] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -24,6 +26,9 @@ export default function AdminNotificationSettingsForm() {
       })
       .catch(() => {
         if (isMounted) setNotificationEnabled(true);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
       });
 
     return () => {
@@ -45,7 +50,7 @@ export default function AdminNotificationSettingsForm() {
     }
   };
 
-  return (
+  return isLoading ? <FormDataSkeleton /> : (
     <form onSubmit={handleSubmit} className="space-y-4" noValidate>
       <ToggleRow
         id={isSuperAdmin ? "superAdminApprovalNotification" : "adminCriticalActivity"}
@@ -55,7 +60,7 @@ export default function AdminNotificationSettingsForm() {
         onChange={setNotificationEnabled}
       />
       <div className="flex justify-end pt-2">
-        <Button type="submit" icon={<Save size={18} />} disabled={isSaving}>{isSaving ? "Menyimpan..." : "Simpan"}</Button>
+        <Button type="submit" icon={<Save size={18} />} loading={isSaving}>Simpan</Button>
       </div>
     </form>
   );

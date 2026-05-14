@@ -15,7 +15,7 @@ export interface DashboardStat {
 
 export const dashboardStats: DashboardStat[] = [
   {
-    label: "Total Pasien",
+    label: "Total Pasien Saya",
     value: "0",
     helper: "",
     tone: "safe",
@@ -23,7 +23,7 @@ export const dashboardStats: DashboardStat[] = [
     icon: UsersRound,
   },
   {
-    label: "Peringatan Kritis",
+    label: "Peringatan Pasien Kritis",
     value: "0",
     helper: "",
     tone: "critical",
@@ -31,7 +31,7 @@ export const dashboardStats: DashboardStat[] = [
     icon: AlertTriangle,
   },
   {
-    label: "Kepatuhan Keseluruhan",
+    label: "Kepatuhan Pasien Keseluruhan",
     value: "0%",
     helper: "",
     tone: "safe",

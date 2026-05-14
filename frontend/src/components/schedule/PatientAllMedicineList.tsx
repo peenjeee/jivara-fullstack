@@ -27,7 +27,7 @@ export default function PatientAllMedicineList({ schedules }: PatientAllMedicine
       </div>
 
       <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {schedules.length > 0 ? schedules.map((schedule, index) => <MedicineReadOnlyCard key={schedule.id} schedule={schedule} index={index} />) : <EmptyState title="Belum ada obat." description="Obat aktif akan tampil di sini setelah dijadwalkan." className="shadow-none" />}
+        {schedules.length > 0 ? schedules.map((schedule, index) => <MedicineReadOnlyCard key={`all-medicine-${schedule.id}-${index}`} schedule={schedule} index={index} />) : <EmptyState title="Belum ada obat." description="Obat aktif akan tampil di sini setelah dijadwalkan." className="shadow-none" />}
       </div>
     </motion.section>
   );

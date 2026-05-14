@@ -29,8 +29,8 @@ export default function PatientRecentActivity({ activities, patientName }: Patie
     >
       {latestActivities.length > 0 ? (
         <div className="space-y-3">
-          {latestActivities.map((activity) => (
-            <article key={activity.id} className="rounded-3xl bg-surface p-4">
+          {latestActivities.map((activity, index) => (
+            <article key={`${activity.category}-${activity.id}-${index}`} className="rounded-3xl bg-surface p-4">
               <div className="flex gap-3">
                 <ActivityCategoryIcon category={activity.category} />
                 <div className="min-w-0 flex-1">

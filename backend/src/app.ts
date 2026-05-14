@@ -20,6 +20,7 @@ import notificationRoutes from './routes/notification.routes';
 import auditLogRoutes from './routes/audit-log.routes';
 import nurseRoutes from './routes/nurse.routes';
 import alertRoutes from './routes/alert.routes';
+import publicStatsRoutes from './routes/public-stats.routes';
 import { startMedicationReminderScheduler } from './services/medication-reminder-scheduler.service';
 
 const app = express();
@@ -86,6 +87,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
 
 const mountApiRoutes = (basePath: string) => {
   app.use(`${basePath}/auth`, authRoutes);
+  app.use(`${basePath}/public`, publicStatsRoutes);
   app.use(`${basePath}/patients`, patientRoutes);
   app.use(`${basePath}/nurses`, nurseRoutes);
   app.use(`${basePath}/prescriptions`, prescriptionRoutes);

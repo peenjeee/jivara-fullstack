@@ -222,7 +222,7 @@ export default function Hero() {
       >
         <h1 id="hero-title" className="font-display text-[clamp(28px,8vw,44px)] lg:text-[clamp(40px,6.4vw,76px)] font-extrabold leading-[1.1] lg:leading-[1.05] tracking-[-0.02em]">
           <motion.span
-            className="block text-primary"
+            className="block mb-3 lg:mb-5 text-primary"
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}
@@ -252,7 +252,7 @@ export default function Hero() {
           </motion.span>
         </h1>
         <motion.p
-          className="w-full max-w-[450px] lg:max-w-[560px] mt-4 lg:mt-7 text-muted text-base lg:text-[18px] font-normal leading-relaxed lg:leading-[1.6]"
+          className="w-full max-w-[450px] lg:max-w-[560px] pt-4 lg:pt-6 text-muted text-base lg:text-[18px] font-normal leading-relaxed lg:leading-[1.6]"
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: 0.5 }}

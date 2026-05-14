@@ -67,7 +67,7 @@ describe("auth login feature", () => {
     render(<LoginForm />);
 
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "nurse@test.local" } });
-    fireEvent.change(screen.getByLabelText(/kata sandi/i), { target: { value: "secret123" } });
+    fireEvent.change(screen.getByLabelText(/^kata sandi/i), { target: { value: "secret123" } });
     fireEvent.click(screen.getByRole("button", { name: /masuk/i }));
 
     await waitFor(() => expect(push).toHaveBeenCalledWith("/patients"));
@@ -82,7 +82,7 @@ describe("auth login feature", () => {
     render(<LoginForm />);
 
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "nurse@test.local" } });
-    fireEvent.change(screen.getByLabelText(/kata sandi/i), { target: { value: "wrong" } });
+    fireEvent.change(screen.getByLabelText(/^kata sandi/i), { target: { value: "wrong" } });
     fireEvent.click(screen.getByRole("button", { name: /masuk/i }));
 
     await waitFor(() => expect(showError).toHaveBeenCalledWith("Login gagal. Periksa kembali email dan kata sandi Anda."));

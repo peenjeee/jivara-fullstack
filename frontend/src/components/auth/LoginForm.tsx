@@ -112,7 +112,7 @@ export default function LoginForm() {
       footer={
         <p className="text-muted font-body">
           Belum punya akun?{" "}
-          <Link href="/register" prefetch className="font-bold underline hover-text-primary transition-colors hover:text-primary-dark">
+          <Link href="/register" prefetch className="font-bold !text-primary underline transition-colors hover:!text-primary-dark">
             Daftar
           </Link>
         </p>

@@ -78,8 +78,8 @@ function InteractionAnalysisCard({ interactions }: { readonly interactions: Food
       </div>
 
       <div className="space-y-3">
-        {interactions.map((interaction) => (
-          <article key={interaction.schedule.id} className="rounded-3xl bg-surface p-4">
+        {interactions.map((interaction, index) => (
+          <article key={`food-interaction-${interaction.schedule.id}-${index}`} className="rounded-3xl bg-surface p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">

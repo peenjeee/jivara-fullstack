@@ -7,12 +7,14 @@ import { AlertTriangle, Bell, CheckCheck, ClipboardList } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import Button from "@/components/ui/Button";
+import { ActivityDataSkeleton, SummaryCardsSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import { FoodScanDetailModal } from "@/components/food-scan";
 import { getActivityDateKey } from "@/helpers/activityLogs";
 import { activityMatchesNurse } from "@/helpers/nurses";
 import { getAlertActivitiesFromApi, resolveAlertViaApi } from "@/lib/alertsApi";
 import { getAuditActivitiesFromApi } from "@/lib/auditLogApi";
+import { getPatientsFromApi } from "@/lib/patientApi";
 import type { ActivityCategory, ActivityLogRecord } from "@/lib/mocks/activityLogs";
 import { showToast } from "@/lib/swal";
 import { useActivityLogStore } from "@/store/activityLog";
@@ -34,7 +36,6 @@ export default function ActivityLogPage({ initialPatientName = "", initialCatego
   const activities = useActivityLogStore((state) => state.activities);
   const setActivities = useActivityLogStore((state) => state.setActivities);
   const nurses = useNurseStore((state) => state.nurses);
-  const assignments = useNurseStore((state) => state.assignments);
   const markActivityAsRead = useActivityLogStore((state) => state.markAsRead);
   const markAllActivitiesAsRead = useActivityLogStore((state) => state.markAllAsRead);
   const [search, setSearch] = useState(initialPatientName);
@@ -45,6 +46,8 @@ export default function ActivityLogPage({ initialPatientName = "", initialCatego
   const [visibleCount, setVisibleCount] = useState(loadBatchSize);
   const [selectedActivity, setSelectedActivity] = useState<ActivityLogRecord | null>(null);
   const [selectedFoodScanId, setSelectedFoodScanId] = useState<string | null>(null);
+  const [patientAssignments, setPatientAssignments] = useState<Record<string, string>>({});
+  const [isLoading, setIsLoading] = useState(true);
   const deferredSearch = useDeferredValue(search);
 
   useEffect(() => {
@@ -54,12 +57,17 @@ export default function ActivityLogPage({ initialPatientName = "", initialCatego
       ? Promise.all([getAuditActivitiesFromApi(), getAlertActivitiesFromApi()]).then(([auditActivities, alertActivities]) => [...alertActivities, ...auditActivities])
       : getAlertActivitiesFromApi();
 
-    activityRequest
-      .then((nextActivities) => {
-        if (isMounted) setActivities(nextActivities);
+    Promise.all([activityRequest, getPatientsFromApi()])
+      .then(([nextActivities, patients]) => {
+        if (!isMounted) return;
+        setActivities(nextActivities);
+        setPatientAssignments(Object.fromEntries(patients.flatMap((patient) => patient.assignedNurseId ? [[patient.id, patient.assignedNurseId]] : [])));
       })
       .catch(() => {
         if (isMounted) setActivities([]);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
       });
 
     return () => {
@@ -95,13 +103,13 @@ export default function ActivityLogPage({ initialPatientName = "", initialCatego
           || (quickFilter === "critical" && activity.severity === "Kritis")
           || (quickFilter === "warning" && activity.severity === "Peringatan");
         const matchesCategory = category === "all" || activity.category === category;
-        const matchesNurse = nurseId === "all" || activityMatchesNurse(activity, assignments, nurseId);
+        const matchesNurse = nurseId === "all" || activityMatchesNurse(activity, patientAssignments, nurseId);
         const matchesDate = !date || getActivityDateKey(activity.timestamp) === date;
 
         return matchesSearch && matchesQuickFilter && matchesCategory && matchesNurse && matchesDate;
       })
       .sort((first, second) => new Date(second.timestamp).getTime() - new Date(first.timestamp).getTime());
-  }, [activities, assignments, category, date, deferredSearch, nurseId, quickFilter]);
+  }, [activities, category, date, deferredSearch, nurseId, patientAssignments, quickFilter]);
 
   const hasUnread = activities.some((activity) => !activity.read);
   const hasActiveFilters = Boolean(search || quickFilter !== "all" || category !== "all" || nurseId !== "all" || date);
@@ -174,7 +182,7 @@ export default function ActivityLogPage({ initialPatientName = "", initialCatego
         )}
       />
 
-      <SummaryCardGrid stats={summaryStats} />
+      {isLoading ? <SummaryCardsSkeleton /> : <SummaryCardGrid stats={summaryStats} />}
 
       <motion.div
         className="mt-6"
@@ -182,7 +190,7 @@ export default function ActivityLogPage({ initialPatientName = "", initialCatego
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: 0.32 }}
       >
-        <ActivityToolbar
+        {isLoading ? <ToolbarSkeleton /> : <ActivityToolbar
           search={search}
           quickFilter={quickFilter}
           category={category}
@@ -196,7 +204,7 @@ export default function ActivityLogPage({ initialPatientName = "", initialCatego
           onNurseChange={(value) => { setNurseId(value); setVisibleCount(loadBatchSize); }}
           onDateChange={handleDateChange}
           onReset={resetFilters}
-        />
+        />}
       </motion.div>
 
       <motion.div
@@ -205,14 +213,14 @@ export default function ActivityLogPage({ initialPatientName = "", initialCatego
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.4 }}
       >
-        <ActivityFeed
+        {isLoading ? <ActivityDataSkeleton /> : <ActivityFeed
           activities={filteredActivities}
           visibleCount={visibleCount}
           readOnly={readOnly}
           onLoadMore={() => setVisibleCount((currentCount) => currentCount + loadBatchSize)}
           onMarkRead={markAsRead}
           onViewDetail={setSelectedActivity}
-        />
+        />}
       </motion.div>
 
       <ActivityDetailModal activity={selectedActivity} onClose={() => setSelectedActivity(null)} onViewFoodScan={viewFoodScan} onViewSchedule={viewSchedule} />

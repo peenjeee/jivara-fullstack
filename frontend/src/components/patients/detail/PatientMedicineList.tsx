@@ -15,8 +15,8 @@ export default function PatientMedicineList({ schedules }: PatientMedicineListPr
     <PatientDetailSection title="Jadwal Obat" delay={0.24}>
       {schedules.length > 0 ? (
         <div className="space-y-3">
-          {schedules.map((schedule) => (
-            <article key={schedule.id} className="rounded-3xl bg-surface p-4">
+          {schedules.map((schedule, index) => (
+            <article key={`patient-medicine-${schedule.id}-${index}`} className="rounded-3xl bg-surface p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                   <div className="mb-5 flex flex-wrap items-center gap-3">

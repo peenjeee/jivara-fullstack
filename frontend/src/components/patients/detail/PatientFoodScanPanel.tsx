@@ -32,8 +32,8 @@ export default function PatientFoodScanPanel({ scans, patientName }: PatientFood
     >
       {latestScans.length > 0 ? (
         <div className="space-y-3">
-          {latestScans.map((scan) => (
-            <article key={scan.id} className="rounded-3xl bg-surface p-4">
+          {latestScans.map((scan, index) => (
+            <article key={`patient-food-scan-${scan.id}-${index}`} className="rounded-3xl bg-surface p-4">
               <div className="flex items-start gap-3">
                 <div className={`inline-flex h-11 w-8 shrink-0 items-start justify-center pt-0.5 ${riskClass[scan.risk]}`}>
                   <ShieldAlert size={20} strokeWidth={2.4} />

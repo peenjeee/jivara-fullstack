@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Bell, ClipboardList, Siren, TrendingUp } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
+import { DetailDataSkeleton } from "@/components/ui/PageSkeletons";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import type { PatientDetailData } from "@/helpers/patientDetails";
 import { getPatientSummary } from "@/helpers/patientDetails";
@@ -25,6 +26,7 @@ interface PatientDetailPageProps {
 
 export default function PatientDetailPage({ data, patientId }: PatientDetailPageProps) {
   const [detailData, setDetailData] = useState(data);
+  const [isLoading, setIsLoading] = useState(Boolean(patientId));
 
   useEffect(() => {
     if (!patientId) return;
@@ -37,6 +39,9 @@ export default function PatientDetailPage({ data, patientId }: PatientDetailPage
       })
       .catch(() => {
         if (isMounted) setDetailData(data);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
       });
 
     return () => {
@@ -84,13 +89,14 @@ export default function PatientDetailPage({ data, patientId }: PatientDetailPage
     
       />
 
+      {isLoading ? <DetailDataSkeleton /> : <>
       <PatientProfileHero patient={detailData.patient} />
       <SummaryCardGrid stats={stats} className="xl:!grid-cols-4" />
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.8fr)]">
         <div className="min-w-0 space-y-6">
-          <PatientAdherenceChart patient={detailData.patient} />
           <PatientMedicineList schedules={detailData.schedules} />
+          <PatientAdherenceChart patient={detailData.patient} />
         </div>
 
         <div className="min-w-0 space-y-6">
@@ -99,6 +105,7 @@ export default function PatientDetailPage({ data, patientId }: PatientDetailPage
           <PatientRecentActivity activities={detailData.activities} patientName={detailData.patient.name} />
         </div>
       </div>
+      </>}
     </DashboardPageShell>
   );
 }

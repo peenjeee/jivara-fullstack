@@ -83,8 +83,8 @@ export default function PatientScheduleDaySummary({ selectedDate, schedulesForDa
         </div>
 
         <div className="mt-4 space-y-2">
-          {allSchedules.length > 0 ? allSchedules.map((schedule) => (
-            <div key={schedule.id} className="flex items-center justify-between gap-3 rounded-2xl bg-surface px-4 py-3">
+          {allSchedules.length > 0 ? allSchedules.map((schedule, index) => (
+            <div key={`day-summary-schedule-${schedule.id}-${index}`} className="flex items-center justify-between gap-3 rounded-2xl bg-surface px-4 py-3">
               <p className="min-w-0 truncate text-sm font-extrabold text-text-main">{schedule.medicineName}</p>
               <button
                 type="button"

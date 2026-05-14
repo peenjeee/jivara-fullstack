@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import ActivityLogPage from "@/components/activity-log/ActivityLogPage";
 import { getAlertActivitiesFromApi, resolveAlertViaApi } from "@/lib/alertsApi";
 import { getAuditActivitiesFromApi } from "@/lib/auditLogApi";
+import { getPatientsFromApi } from "@/lib/patientApi";
 import { showToast } from "@/lib/swal";
 import { useActivityLogStore } from "@/store/activityLog";
 import { useNurseStore } from "@/store/nurses";
@@ -22,6 +23,10 @@ vi.mock("@/lib/alertsApi", () => ({
 
 vi.mock("@/lib/auditLogApi", () => ({
   getAuditActivitiesFromApi: vi.fn(),
+}));
+
+vi.mock("@/lib/patientApi", () => ({
+  getPatientsFromApi: vi.fn(),
 }));
 
 vi.mock("@/lib/swal", () => ({
@@ -50,14 +55,16 @@ describe("activity log feature", () => {
     push.mockClear();
     vi.mocked(getAlertActivitiesFromApi).mockReset();
     vi.mocked(getAuditActivitiesFromApi).mockReset();
+    vi.mocked(getPatientsFromApi).mockReset();
     vi.mocked(resolveAlertViaApi).mockReset();
     vi.mocked(showToast).mockClear();
     useActivityLogStore.setState({ activities: [] });
-    useNurseStore.setState({ nurses: [], assignments: {} });
+    useNurseStore.setState({ nurses: [] });
   });
 
   it("loads alert activities, filters critical items, and marks all as read", async () => {
     vi.mocked(getAlertActivitiesFromApi).mockResolvedValueOnce([activity]);
+    vi.mocked(getPatientsFromApi).mockResolvedValueOnce([]);
     vi.mocked(resolveAlertViaApi).mockResolvedValue(undefined);
 
     render(<ActivityLogPage />);
@@ -76,6 +83,7 @@ describe("activity log feature", () => {
   it("read-only mode combines audit and alert activities", async () => {
     vi.mocked(getAlertActivitiesFromApi).mockResolvedValueOnce([activity]);
     vi.mocked(getAuditActivitiesFromApi).mockResolvedValueOnce([{ ...activity, id: "audit-1", title: "Patient Updated", category: "Administrasi", severity: "Sukses", read: true }]);
+    vi.mocked(getPatientsFromApi).mockResolvedValueOnce([]);
 
     render(<ActivityLogPage readOnly />);
 

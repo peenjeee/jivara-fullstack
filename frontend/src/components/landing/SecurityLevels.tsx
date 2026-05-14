@@ -23,6 +23,7 @@ export default function SecurityLevels() {
         title="Tingkat"
         subtitle="Keamanan"
         description="Klasifikasi interaksi makanan dan obat yang konsisten untuk meminimalisir risiko medis dan efek samping."
+        className="lg:items-center"
       />
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:gap-x-[64px] lg:gap-y-[58px]">
         {levels.map((level) => (

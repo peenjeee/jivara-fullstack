@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Modal from "@/components/ui/Modal";
+import { ActivityDataSkeleton } from "@/components/ui/PageSkeletons";
 import type { FoodScanAnalysis } from "@/helpers/foodScans";
 import { getFoodScanAnalysisFromApi } from "@/lib/foodScanApi";
 import FoodScanAnalysisView from "./FoodScanAnalysisView";
@@ -11,8 +12,14 @@ interface FoodScanDetailModalProps {
   readonly onClose: () => void;
 }
 
+type AnalysisState = {
+  readonly scanId: string | null;
+  readonly data: FoodScanAnalysis | null;
+};
+
 export default function FoodScanDetailModal({ scanId, onClose }: FoodScanDetailModalProps) {
-  const [analysis, setAnalysis] = useState<FoodScanAnalysis | null>(null);
+  const [analysisState, setAnalysisState] = useState<AnalysisState>({ scanId: null, data: null });
+  const isLoading = Boolean(scanId && analysisState.scanId !== scanId);
 
   useEffect(() => {
     if (!scanId) {
@@ -23,10 +30,10 @@ export default function FoodScanDetailModal({ scanId, onClose }: FoodScanDetailM
 
     getFoodScanAnalysisFromApi(scanId)
       .then((nextAnalysis) => {
-        if (isMounted) setAnalysis(nextAnalysis);
+        if (isMounted) setAnalysisState({ scanId, data: nextAnalysis });
       })
       .catch(() => {
-        if (isMounted) setAnalysis(null);
+        if (isMounted) setAnalysisState({ scanId, data: null });
       });
 
     return () => {
@@ -36,7 +43,8 @@ export default function FoodScanDetailModal({ scanId, onClose }: FoodScanDetailM
 
   return (
     <Modal isOpen={Boolean(scanId)} title="Detail Scan Makanan" onClose={onClose}>
-      {scanId && analysis?.scan.id === scanId && <FoodScanAnalysisView scanId={analysis.scan.id} imageSizes="(max-width: 768px) 100vw, 672px" analysisData={analysis} />}
+      {scanId && isLoading && <ActivityDataSkeleton rows={4} />}
+      {scanId && !isLoading && analysisState.data?.scan.id === scanId && <FoodScanAnalysisView scanId={analysisState.data.scan.id} imageSizes="(max-width: 768px) 100vw, 672px" analysisData={analysisState.data} />}
     </Modal>
   );
 }

@@ -15,7 +15,7 @@ interface NurseFormProps {
   readonly initialValues?: NurseRecord;
   readonly mode?: "add" | "edit";
   readonly onCancel: () => void;
-  readonly onSubmit: (values: NurseFormValues) => void;
+  readonly onSubmit: (values: NurseFormValues) => void | Promise<void>;
 }
 
 interface NurseFormState {
@@ -38,6 +38,7 @@ export default function NurseForm({ initialValues, mode = "add", onSubmit }: Nur
     password: "",
     status: initialValues?.status ?? "",
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const updateValue = <TKey extends keyof NurseFormState>(key: TKey, value: NurseFormState[TKey]) => {
     setValues((current) => ({ ...current, [key]: value }));
@@ -47,8 +48,9 @@ export default function NurseForm({ initialValues, mode = "add", onSubmit }: Nur
     updateValue("phone", value.replace(/\D/g, ""));
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isSubmitting) return;
 
     const trimmedName = values.fullName.trim();
     const trimmedEmail = values.email.trim();
@@ -65,14 +67,12 @@ export default function NurseForm({ initialValues, mode = "add", onSubmit }: Nur
       return;
     }
 
-    onSubmit({
-      fullName: trimmedName,
-      email: trimmedEmail,
-      phone: trimmedPhone,
-      gender: values.gender,
-      password: trimmedPassword,
-      status: values.status,
-    });
+    setIsSubmitting(true);
+    try {
+      await onSubmit({ fullName: trimmedName, email: trimmedEmail, phone: trimmedPhone, gender: values.gender, password: trimmedPassword, status: values.status });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -132,7 +132,7 @@ export default function NurseForm({ initialValues, mode = "add", onSubmit }: Nur
       </FormSection>
 
       <FormStickyActions>
-        <Button type="submit">{mode === "add" ? "Tambah Perawat" : "Simpan Perubahan"}</Button>
+        <Button type="submit" loading={isSubmitting}>{mode === "add" ? "Tambah Perawat" : "Simpan Perubahan"}</Button>
       </FormStickyActions>
     </form>
   );

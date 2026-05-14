@@ -3,10 +3,17 @@ import type { LucideIcon } from "lucide-react";
 import type { ActivityCategory, ActivitySeverity } from "@/lib/mocks/activityLogs";
 
 export const activitySeverityTextStyles: Record<ActivitySeverity, string> = {
-  Info: "text-warning",
+  Info: "text-warning-dark",
   Sukses: "text-[var(--blue)]",
-  Peringatan: "text-warning",
+  Peringatan: "text-warning-dark",
   Kritis: "text-danger",
+};
+
+const activitySeverityBadgeStyles: Record<ActivitySeverity, string> = {
+  Info: "bg-warning/15 text-warning-dark",
+  Sukses: "bg-[var(--blue)]/10 text-[var(--blue)]",
+  Peringatan: "bg-warning/15 text-warning-dark",
+  Kritis: "bg-danger/10 text-danger",
 };
 
 export const activityCategoryTextStyles: Record<ActivityCategory, string> = {
@@ -31,7 +38,7 @@ export const activitySeverityIcons: Record<ActivitySeverity, LucideIcon> = {
 };
 
 export function ActivitySeverityBadge({ severity }: { readonly severity: ActivitySeverity }) {
-  return <span className={`text-xs font-extrabold ${activitySeverityTextStyles[severity]}`}>{severity}</span>;
+  return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-extrabold ${activitySeverityBadgeStyles[severity]}`}>{severity}</span>;
 }
 
 export function ActivityCategoryBadge({ category }: { readonly category: ActivityCategory }) {

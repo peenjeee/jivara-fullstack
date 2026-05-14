@@ -10,7 +10,7 @@ interface NurseModalProps {
   readonly mode?: "add" | "edit";
   readonly nurse?: NurseRecord | null;
   readonly onClose: () => void;
-  readonly onSubmit: (values: NurseFormValues) => void;
+  readonly onSubmit: (values: NurseFormValues) => void | Promise<void>;
 }
 
 export default function NurseModal({ isOpen, mode = "add", nurse, onClose, onSubmit }: NurseModalProps) {

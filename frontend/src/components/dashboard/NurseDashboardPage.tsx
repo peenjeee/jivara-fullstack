@@ -6,6 +6,7 @@ import { motion } from "motion/react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import { PatientTable } from "@/components/patients";
+import { SummaryCardsSkeleton, TableDataSkeleton } from "@/components/ui/PageSkeletons";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import { emptyNurseDashboardData, getNurseDashboardData, type NurseDashboardData } from "@/lib/dashboardApi";
 import { useSplashScreen } from "@/components/ui/AppSplashScreen";
@@ -14,6 +15,7 @@ export default function NurseDashboardPage() {
   const router = useRouter();
   const { isSplashFinished } = useSplashScreen();
   const [dashboardData, setDashboardData] = useState<NurseDashboardData>(emptyNurseDashboardData);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
@@ -24,6 +26,9 @@ export default function NurseDashboardPage() {
       })
       .catch(() => {
         if (isMounted) setDashboardData({ stats: [], patients: [] });
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
       });
 
     return () => {
@@ -36,7 +41,7 @@ export default function NurseDashboardPage() {
   return (
     <DashboardPageShell>
       <DashboardPageHeader id="overview" title="Ringkasan Pasien" />
-      <SummaryCardGrid stats={dashboardData.stats} />
+      {isLoading ? <SummaryCardsSkeleton /> : <SummaryCardGrid stats={dashboardData.stats} />}
 
       <motion.div
         className="mt-6"
@@ -44,13 +49,7 @@ export default function NurseDashboardPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.4 }}
       >
-        <PatientTable
-          patients={dashboardData.patients}
-          title="Pasien Terbaru"
-          showViewAll
-          actions={["view"]}
-          onAction={(_, patient) => router.push(`/patients/${encodeURIComponent(patient.id)}`)}
-        />
+        {isLoading ? <TableDataSkeleton /> : <PatientTable patients={dashboardData.patients} title="Pasien Terbaru" showViewAll actions={["view"]} onAction={(_, patient) => router.push(`/patients/${encodeURIComponent(patient.id)}`)} />}
       </motion.div>
     </DashboardPageShell>
   );

@@ -13,7 +13,7 @@ interface ScheduleModalProps {
   readonly medicineIndexOffset?: number;
   readonly medicineIndexOffsetByPatient?: Readonly<Record<string, number>>;
   readonly onClose: () => void;
-  readonly onSubmit: (values: ScheduleFormValues) => void;
+  readonly onSubmit: (values: ScheduleFormValues) => void | Promise<void>;
 }
 
 export default function ScheduleModal({ isOpen, patients, initialValues, mode = "add", patientLocked = false, medicineIndexOffset = 0, medicineIndexOffsetByPatient = {}, onClose, onSubmit }: ScheduleModalProps) {

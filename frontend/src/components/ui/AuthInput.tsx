@@ -1,4 +1,7 @@
-import React from 'react';
+"use client";
+
+import React, { useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 
 interface AuthInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label: string;
@@ -8,8 +11,11 @@ interface AuthInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   labelClassName?: string;
 }
 
-const AuthInput = ({ label, id, required = true, icon, className = '', labelClassName = '', name, ...props }: AuthInputProps) => {
+const AuthInput = ({ label, id, required = true, icon, className = '', labelClassName = '', name, type, ...props }: AuthInputProps) => {
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const isDisabled = Boolean(props.disabled || props.readOnly);
+  const isPassword = type === 'password';
+  const inputType = isPassword && isPasswordVisible ? 'text' : type;
 
   return (
     <div>
@@ -25,9 +31,21 @@ const AuthInput = ({ label, id, required = true, icon, className = '', labelClas
         <input
           id={id}
           name={name ?? id}
-          className={`w-full py-4 ${icon ? 'pl-14 pr-5' : 'px-5'} bg-surface shadow-sm rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-body disabled:cursor-not-allowed disabled:bg-line/35 disabled:text-muted disabled:opacity-100 ${className}`}
+          type={inputType}
+          className={`w-full py-4 ${icon ? 'pl-14' : 'pl-5'} ${isPassword ? 'pr-14' : 'pr-5'} bg-surface shadow-sm rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-body disabled:cursor-not-allowed disabled:bg-line/35 disabled:text-muted disabled:opacity-100 ${className}`}
           {...props}
         />
+        {isPassword && (
+          <button
+            type="button"
+            className="absolute right-5 top-1/2 flex -translate-y-1/2 text-muted transition-colors hover:text-primary focus-visible:outline-none focus-visible:text-primary disabled:cursor-not-allowed disabled:text-muted/55"
+            onClick={() => setIsPasswordVisible((current) => !current)}
+            disabled={isDisabled}
+            aria-label={isPasswordVisible ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
+          >
+            {isPasswordVisible ? <EyeOff size={20} strokeWidth={2.2} /> : <Eye size={20} strokeWidth={2.2} />}
+          </button>
+        )}
       </div>
     </div>
   );

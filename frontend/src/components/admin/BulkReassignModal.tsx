@@ -14,7 +14,7 @@ interface BulkReassignModalProps {
   readonly sourceNurseId: string;
   readonly nurses: readonly NurseRecord[];
   readonly onClose: () => void;
-  readonly onSubmit: (targetNurseId: string) => void;
+  readonly onSubmit: (targetNurseId: string) => void | Promise<void>;
 }
 
 export default function BulkReassignModal({ isOpen, selectedCount, sourceNurseId, nurses, onClose, onSubmit }: BulkReassignModalProps) {
@@ -22,15 +22,22 @@ export default function BulkReassignModal({ isOpen, selectedCount, sourceNurseId
     .filter((nurse) => nurse.status === "Aktif" && nurse.id !== sourceNurseId)
     .map((nurse) => ({ label: nurse.fullName, value: nurse.id }));
   const [targetNurseId, setTargetNurseId] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const closeModal = () => {
     setTargetNurseId("");
     onClose();
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (targetNurseId) onSubmit(targetNurseId);
+    if (!targetNurseId || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await onSubmit(targetNurseId);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -41,7 +48,7 @@ export default function BulkReassignModal({ isOpen, selectedCount, sourceNurseId
             <SelectField id="targetNurseId" value={targetNurseId} placeholder="Pilih" className={FORM_INPUT_CLASS} options={targetOptions} inlineOptions onChange={setTargetNurseId} />
           </FormField>
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <Button type="submit">Reassign Pasien</Button>
+            <Button type="submit" loading={isSubmitting}>Reassign Pasien</Button>
           </div>
         </form>
       ) : (

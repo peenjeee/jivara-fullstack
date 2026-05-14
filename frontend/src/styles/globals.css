@@ -25,6 +25,7 @@
   --color-line: var(--line);
   --color-safe: var(--safe);
   --color-warning: var(--warning);
+  --color-warning-dark: var(--warning-dark);
   --color-danger: var(--danger);
   --color-blue: var(--blue);
   --color-primary-dark: var(--primary-dark);
@@ -49,6 +50,7 @@
   --line: rgba(15, 23, 42, 0.1);
   --safe: #419939;
   --warning: #ffc107;
+  --warning-dark: #a16207;
   --danger: #df4759;
   --blue: #467fd0;
   --primary-dark: #0c5531;

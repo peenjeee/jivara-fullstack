@@ -28,11 +28,11 @@ export default function SecurityCard({
       }}
     >
       <h3
-        className={`mb-7 ${color} font-display text-base font-extrabold tracking-[0.16em] uppercase`}
+        className={`font-display text-xl font-black tracking-[-0.03em] ${color}`}
       >
         {title}
       </h3>
-      <p className="text-muted text-sm leading-relaxed">{description}</p>
+      <p className="mt-3 text-sm leading-6 text-muted">{description}</p>
     </motion.article>
   );
 }

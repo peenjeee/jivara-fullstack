@@ -26,7 +26,7 @@ export interface PatientDashboardData {
   medicationLogs: MedicationLogResponse[];
 }
 
-const getCurrentPatient = async () => {
+export const getCurrentPatientFromApi = async () => {
   const patients = await getPatientsFromApi();
   const patient = patients[0];
 
@@ -39,7 +39,7 @@ const getCurrentPatient = async () => {
 };
 
 export const getPatientDashboardData = async (): Promise<PatientDashboardData> => {
-  const patient = await getCurrentPatient();
+  const patient = await getCurrentPatientFromApi();
   const [schedules, logResponse] = await Promise.all([
     getSchedulesFromApi(),
     api.get<PaginatedResponse<MedicationLogResponse>>("/medication-logs", { params: { patient_id: patient.id, limit: 100 } }),

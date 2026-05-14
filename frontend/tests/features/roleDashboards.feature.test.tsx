@@ -8,6 +8,10 @@ import PatientDashboardPage from "@/components/patient-dashboard/PatientDashboar
 import PatientSettingsPage from "@/components/settings/PatientSettingsPage";
 import { getAdminDashboardStats, getNurseDashboardData } from "@/lib/dashboardApi";
 import { getPatientDashboardData } from "@/lib/patientDashboardApi";
+import { getAlertActivitiesFromApi } from "@/lib/alertsApi";
+import { getAuditActivitiesFromApi } from "@/lib/auditLogApi";
+import { getNursesFromApi } from "@/lib/nurseApi";
+import { getPatientsFromApi } from "@/lib/patientApi";
 import { getSchedulesFromApi } from "@/lib/scheduleApi";
 import { useActivityLogStore } from "@/store/activityLog";
 import { useNurseStore } from "@/store/nurses";
@@ -42,6 +46,22 @@ vi.mock("@/lib/patientDashboardApi", () => ({
 
 vi.mock("@/lib/scheduleApi", () => ({
   getSchedulesFromApi: vi.fn(),
+}));
+
+vi.mock("@/lib/alertsApi", () => ({
+  getAlertActivitiesFromApi: vi.fn(),
+}));
+
+vi.mock("@/lib/auditLogApi", () => ({
+  getAuditActivitiesFromApi: vi.fn(),
+}));
+
+vi.mock("@/lib/nurseApi", () => ({
+  getNursesFromApi: vi.fn(),
+}));
+
+vi.mock("@/lib/patientApi", () => ({
+  getPatientsFromApi: vi.fn(),
 }));
 
 vi.mock("@/components/settings/ProfileSettingsForm", () => ({ default: () => <div>Form profil perawat</div> }));
@@ -87,7 +107,11 @@ describe("role dashboard and settings features", () => {
     vi.mocked(getNurseDashboardData).mockReset();
     vi.mocked(getPatientDashboardData).mockReset();
     vi.mocked(getSchedulesFromApi).mockReset();
-    useNurseStore.setState({ nurses: [], assignments: {} });
+    vi.mocked(getAlertActivitiesFromApi).mockReset();
+    vi.mocked(getAuditActivitiesFromApi).mockReset();
+    vi.mocked(getNursesFromApi).mockReset();
+    vi.mocked(getPatientsFromApi).mockReset();
+    useNurseStore.setState({ nurses: [] });
     useActivityLogStore.setState({ activities: [] });
     usePatientDashboardStore.getState().resetPatientDashboardState();
   });
@@ -101,12 +125,16 @@ describe("role dashboard and settings features", () => {
       ],
     });
     vi.mocked(getSchedulesFromApi).mockResolvedValueOnce([schedule]);
+    vi.mocked(getNursesFromApi).mockResolvedValueOnce([]);
+    vi.mocked(getPatientsFromApi).mockResolvedValueOnce([patient]);
+    vi.mocked(getAlertActivitiesFromApi).mockResolvedValueOnce([]);
+    vi.mocked(getAuditActivitiesFromApi).mockResolvedValueOnce([]);
 
     render(<AdminDashboardPage />);
 
     expect(await screen.findByText("Dashboard Admin")).toBeInTheDocument();
     expect(await screen.findByText("Total Pasien")).toBeInTheDocument();
-    expect(screen.getByText("12")).toBeInTheDocument();
+    expect(await screen.findByText("12")).toBeInTheDocument();
 
     render(<AdminSettingsPage />);
     expect(screen.getByText("Pengaturan Admin")).toBeInTheDocument();
