@@ -1,4 +1,5 @@
 export interface NurseCreateDTO {
+  organizationId?: string;
   fullName: string;
   email: string;
   password: string;
