@@ -45,7 +45,35 @@ const getServiceWorkerRegistration = async () => {
   }
 
   const existingRegistration = await navigator.serviceWorker.getRegistration("/");
-  return existingRegistration ?? navigator.serviceWorker.register("/sw.js", { scope: "/" });
+  const registration = existingRegistration ?? await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+  await navigator.serviceWorker.ready;
+  return registration;
+};
+
+const getPushSubscription = async (registration: ServiceWorkerRegistration, publicKey: string) => {
+  const applicationServerKey = urlBase64ToUint8Array(publicKey);
+  const existingSubscription = await registration.pushManager.getSubscription();
+  if (existingSubscription) return existingSubscription;
+
+  try {
+    return await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey,
+    });
+  } catch (error) {
+    const staleSubscription = await registration.pushManager.getSubscription();
+    await staleSubscription?.unsubscribe().catch(() => undefined);
+
+    try {
+      return await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey,
+      });
+    } catch {
+      const message = error instanceof Error && error.message ? error.message : "Push service error";
+      throw new Error(`Gagal mendaftarkan push notification. Pastikan PWA dibuka dari HTTPS, izin notifikasi aktif, dan browser mendukung Web Push. Detail: ${message}`);
+    }
+  }
 };
 
 export const enableMedicationPushNotifications = async () => {
@@ -64,11 +92,7 @@ export const enableMedicationPushNotifications = async () => {
     getServiceWorkerRegistration(),
   ]);
 
-  const existingSubscription = await registration.pushManager.getSubscription();
-  const subscription = existingSubscription ?? await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(keyResponse.data.data.publicKey),
-  });
+  const subscription = await getPushSubscription(registration, keyResponse.data.data.publicKey);
 
   await api.post("/notifications/subscribe", {
     patient_id: patientId,
