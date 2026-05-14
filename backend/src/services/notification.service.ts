@@ -306,8 +306,7 @@ export const sendPushNotification = async (dto: SendNotificationDTO, user?: Acce
     })
     .returning();
 
-  const apiUrl = process.env.API_URL?.replace(/\/+$/, "") || "";
-  const trackingUrl = apiUrl ? `${apiUrl}/api/notifications/events` : undefined;
+  const trackingUrl = "/api/v1/notifications/events";
   const payload = {
     title: dto.title,
     body: dto.body,

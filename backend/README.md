@@ -82,6 +82,7 @@ Server secara default akan berjalan di `http://localhost:3001`.
 | `npm run db:push` |
 | `npm run seed` |
 | `npm run backfill:patient-assignments` |
+| `npm run vapid:generate` |
 | `npm run lint` |
 
 ---
@@ -107,6 +108,7 @@ API utama tersedia dengan prefix versioning `/api/v1`. Prefix lama `/api` masih 
 ## Catatan Production
 
 - Untuk Web Push di HP/PWA, frontend harus berjalan pada HTTPS atau secure context.
+- Endpoint `GET /api/v1/notifications/public-key` membutuhkan env `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, dan `VAPID_SUBJECT`; generate key dengan `npm run vapid:generate`, lalu set di Railway/backend production.
 - Untuk Railway/production, jangan mengandalkan filesystem lokal `uploads/`; gunakan Supabase Storage dengan env storage di atas.
 - Endpoint `/api/notifications/events` sengaja tidak membutuhkan bearer token karena dipanggil dari service worker saat user mengklik notifikasi.
 - `GET /api/food-scans/analytics/interactions` dibatasi untuk role `nurse` dan `admin`, dan tetap mengikuti scope akses pasien.
