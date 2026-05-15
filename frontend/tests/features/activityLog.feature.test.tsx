@@ -35,6 +35,13 @@ vi.mock("@/lib/patientApi", () => ({
   getPatientsFromApi: vi.fn(),
 }));
 
+vi.mock("@/lib/axios", () => ({
+  default: {
+    get: vi.fn().mockResolvedValue({ data: { data: [] } }),
+    post: vi.fn().mockResolvedValue({ data: { data: [] } }),
+  },
+}));
+
 vi.mock("@/lib/swal", () => ({
   showToast: vi.fn(),
 }));
