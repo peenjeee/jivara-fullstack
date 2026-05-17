@@ -8,6 +8,10 @@ import {
 } from "../types/medication-schedule.types";
 import { AccessUser, assertCanAccessPatient, scopedPatientFilter } from "./access-control.service";
 import { diffChanges, writeAuditLogAsync } from "./audit-log.service";
+import { deleteCachedByPrefix, getCached, setCached } from "./cache.service";
+
+const CACHE_PREFIX = "medication-schedules:";
+const CACHE_TTL_MS = Number(process.env.MEDICATION_SCHEDULE_CACHE_TTL_MS || 30_000);
 
 const getBooleanFilter = (value?: string) => {
   if (value === undefined || value === "all") return undefined;
@@ -30,7 +34,26 @@ const ensurePrescriptionExists = async (prescriptionId: string) => {
   }
 };
 
+const getCacheScope = (user?: AccessUser) => `${user?.id || "anonymous"}:${user?.role || "none"}`;
+
+const getListCacheKey = (query: MedicationScheduleListQuery, user?: AccessUser) => {
+  const normalizedQuery = Object.entries(query)
+    .sort(([first], [second]) => first.localeCompare(second))
+    .map(([key, value]) => `${key}=${String(value)}`)
+    .join("&");
+
+  return `${CACHE_PREFIX}list:${getCacheScope(user)}:${normalizedQuery}`;
+};
+
+const getDetailCacheKey = (id: string, user?: AccessUser) => `${CACHE_PREFIX}detail:${getCacheScope(user)}:${id}`;
+
+const invalidateMedicationScheduleCache = () => deleteCachedByPrefix(CACHE_PREFIX);
+
 export const listMedicationSchedules = async (query: MedicationScheduleListQuery, user?: AccessUser) => {
+  const cacheKey = getListCacheKey(query, user);
+  const cached = getCached<Array<typeof medicationSchedules.$inferSelect>>(cacheKey);
+  if (cached) return cached;
+
   const patientId = query.patientId || query.patient_id;
   const activeFilter = getBooleanFilter(query.isActive || query.is_active);
   const conditions = [];
@@ -41,14 +64,21 @@ export const listMedicationSchedules = async (query: MedicationScheduleListQuery
 
   if (activeFilter !== undefined) conditions.push(eq(medicationSchedules.isActive, activeFilter));
 
-  return db
+  const rows = await db
     .select()
     .from(medicationSchedules)
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(medicationSchedules.createdAt));
+
+  setCached(cacheKey, rows, CACHE_TTL_MS);
+  return rows;
 };
 
 export const getMedicationScheduleById = async (id: string, user?: AccessUser) => {
+  const cacheKey = getDetailCacheKey(id, user);
+  const cached = getCached<typeof medicationSchedules.$inferSelect>(cacheKey);
+  if (cached) return cached;
+
   const schedule = await db.select().from(medicationSchedules).where(eq(medicationSchedules.id, id)).limit(1);
 
   if (schedule.length === 0) {
@@ -57,6 +87,7 @@ export const getMedicationScheduleById = async (id: string, user?: AccessUser) =
 
   if (user) await assertCanAccessPatient(user, schedule[0].patientId);
 
+  setCached(cacheKey, schedule[0], CACHE_TTL_MS);
   return schedule[0];
 };
 
@@ -86,6 +117,8 @@ export const createMedicationSchedule = async (dto: MedicationScheduleCreateDTO,
     resourceId: schedule.id,
     changes: { after: schedule },
   });
+
+  invalidateMedicationScheduleCache();
 
   return schedule;
 };
@@ -128,6 +161,8 @@ export const updateMedicationSchedule = async (id: string, dto: MedicationSchedu
     });
   }
 
+  invalidateMedicationScheduleCache();
+
   return schedule;
 };
 
@@ -146,4 +181,6 @@ export const deactivateMedicationSchedule = async (id: string, user?: AccessUser
     resourceId: id,
     changes: { isActive: { from: existing.isActive, to: false } },
   });
+
+  invalidateMedicationScheduleCache();
 };
