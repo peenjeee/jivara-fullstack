@@ -25,8 +25,20 @@ export default function LoginForm() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const { hasHydrated, user, setAuth, logout } = useAuthStore();
+  const { hasHydrated, user, setAuth, setHasHydrated, logout } = useAuthStore();
   const hasTriedRestoreRef = useRef(false);
+
+  useEffect(() => {
+    if (hasHydrated) return;
+
+    const timer = window.setTimeout(() => {
+      if (!useAuthStore.getState().hasHydrated) {
+        setHasHydrated(true);
+      }
+    }, 3000);
+
+    return () => window.clearTimeout(timer);
+  }, [hasHydrated, setHasHydrated]);
 
   useEffect(() => {
     if (!hasHydrated || hasTriedRestoreRef.current) return;
