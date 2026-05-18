@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import { and, count, desc, eq, ilike, or } from "drizzle-orm";
 import { db } from "../db";
-import { nurses, organizations, patientNurseAssignments, users } from "../db/schema";
+import { nurses, organizations, patientNurseAssignments, userNotificationPreferences, users } from "../db/schema";
 import { AUTH_CONSTANTS } from "../types/auth.types";
 import { NurseCreateDTO, NurseListQuery, NurseUpdateDTO } from "../types/nurse.types";
 import { AccessUser, ensureOrganizationIdForUser, getOrganizationIdForUser } from "./access-control.service";
@@ -199,6 +199,12 @@ export const createNurse = async (dto: NurseCreateDTO, user?: AccessUser) => {
         department: dto.department || null,
       })
       .returning();
+
+    await tx.insert(userNotificationPreferences).values({
+      userId: newUser.id,
+      preferenceKey: "nurse_critical_alert",
+      isEnabled: true,
+    }).onConflictDoNothing();
 
     return { ...newNurse, user: newUser };
   });

@@ -1,5 +1,5 @@
 import { db } from "../db";
-import { organizations, patients, users, refreshTokens } from "../db/schema";
+import { organizations, patients, users, refreshTokens, userNotificationPreferences } from "../db/schema";
 import { and, desc, eq, or } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -107,6 +107,12 @@ export const registerUser = async (dto: RegisterDTO) => {
         accountStatus: users.accountStatus,
         createdAt: users.createdAt,
       });
+
+    await tx.insert(userNotificationPreferences).values({
+      userId: user.id,
+      preferenceKey: "admin_critical_activity",
+      isEnabled: true,
+    }).onConflictDoNothing();
 
     return { ...user, organizationName: organization.name };
   });

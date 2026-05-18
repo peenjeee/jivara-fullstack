@@ -8,6 +8,7 @@ import axios from "axios";
 import { LogOut } from "lucide-react";
 import { SimpleFooter } from "@/components/landing/Footer";
 import ForcePasswordChangeModal from "@/components/auth/ForcePasswordChangeModal";
+import { tryEnableDefaultPushNotifications } from "@/lib/pushNotifications";
 import { showConfirm } from "@/lib/swal";
 import { useAuthStore } from "@/store/auth";
 import type { User } from "@/types/auth";
@@ -32,6 +33,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [isRedirectingToLogin, setIsRedirectingToLogin] = useState(false);
   const [isRestoringSession, setIsRestoringSession] = useState(false);
   const isSyncingRef = useRef(false);
+  const autoPushUserIdRef = useRef<string | null>(null);
   const lastUserStatusSyncAtRef = useRef(0);
   const userStatusSyncBlockedUntilRef = useRef(0);
   const isNavigatingAwayRef = useRef(false);
@@ -224,6 +226,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
     if (!isCurrentRouteAllowed) router.replace(fallbackPath);
   }, [fallbackPath, hasHydrated, isCurrentRouteAllowed, router, user, isLoggingOut, restoreSession]);
+
+  useEffect(() => {
+    if (!hasHydrated || !user || isLoggingOut || isNavigatingAwayRef.current) return;
+    if (autoPushUserIdRef.current === user.id) return;
+
+    autoPushUserIdRef.current = user.id;
+    void tryEnableDefaultPushNotifications(user);
+  }, [hasHydrated, isLoggingOut, user]);
 
   useEffect(() => {
     if (user || isLoggingOut || isNavigatingAwayRef.current) return;
