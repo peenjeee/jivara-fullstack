@@ -1,6 +1,18 @@
 const OFFLINE_URL = "/offline";
-const CACHE_NAME = "jivara-offline-v5";
+const CACHE_NAME = "jivara-offline-v6";
 const OFFLINE_ASSETS = [OFFLINE_URL, "/images/logo/text.png", "/images/logo/notext.png", "/images/logo/splash.png"];
+const NAVIGATION_TIMEOUT_MS = 8000;
+
+async function fetchWithTimeout(request, timeoutMs) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(request, { signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 async function cacheRequest(cache, request) {
   try {
@@ -51,7 +63,7 @@ self.addEventListener("fetch", (event) => {
 
   if (event.request.mode === "navigate") {
     event.respondWith(
-      fetch(event.request).catch(() => caches.match(OFFLINE_URL).then((response) => response ?? Response.error())),
+      fetchWithTimeout(event.request, NAVIGATION_TIMEOUT_MS).catch(() => caches.match(OFFLINE_URL).then((response) => response ?? Response.error())),
     );
     return;
   }
