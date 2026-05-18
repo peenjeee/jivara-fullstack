@@ -1,8 +1,9 @@
 "use client";
 
-import type { RefObject } from "react";
+import { useRef } from "react";
+import type { ChangeEvent, RefObject } from "react";
 import { motion } from "motion/react";
-import { Camera, CameraOff, Loader2, ScanLine } from "lucide-react";
+import { Camera, CameraOff, ImagePlus, Loader2, ScanLine } from "lucide-react";
 import Webcam from "react-webcam";
 import Button from "@/components/ui/Button";
 import SelectField from "@/components/ui/SelectField";
@@ -21,13 +22,34 @@ interface FoodScanCameraCardProps {
   readonly onRetryCamera: () => void;
   readonly onScan: () => void;
   readonly onSelectCamera: (deviceId: string) => void;
+  readonly onUploadImage: (file: File) => void;
   readonly selectedCameraId: string | null;
   readonly webcamRef: RefObject<Webcam | null>;
 }
 
-export default function FoodScanCameraCard({ cameraDevices, cameraError, cameraKey, isCameraEnabled, isCameraReady, isCameraStarting, isScanning, onCameraError, onCameraReady, onRetryCamera, onScan, onSelectCamera, selectedCameraId, webcamRef }: FoodScanCameraCardProps) {
+export default function FoodScanCameraCard({ cameraDevices, cameraError, cameraKey, isCameraEnabled, isCameraReady, isCameraStarting, isScanning, onCameraError, onCameraReady, onRetryCamera, onScan, onSelectCamera, onUploadImage, selectedCameraId, webcamRef }: FoodScanCameraCardProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleUploadChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    onUploadImage(file);
+  };
+
   return (
     <motion.section className="overflow-visible rounded-[32px] bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.08)] sm:p-8" initial={{ opacity: 0, y: 22 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: 0.08 }}>
+      {/* <div className="mb-5 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-3xl bg-primary/10 p-4">
+          <div className="flex items-center gap-3 text-primary"><Camera className="h-5 w-5" aria-hidden="true" /><p className="text-sm font-extrabold uppercase tracking-[0.12em]">Scan Kamera</p></div>
+          <p className="mt-2 text-sm font-semibold leading-6 text-muted">Ambil foto langsung dari kamera perangkat, lalu gambar disimpan sebelum dianalisis AI.</p>
+        </div>
+        <div className="rounded-3xl bg-surface p-4">
+          <div className="flex items-center gap-3 text-primary"><ImagePlus className="h-5 w-5" aria-hidden="true" /><p className="text-sm font-extrabold uppercase tracking-[0.12em]">Upload Gambar</p></div>
+          <p className="mt-2 text-sm font-semibold leading-6 text-muted">Pilih foto dari galeri. File tetap melewati alur upload yang sama ke Supabase Storage.</p>
+        </div>
+      </div> */}
+
       <div data-food-scan-camera className="relative flex h-64 items-center justify-center overflow-hidden rounded-[28px] bg-dark outline-2 outline-dashed outline-primary/45 sm:h-80">
         {isCameraEnabled && !cameraError && (
           <Webcam key={cameraKey} ref={webcamRef} audio={false} className="h-full w-full object-cover" disablePictureInPicture forceScreenshotSourceSize imageSmoothing muted screenshotFormat="image/jpeg" screenshotQuality={0.92} videoConstraints={getVideoConstraints(selectedCameraId)} onUserMedia={onCameraReady} onUserMediaError={onCameraError} />
@@ -52,7 +74,9 @@ export default function FoodScanCameraCard({ cameraDevices, cameraError, cameraK
 
       <div className="mx-auto mt-6 flex w-full max-w-xl flex-col justify-center gap-3 min-[420px]:flex-row">
         {(!isCameraEnabled || cameraError) && <Button type="button" size="sm" variant="outline" className="w-full min-w-0 min-[420px]:max-w-64" icon={<Camera size={16} />} loading={isCameraStarting} onClick={onRetryCamera}>{cameraError ? "Coba Kamera" : "Aktifkan Kamera"}</Button>}
-        <Button type="button" size="sm" className="w-full min-w-0 min-[420px]:max-w-64" icon={<ScanLine size={16} />} loading={isScanning} disabled={!isCameraReady} onClick={onScan}>Scan Sekarang</Button>
+        {isCameraEnabled && !cameraError && <Button type="button" size="sm" className="w-full min-w-0 min-[420px]:max-w-64" icon={<ScanLine size={16} />} loading={isScanning} disabled={!isCameraReady} onClick={onScan}>Scan Sekarang</Button>}
+        <input ref={fileInputRef} type="file" className="sr-only" accept="image/jpeg,image/png,image/webp" aria-label="Upload gambar makanan" onChange={handleUploadChange} />
+        <Button type="button" size="sm" variant="outline" className="w-full min-w-0 min-[420px]:max-w-64" icon={<ImagePlus size={16} />} loading={isScanning} onClick={() => fileInputRef.current?.click()}>Upload Gambar</Button>
       </div>
 
       {isCameraEnabled && cameraDevices.length > 1 && (

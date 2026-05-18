@@ -1,4 +1,5 @@
 import api from "@/lib/axios";
+import { getApiErrorMessage } from "@/lib/apiErrors";
 import type { FoodScanAnalysis } from "@/helpers/foodScans";
 import type { FoodScanRecord, FoodScanRisk } from "@/lib/mocks/foodScans";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
@@ -41,6 +42,45 @@ interface InteractionResponse {
   overall_risk_level: string;
   overall_recommendation: string;
   disclaimer: string;
+  patient_medications?: string[];
+  analyzed_medications_count?: number;
+  safe_items?: Array<{
+    food_item: string;
+    food_display: string;
+    status: string;
+  }>;
+  recommended_foods?: FoodRecommendationResponse[];
+  foods_to_avoid?: FoodRecommendationResponse[];
+}
+
+interface FoodRecommendationResponse {
+  food_name: string;
+  severity_score: number;
+  risk_level: string;
+  worst_category?: string | null;
+}
+
+interface NutritionResponse {
+  items: NutritionItemResponse[];
+  total: {
+    calories: number;
+    protein_g: number;
+    fat_g: number;
+    carbs_g: number;
+  };
+}
+
+interface NutritionItemResponse {
+  food_item: string;
+  food_display: string;
+  portion: string;
+  nutrition: {
+    calories: number;
+    protein_g: number;
+    fat_g: number;
+    carbs_g: number;
+  };
+  source: string;
 }
 
 interface FoodScanDetailResponse {
@@ -65,6 +105,10 @@ interface FoodScanDetailResponse {
     interactionDescription?: string | null;
     recommendation?: string | null;
   }>;
+  patientMedications?: string[];
+  analyzedMedicationCount?: number;
+  recommendedFoods?: FoodRecommendationResponse[];
+  foodsToAvoid?: FoodRecommendationResponse[];
 }
 
 interface FoodScanDetailApiResponse {
@@ -106,6 +150,32 @@ const toRisk = (riskLevel: string): FoodScanRisk => {
 
 const getBackendImageUrl = (imageUrl: string) => imageUrl.startsWith("http") ? imageUrl : `${getBackendOrigin()}${imageUrl}`;
 
+const mapRecommendation = (food: FoodRecommendationResponse) => ({
+  foodName: food.food_name,
+  severityScore: food.severity_score,
+  riskLevel: food.risk_level,
+  worstCategory: food.worst_category,
+});
+
+const mapSafeFood = (item: { food_item: string; food_display: string; status: string }) => ({
+  foodItem: item.food_item,
+  foodDisplay: item.food_display,
+  status: item.status,
+});
+
+const mapNutritionItem = (item: NutritionItemResponse) => ({
+  foodItem: item.food_item,
+  foodDisplay: item.food_display,
+  portion: item.portion,
+  nutrition: {
+    calories: item.nutrition.calories,
+    proteinG: item.nutrition.protein_g,
+    fatG: item.nutrition.fat_g,
+    carbsG: item.nutrition.carbs_g,
+  },
+  source: item.source,
+});
+
 const mapScanDetail = (detail: FoodScanDetailResponse, patientName = "Pasien"): FoodScanAnalysis => {
   const foodName = detail.detectedItems?.map((item) => item.labelDisplay).join(", ") || "Makanan terdeteksi";
   const risk = toRisk(detail.overallRiskLevel || "rendah");
@@ -141,12 +211,21 @@ const mapScanDetail = (detail: FoodScanDetailResponse, patientName = "Pasien"): 
     reasoning: interaction.interactionDescription || "Interaksi terdeteksi dari hasil analisis makanan-obat.",
     recommendation: interaction.recommendation || "Ikuti rekomendasi tenaga kesehatan.",
   }));
+  const riskyFoodItems = new Set((detail.interactions || []).map((interaction) => interaction.foodItem));
+  const safeFoods = (detail.detectedItems || [])
+    .filter((item) => !riskyFoodItems.has(item.label))
+    .map((item) => ({ foodItem: item.label, foodDisplay: item.labelDisplay, status: "aman" }));
 
   return {
     scan,
     patientName,
+    analyzedMedicationCount: detail.analyzedMedicationCount ?? detail.patientMedications?.length ?? interactions.length,
+    analyzedMedications: detail.patientMedications ?? interactions.map((interaction) => interaction.schedule.medicineName),
     schedules: interactions.map((interaction) => interaction.schedule),
     interactions,
+    safeFoods,
+    recommendedFoods: (detail.recommendedFoods || []).map(mapRecommendation),
+    foodsToAvoid: (detail.foodsToAvoid || []).map(mapRecommendation),
     overallRisk: interactions.some((interaction) => interaction.risk === "High Risk") ? "High Risk" : risk,
   };
 };
@@ -186,17 +265,24 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
   const detection = detectResponse.data.data;
   const detectedLabels = detection.detected_items.map((item) => item.label);
 
-  const [interactionResponse] = await Promise.all([
+  const [interactionResult, nutritionResult] = await Promise.allSettled([
     api.post<{ data: InteractionResponse }>(`/food-scans/${encodeURIComponent(upload.image_id)}/interactions`, {
       patientId,
       detectedItems: detectedLabels,
     }),
-    api.post("/nutrition-estimates", {
+    api.post<{ data: NutritionResponse }>("/nutrition-estimates", {
       detectedItems: detection.detected_items.map((item) => ({ label: item.label, confidence: item.confidence })),
     }),
   ]);
 
-  const interactionData = interactionResponse.data.data;
+  if (interactionResult.status === "rejected") {
+    throw new Error(getApiErrorMessage(interactionResult.reason, "Analisis interaksi makanan gagal."));
+  }
+
+  const interactionData = interactionResult.value.data.data;
+  const nutritionData = nutritionResult.status === "fulfilled"
+    ? nutritionResult.value.data.data
+    : null;
   const risk = toRisk(interactionData.overall_risk_level);
   const image = getBackendImageUrl(upload.upload_url);
   const foodName = toFoodName(detection.detected_items);
@@ -221,8 +307,22 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
   return {
     scan,
     patientName: patient.fullName || "Pasien",
+    analyzedMedicationCount: interactionData.analyzed_medications_count ?? interactionData.patient_medications?.length ?? interactions.length,
+    analyzedMedications: interactionData.patient_medications ?? interactions.map((interaction) => interaction.schedule.medicineName),
     schedules: interactions.map((interaction) => interaction.schedule),
     interactions,
+    nutritionItems: nutritionData?.items.map(mapNutritionItem),
+    nutritionTotal: nutritionData
+      ? {
+        calories: nutritionData.total.calories,
+        proteinG: nutritionData.total.protein_g,
+        fatG: nutritionData.total.fat_g,
+        carbsG: nutritionData.total.carbs_g,
+      }
+      : undefined,
+    safeFoods: (interactionData.safe_items || []).map(mapSafeFood),
+    recommendedFoods: (interactionData.recommended_foods || []).map(mapRecommendation),
+    foodsToAvoid: (interactionData.foods_to_avoid || []).map(mapRecommendation),
     overallRisk: risk,
   };
 };

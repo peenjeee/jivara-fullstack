@@ -311,21 +311,61 @@
       display: none !important;
     }
 
-    .swagger-ui .info p,
-    .swagger-ui .info li,
-    .swagger-ui .info table,
-    .swagger-ui .info .renderedMarkdown p {
-      color: var(--jivara-muted) !important;
+.swagger-ui .info p,
+.swagger-ui .info li,
+.swagger-ui .info table,
+.swagger-ui .info .renderedMarkdown p {
+  color: var(--jivara-muted) !important;
       font-size: 13px;
       line-height: 1.7;
       margin-left: auto;
       margin-right: auto;
-      text-align: center;
-    }
+  text-align: center;
+}
 
-    .swagger-ui a,
-    .swagger-ui .info a {
-      color: var(--jivara-primary);
+.swagger-ui .renderedMarkdown code,
+.swagger-ui .markdown code,
+.swagger-ui .opblock-description-wrapper code,
+.swagger-ui .opblock-external-docs-wrapper code,
+.swagger-ui .opblock-title_normal code {
+  display: inline-block;
+  padding: 0.12rem 0.45rem;
+  border: 1px solid var(--jivara-line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--jivara-primary) 12%, white) !important;
+  color: var(--jivara-primary-dark) !important;
+  font-size: 0.95em;
+  font-weight: 800;
+  line-height: 1.4;
+  box-shadow: none !important;
+}
+
+.swagger-ui .renderedMarkdown pre,
+.swagger-ui .markdown pre,
+.swagger-ui .opblock-description-wrapper pre,
+.swagger-ui .opblock-external-docs-wrapper pre {
+  border: 1px solid var(--jivara-line) !important;
+  border-radius: 18px;
+  background: var(--jivara-surface) !important;
+  box-shadow: none !important;
+}
+
+.swagger-ui .renderedMarkdown pre code,
+.swagger-ui .markdown pre code,
+.swagger-ui .opblock-description-wrapper pre code,
+.swagger-ui .opblock-external-docs-wrapper pre code {
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent !important;
+  color: var(--jivara-ink) !important;
+  font-weight: 700;
+}
+
+.swagger-ui a,
+.swagger-ui .info a {
+  color: var(--jivara-primary);
       font-weight: 700;
     }
 

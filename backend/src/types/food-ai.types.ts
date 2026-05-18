@@ -21,5 +21,6 @@ export interface NutritionDTO {
   detectedItems: Array<{
     label: string;
     confidence?: number;
+    portionGrams?: number;
   }>;
 }

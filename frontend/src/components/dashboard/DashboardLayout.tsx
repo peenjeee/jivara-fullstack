@@ -237,7 +237,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   }, [hasHydrated, isLoggingOut, user]);
 
   useEffect(() => {
-    if (!hasHydrated || !user || isLoggingOut || isNavigatingAwayRef.current || !isStandalonePwa) return;
+    if (!hasHydrated || !user || isLoggingOut || isNavigatingAwayRef.current) return;
     if (notificationPromptUserIdRef.current === user.id) return;
     if (!("Notification" in window) || Notification.permission !== "default") return;
 
@@ -253,7 +253,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       }
       void tryEnableDefaultPushNotifications(user, { requestPermission: true });
     });
-  }, [hasHydrated, isLoggingOut, isStandalonePwa, user]);
+  }, [hasHydrated, isLoggingOut, user]);
 
   useEffect(() => {
     if (user || isLoggingOut || isNavigatingAwayRef.current) return;

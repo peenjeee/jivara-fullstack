@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray } from "drizzle-orm";
+import { and, count, desc, eq } from "drizzle-orm";
 import axios from "axios";
 import { db } from "../db";
 import {
@@ -32,10 +32,56 @@ type FoodDetectionResult = {
   modelVersion: string;
 };
 
+type ReasoningFoodScore = {
+  food_name: string;
+  severity_score: number;
+  risk_level: string;
+  worst_category: string | null;
+};
+
+type ReasoningInteractionResponse = {
+  detected_food: string;
+  highest_severity: number;
+  status: string;
+  detailed_predictions: Array<{
+    medication: string;
+    severity_score: number;
+    risk_level: string;
+    mechanisms?: string[];
+    matched_categories?: string[];
+    risky_categories?: string[];
+  }>;
+  llm_reasoning?: string;
+  recommended_foods?: ReasoningFoodScore[];
+  alert_sent?: boolean;
+};
+
+type ReasoningRecommendResponse = {
+  patient_medications: string[];
+  matched_categories?: Record<string, string[]>;
+  total_foods_analyzed?: number;
+  summary?: { safe: number; avoid: number };
+  recommended_foods: ReasoningFoodScore[];
+  foods_to_avoid?: ReasoningFoodScore[];
+};
+
+type ReasoningNutritionResponse = {
+  status: string;
+  yolo_class: string;
+  matched_food: string;
+  portion_grams: number;
+  nutrition_facts: {
+    calories_kcal: number;
+    proteins_g: number;
+    fats_g: number;
+    carbohydrates_g: number;
+  };
+};
+
 const DEVELOPMENT_DETECTED_ITEMS: DetectionItem[] = [
   {
-    label: "nasi_putih",
-    labelDisplay: "Nasi Putih",
+    label: "nasi-goreng",
+    labelDisplay: "Nasi Goreng",
     confidence: 0.94,
     boundingBox: { x: 120, y: 80, width: 200, height: 180 },
   },
@@ -60,6 +106,8 @@ const getAiInferenceUrl = () => {
   return undefined;
 };
 
+const getReasoningApiBaseUrl = () => (process.env.FOOD_REASONING_API_URL || process.env.AI_REASONING_URL || "http://ai.jivara.web.id").replace(/\/+$/, "");
+
 const shouldUseDevelopmentFallback = () =>
   process.env.FOOD_AI_ALLOW_LOCAL_FALLBACK === "true" || process.env.NODE_ENV !== "production";
 
@@ -67,6 +115,42 @@ const resolvePublicImageUrl = (imageUrl: string) => {
   if (/^https?:\/\//i.test(imageUrl)) return imageUrl;
   return `${(process.env.API_URL || "http://localhost:3001").replace(/\/$/, "")}${imageUrl.startsWith("/") ? "" : "/"}${imageUrl}`;
 };
+
+const normalizeDetectedLabel = (item: unknown) => {
+  if (typeof item === "string") return item;
+  if (item && typeof item === "object") {
+    const record = item as Record<string, unknown>;
+    return String(record.label || record.food_item || record.yolo_class || "");
+  }
+
+  return "";
+};
+
+const normalizeMedicationNames = (medications: Array<{ drugName: string }>) => medications.map((medication) => medication.drugName.toUpperCase());
+
+const mapRiskScoreToLevel = (score: number) => {
+  if (score >= 4) return "tinggi";
+  if (score >= 2) return "sedang";
+  return "rendah";
+};
+
+const getReasoningTimeoutMs = () => Number(process.env.FOOD_REASONING_TIMEOUT_MS || process.env.FOOD_AI_TIMEOUT_MS || 10000);
+
+const postReasoning = async <T>(path: string, body: unknown): Promise<T> => {
+  try {
+    const response = await axios.post<T>(`${getReasoningApiBaseUrl()}${path}`, body, { timeout: getReasoningTimeoutMs() });
+    return response.data;
+  } catch (error) {
+    const status = axios.isAxiosError(error) && error.response?.status ? error.response.status : 502;
+    throw { status, message: "Service AI reasoning gagal memproses analisis makanan", code: "AI_REASONING_FAILED" };
+  }
+};
+
+const checkFoodInteractionWithReasoning = (yoloClass: string, patientMedications: string[]) => postReasoning<ReasoningInteractionResponse>("/interaction-check", { yolo_class: yoloClass, patient_medications: patientMedications });
+
+const getFoodRecommendations = (patientMedications: string[], topN = 5) => postReasoning<ReasoningRecommendResponse>("/recommend", { patient_medications: patientMedications, top_n: topN });
+
+const getFoodNutrition = (yoloClass: string, portionGrams = 100) => postReasoning<ReasoningNutritionResponse>("/nutrition", { yolo_class: yoloClass, portion_grams: portionGrams });
 
 const toDetectionItem = (item: Record<string, unknown>): DetectionItem => ({
   label: String(item.label || item.class || item.name || "makanan_terdeteksi"),
@@ -116,7 +200,7 @@ const getDevelopmentDetectionResult = (): FoodDetectionResult => ({
     },
   ],
   inferenceTimeMs: 1840,
-  modelVersion: "development-yolov11-indo-food-v1.0",
+  modelVersion: "yolov11",
 });
 
 const runFoodDetection = async (scan: typeof foodScans.$inferSelect, patientId: string): Promise<FoodDetectionResult> => {
@@ -146,12 +230,6 @@ const runFoodDetection = async (scan: typeof foodScans.$inferSelect, patientId: 
     const status = axios.isAxiosError(error) && error.response?.status ? error.response.status : 502;
     throw { status, message: "Service AI gagal memproses gambar makanan", code: "AI_INFERENCE_FAILED" };
   }
-};
-
-const NUTRITION_MAP: Record<string, { display: string; portion: string; calories: number; protein: number; fat: number; carbs: number; source: string }> = {
-  nasi_putih: { display: "Nasi Putih", portion: "1 porsi (150g)", calories: 195, protein: 3.5, fat: 0.3, carbs: 43.2, source: "TKPI" },
-  rendang: { display: "Rendang Daging", portion: "1 porsi (100g)", calories: 193, protein: 22.6, fat: 10.2, carbs: 2.1, source: "Dataset Makanan Indonesia" },
-  kangkung: { display: "Kangkung", portion: "1 porsi (100g)", calories: 19, protein: 2.6, fat: 0.2, carbs: 3.1, source: "TKPI" },
 };
 
 const ensurePatientExists = async (patientId: string) => {
@@ -213,61 +291,31 @@ export const getFoodScanById = async (scanId: string, user?: AccessUser) => {
   const scan = await ensureScanExists(scanId);
   if (user) await assertCanAccessPatient(user, scan.patientId);
 
-  const [items, interactions] = await Promise.all([
+  const [items, interactions, activeMedications] = await Promise.all([
     db.select().from(detectedItems).where(eq(detectedItems.scanId, scanId)),
     db.select().from(interactionResults).where(eq(interactionResults.scanId, scanId)),
+    db
+      .select({ drugName: medicationSchedules.drugName })
+      .from(medicationSchedules)
+      .where(and(
+        eq(medicationSchedules.patientId, scan.patientId),
+        eq(medicationSchedules.isActive, true),
+      )),
   ]);
+
+  const patientMedications = normalizeMedicationNames(activeMedications);
+  const recommendationData = patientMedications.length > 0
+    ? await getFoodRecommendations(patientMedications, 5).catch(() => ({ recommended_foods: [], foods_to_avoid: [] as ReasoningFoodScore[] }))
+    : { recommended_foods: [], foods_to_avoid: [] as ReasoningFoodScore[] };
 
   return {
     ...mapScanSummary(scan),
     detectedItems: items,
     interactions,
-  };
-};
-
-const incrementSummary = <T extends string>(summary: Record<string, { label: string; total: number }>, value: T) => {
-  summary[value] ??= { label: value, total: 0 };
-  summary[value].total += 1;
-};
-
-export const getInteractionAnalytics = async (user?: AccessUser) => {
-  const scans = await db.select({ id: foodScans.id, patientId: foodScans.patientId }).from(foodScans).orderBy(desc(foodScans.createdAt)).limit(1000);
-  const accessibleScanIds = [];
-
-  for (const scan of scans) {
-    try {
-      if (user) await assertCanAccessPatient(user, scan.patientId);
-      accessibleScanIds.push(scan.id);
-    } catch {
-      // Skip scans outside the user's patient scope.
-    }
-  }
-
-  if (accessibleScanIds.length === 0) {
-    return { totalScans: 0, totalInteractions: 0, severityDistribution: [], topFoods: [], topMedications: [] };
-  }
-
-  const interactions = await db.select().from(interactionResults).where(inArray(interactionResults.scanId, accessibleScanIds));
-  const severityDistribution: Record<string, { label: string; total: number }> = {};
-  const topFoods: Record<string, { label: string; total: number }> = {};
-  const topMedications: Record<string, { label: string; total: number }> = {};
-
-  for (const interaction of interactions) {
-    incrementSummary(severityDistribution, interaction.severity);
-    incrementSummary(topFoods, interaction.foodItem);
-    incrementSummary(topMedications, interaction.medication);
-  }
-
-  const sortByTotal = (items: Record<string, { label: string; total: number }>) => Object.values(items).sort((first, second) => second.total - first.total);
-
-  return {
-    totalScans: accessibleScanIds.length,
-    totalInteractions: interactions.length,
-    scansWithInteractions: new Set(interactions.map((interaction) => interaction.scanId)).size,
-    interactionRate: accessibleScanIds.length > 0 ? Math.round((new Set(interactions.map((interaction) => interaction.scanId)).size / accessibleScanIds.length) * 10000) / 100 : 0,
-    severityDistribution: sortByTotal(severityDistribution),
-    topFoods: sortByTotal(topFoods).slice(0, 10),
-    topMedications: sortByTotal(topMedications).slice(0, 10),
+    patientMedications,
+    analyzedMedicationCount: patientMedications.length,
+    recommendedFoods: recommendationData.recommended_foods,
+    foodsToAvoid: recommendationData.foods_to_avoid || [],
   };
 };
 
@@ -366,22 +414,33 @@ export const checkInteraction = async (dto: InteractionCheckDTO, user?: AccessUs
   const activeMedications = await db
     .select({ drugName: medicationSchedules.drugName, dosage: medicationSchedules.dosage })
     .from(medicationSchedules)
-    .where(eq(medicationSchedules.patientId, dto.patientId));
+    .where(and(
+      eq(medicationSchedules.patientId, dto.patientId),
+      eq(medicationSchedules.isActive, true),
+    ));
 
-  const hasWarfarin = activeMedications.some((medication) => medication.drugName.toLowerCase().includes("warfarin"));
-  const hasKangkung = dto.detectedItems.includes("kangkung");
-  const interactions = hasKangkung ? [
-    {
-      food_item: "kangkung",
-      food_display: "Kangkung",
-      medication: hasWarfarin ? "Warfarin 5mg" : "Obat pengencer darah",
-      severity: "kuning",
-      severity_label: "Perhatian",
-      interaction_description: "Kangkung mengandung Vitamin K yang dapat memengaruhi terapi pengencer darah tertentu.",
-      recommendation: "Batasi porsi kangkung dan jaga konsistensi asupan sayuran hijau. Konsultasikan dengan tenaga medis bila ragu.",
-      sources: ["PIONAS", "DrugBank"],
-    },
-  ] : [];
+  const detectedLabels = dto.detectedItems.map(normalizeDetectedLabel).filter(Boolean);
+  const patientMedications = normalizeMedicationNames(activeMedications);
+  const [interactionChecks, recommendationData] = await Promise.all([
+    Promise.all(detectedLabels.map((label) => checkFoodInteractionWithReasoning(label, patientMedications))),
+    getFoodRecommendations(patientMedications, 5),
+  ]);
+  const interactions = interactionChecks.flatMap((check) => check.detailed_predictions
+    .filter((prediction) => prediction.severity_score > 0)
+    .map((prediction) => ({
+      food_item: check.detected_food,
+      food_display: check.detected_food.replace(/-/g, " "),
+      medication: prediction.medication,
+      severity: prediction.risk_level || mapRiskScoreToLevel(prediction.severity_score),
+      severity_label: prediction.risk_level || mapRiskScoreToLevel(prediction.severity_score),
+      interaction_description: check.llm_reasoning || prediction.mechanisms?.join("; ") || "AI reasoning mendeteksi potensi interaksi obat-makanan.",
+      recommendation: check.recommended_foods?.length
+        ? `Alternatif aman: ${check.recommended_foods.slice(0, 5).map((food) => food.food_name).join(", ")}.`
+        : "Ikuti rekomendasi tenaga kesehatan dan pantau gejala setelah makan.",
+      sources: ["Jivara AI Reasoning"],
+    })));
+  const highestSeverity = Math.max(0, ...interactionChecks.map((check) => check.highest_severity));
+  const overallRiskLevel = mapRiskScoreToLevel(highestSeverity);
 
   if (interactions.length > 0) {
     await db.insert(interactionResults).values(interactions.map((interaction) => ({
@@ -393,19 +452,19 @@ export const checkInteraction = async (dto: InteractionCheckDTO, user?: AccessUs
       recommendation: interaction.recommendation,
       sources: interaction.sources,
     })));
-
-    await db
-      .update(foodScans)
-      .set({ overallRiskScore: 0.45, overallRiskLevel: "sedang" })
-      .where(eq(foodScans.id, dto.scanId));
   }
+
+  await db
+    .update(foodScans)
+    .set({ overallRiskScore: highestSeverity, overallRiskLevel })
+    .where(eq(foodScans.id, dto.scanId));
 
   await writeAuditLog({
     userId: user?.id || null,
     action: "food_scan.interaction_checked",
     resourceType: "food_scan",
     resourceId: dto.scanId,
-    changes: { patientId: dto.patientId, interactionCount: interactions.length, detectedItems: dto.detectedItems.length },
+    changes: { patientId: dto.patientId, interactionCount: interactions.length, detectedItems: detectedLabels.length, recommendationCount: recommendationData.recommended_foods.length },
   });
 
   if (interactions.length > 0) {
@@ -425,13 +484,19 @@ export const checkInteraction = async (dto: InteractionCheckDTO, user?: AccessUs
 
   return {
     interactions,
-    safe_items: dto.detectedItems
-      .filter((item) => item !== "kangkung")
-      .map((item) => ({ food_item: item, food_display: NUTRITION_MAP[item]?.display || item, status: "aman" })),
-    overall_risk_score: interactions.length > 0 ? 0.45 : 0.1,
-    overall_risk_level: interactions.length > 0 ? "sedang" : "rendah",
+    patient_medications: patientMedications,
+    analyzed_medications_count: patientMedications.length,
+    safe_items: detectedLabels
+      .filter((item) => !interactions.some((interaction) => interaction.food_item === item))
+      .map((item) => ({ food_item: item, food_display: item.replace(/-/g, " "), status: "aman" })),
+    recommended_foods: recommendationData.recommended_foods,
+    foods_to_avoid: recommendationData.foods_to_avoid || [],
+    recommendation_summary: recommendationData.summary,
+    matched_medication_categories: recommendationData.matched_categories || {},
+    overall_risk_score: highestSeverity,
+    overall_risk_level: overallRiskLevel,
     overall_recommendation: interactions.length > 0
-      ? "Sebagian besar makanan aman. Perhatikan porsi kangkung saat mengonsumsi obat pengencer darah."
+      ? "Ditemukan potensi interaksi obat-makanan. Ikuti alternatif makanan aman dari rekomendasi AI."
       : "Tidak ditemukan interaksi signifikan pada makanan yang terdeteksi.",
     disclaimer: "Ini bukan nasihat medis. Selalu konsultasikan dengan dokter atau apoteker Anda.",
     timestamp: new Date(),
@@ -439,30 +504,19 @@ export const checkInteraction = async (dto: InteractionCheckDTO, user?: AccessUs
 };
 
 export const estimateNutrition = async (dto: NutritionDTO) => {
-  const items = dto.detectedItems.map((item) => {
-    const nutrition = NUTRITION_MAP[item.label] || {
-      display: item.label,
-      portion: "1 porsi",
-      calories: 0,
-      protein: 0,
-      fat: 0,
-      carbs: 0,
-      source: "Basis Pengetahuan Lokal",
-    };
-
-    return {
-      food_item: item.label,
-      food_display: nutrition.display,
-      portion: nutrition.portion,
-      nutrition: {
-        calories: nutrition.calories,
-        protein_g: nutrition.protein,
-        fat_g: nutrition.fat,
-        carbs_g: nutrition.carbs,
-      },
-      source: nutrition.source,
-    };
-  });
+  const nutritionResponses = await Promise.all(dto.detectedItems.map((item) => getFoodNutrition(item.label, item.portionGrams || 100)));
+  const items = nutritionResponses.map((nutrition) => ({
+    food_item: nutrition.yolo_class,
+    food_display: nutrition.matched_food,
+    portion: `${nutrition.portion_grams} gram`,
+    nutrition: {
+      calories: nutrition.nutrition_facts.calories_kcal,
+      protein_g: nutrition.nutrition_facts.proteins_g,
+      fat_g: nutrition.nutrition_facts.fats_g,
+      carbs_g: nutrition.nutrition_facts.carbohydrates_g,
+    },
+    source: "Jivara AI Nutrition",
+  }));
 
   return {
     items,

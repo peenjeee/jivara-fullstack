@@ -33,15 +33,6 @@ export const getFoodScan = async (req: AuthRequest, res: Response) => {
   }
 };
 
-export const getInteractionAnalytics = async (req: AuthRequest, res: Response) => {
-  try {
-    const data = await foodAiService.getInteractionAnalytics(req.user);
-    res.status(200).json({ status: "berhasil", data });
-  } catch (error) {
-    sendError(res, error);
-  }
-};
-
 export const uploadFoodImage = async (req: AuthRequest, res: Response) => {
   const file = req.file;
 

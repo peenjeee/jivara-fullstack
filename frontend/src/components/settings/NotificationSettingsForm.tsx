@@ -5,13 +5,12 @@ import { Save } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { FormDataSkeleton } from "@/components/ui/PageSkeletons";
 import { getUserNotificationPreferenceFromApi, updateUserNotificationPreferenceViaApi } from "@/lib/notificationSettingsApi";
-import { enableUserPushNotifications } from "@/lib/pushNotifications";
+import { enableUserPushNotifications, supportsBrowserPushNotifications } from "@/lib/pushNotifications";
 import { showToast } from "@/lib/swal";
-import { useIsStandalonePwa } from "@/hooks";
 import ToggleRow from "./ToggleRow";
 
 export default function NotificationSettingsForm() {
-  const isStandalonePwa = useIsStandalonePwa();
+  const supportsPush = supportsBrowserPushNotifications();
   const [criticalAlert, setCriticalAlert] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -37,7 +36,7 @@ export default function NotificationSettingsForm() {
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!isStandalonePwa) return;
+    if (!supportsPush) return;
     setIsSaving(true);
 
     try {
@@ -53,7 +52,7 @@ export default function NotificationSettingsForm() {
 
   const handleToggle = async (enabled: boolean) => {
     setCriticalAlert(enabled);
-    if (!isStandalonePwa) return;
+    if (!supportsPush) return;
 
     setIsSaving(true);
     try {
@@ -72,13 +71,13 @@ export default function NotificationSettingsForm() {
   return isLoading ? <FormDataSkeleton /> : (
     <form onSubmit={handleSubmit} className="space-y-4" noValidate>
       <ToggleRow id="criticalAlert" title="Peringatan Obat" description="Notifikasi saat pasien memiliki risiko interaksi makanan dan obat tinggi." checked={criticalAlert} onChange={(enabled) => { void handleToggle(enabled); }} />
-      {!isStandalonePwa && (
+      {!supportsPush && (
         <p className="rounded-2xl bg-warning/10 px-4 py-3 text-sm font-bold leading-6 text-warning-dark">
-          Buka Jivara sebagai PWA untuk menyimpan pengaturan notifikasi.
+          Browser ini belum mendukung push notification atau Jivara belum dibuka melalui HTTPS.
         </p>
       )}
       <div className="flex justify-end pt-2">
-        <Button type="submit" icon={<Save size={18} />} loading={isSaving} disabled={!isStandalonePwa}>Simpan</Button>
+        <Button type="submit" icon={<Save size={18} />} loading={isSaving} disabled={!supportsPush}>Simpan</Button>
       </div>
     </form>
   );

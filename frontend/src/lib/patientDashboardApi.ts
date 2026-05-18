@@ -2,6 +2,7 @@ import api from "@/lib/axios";
 import type { ActivityLogRecord } from "@/lib/mocks/activityLogs";
 import type { PatientRecord } from "@/lib/mocks/patients";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
+import { getFoodScansForPatientFromApi } from "@/lib/foodScanApi";
 import { getPatientDetailFromApi, getPatientsFromApi } from "@/lib/patientApi";
 import { getSchedulesFromApi } from "@/lib/scheduleApi";
 
@@ -94,8 +95,9 @@ export const getCompletedScheduleDates = (logs: readonly MedicationLogResponse[]
 
 export const getPatientActivitiesFromApi = async (): Promise<ActivityLogRecord[]> => {
   const data = await getPatientDashboardData();
+  const scans = await getFoodScansForPatientFromApi(data.patient.id).catch(() => []);
 
-  return data.medicationLogs.map((log) => ({
+  const medicationActivities: ActivityLogRecord[] = data.medicationLogs.map((log) => ({
     id: log.id,
     title: log.status === "confirmed" ? "Obat dikonfirmasi" : log.status === "missed" ? "Obat terlewat" : "Aktivitas obat",
     description: `${log.drugName} berstatus ${log.status}.`,
@@ -109,6 +111,23 @@ export const getPatientActivitiesFromApi = async (): Promise<ActivityLogRecord[]
     medicineName: log.drugName,
     read: false,
   }));
+
+  const scanActivities: ActivityLogRecord[] = scans.map((scan) => ({
+    id: `food-scan-${scan.id}`,
+    title: scan.risk === "High Risk" ? "Scan makanan berisiko" : "Scan makanan selesai",
+    description: scan.result,
+    category: "Scan Makanan",
+    severity: scan.risk === "High Risk" ? "Peringatan" : "Sukses",
+    timestamp: scan.scannedAt,
+    patientId: scan.patientId,
+    patientName: data.patient.name,
+    patientAvatar: data.patient.avatar,
+    scanId: scan.id,
+    read: false,
+  }));
+
+  return [...medicationActivities, ...scanActivities]
+    .sort((first, second) => Date.parse(second.timestamp) - Date.parse(first.timestamp));
 };
 
 export const confirmMedicationScheduleViaApi = async (schedule: MedicationScheduleRecord, selectedDate: Date) => {

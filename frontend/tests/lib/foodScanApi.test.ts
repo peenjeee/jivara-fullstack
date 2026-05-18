@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import api from "@/lib/axios";
-import { scanFoodImage } from "@/lib/foodScanApi";
+import { getFoodScanAnalysisFromApi, scanFoodImage } from "@/lib/foodScanApi";
 
 vi.mock("@/lib/axios", () => ({
   default: {
@@ -23,8 +23,8 @@ describe("foodScanApi", () => {
     mockedPost
       .mockResolvedValueOnce({ data: { data: { image_id: "img-1", upload_url: "/uploads/img-1.jpg", timestamp: "2026-05-09T08:00:00.000Z" } } })
       .mockResolvedValueOnce({ data: { data: { scan_id: "scan-1", detected_items: [{ label: "milk", label_display: "Susu", confidence: 0.95 }], inference_time_ms: 120, model_version: "v1", timestamp: "2026-05-09T08:00:01.000Z" } } })
-      .mockResolvedValueOnce({ data: { data: { interactions: [{ food_item: "milk", food_display: "Susu", medication: "Cefixime", severity: "high", severity_label: "Tinggi", interaction_description: "Susu dapat mengganggu penyerapan.", recommendation: "Beri jeda 2 jam." }], overall_risk_level: "high", overall_recommendation: "Hindari konsumsi bersamaan.", disclaimer: "Konsultasikan ke tenaga kesehatan." } } })
-      .mockResolvedValueOnce({ data: { data: {} } });
+      .mockResolvedValueOnce({ data: { data: { interactions: [{ food_item: "milk", food_display: "Susu", medication: "Cefixime", severity: "high", severity_label: "Tinggi", interaction_description: "Susu dapat mengganggu penyerapan.", recommendation: "Beri jeda 2 jam." }], patient_medications: ["CEFIXIME"], analyzed_medications_count: 1, recommended_foods: [{ food_name: "ayam-goreng", severity_score: 0, risk_level: "aman", worst_category: null }], foods_to_avoid: [{ food_name: "susu", severity_score: 5, risk_level: "tinggi", worst_category: "antibiotik" }], overall_risk_level: "high", overall_recommendation: "Hindari konsumsi bersamaan.", disclaimer: "Konsultasikan ke tenaga kesehatan." } } })
+      .mockResolvedValueOnce({ data: { data: { items: [{ food_item: "milk", food_display: "Susu", portion: "100 gram", nutrition: { calories: 60, protein_g: 3.2, fat_g: 3.3, carbs_g: 4.8 }, source: "Jivara AI Nutrition" }], total: { calories: 60, protein_g: 3.2, fat_g: 3.3, carbs_g: 4.8 } } } });
 
     const file = new File(["image"], "food.jpg", { type: "image/jpeg" });
     const analysis = await scanFoodImage(file);
@@ -37,7 +37,13 @@ describe("foodScanApi", () => {
     expect(analysis).toMatchObject({
       overallRisk: "High Risk",
       scan: { id: "img-1", patientId: "patient-1", foodName: "Susu", risk: "High Risk" },
+      analyzedMedicationCount: 1,
+      analyzedMedications: ["CEFIXIME"],
       interactions: [expect.objectContaining({ risk: "High Risk", recommendation: "Beri jeda 2 jam." })],
+      recommendedFoods: [{ foodName: "ayam-goreng", severityScore: 0, riskLevel: "aman", worstCategory: null }],
+      foodsToAvoid: [{ foodName: "susu", severityScore: 5, riskLevel: "tinggi", worstCategory: "antibiotik" }],
+      nutritionItems: [expect.objectContaining({ foodDisplay: "Susu", nutrition: { calories: 60, proteinG: 3.2, fatG: 3.3, carbsG: 4.8 } })],
+      nutritionTotal: { calories: 60, proteinG: 3.2, fatG: 3.3, carbsG: 4.8 },
     });
   });
 
@@ -45,5 +51,67 @@ describe("foodScanApi", () => {
     mockedGet.mockResolvedValueOnce({ data: { data: [] } });
 
     await expect(scanFoodImage(new File(["image"], "food.jpg"))).rejects.toThrow("Data pasien tidak ditemukan untuk scan makanan.");
+  });
+
+  it("keeps scan result when nutrition estimate fails", async () => {
+    mockedGet.mockResolvedValueOnce({ data: { data: [{ id: "patient-1", fullName: "Budi Santoso" }] } });
+    mockedPost
+      .mockResolvedValueOnce({ data: { data: { image_id: "img-1", upload_url: "/uploads/img-1.jpg", timestamp: "2026-05-09T08:00:00.000Z" } } })
+      .mockResolvedValueOnce({ data: { data: { scan_id: "scan-1", detected_items: [{ label: "rendang", label_display: "Rendang", confidence: 0.95 }], inference_time_ms: 120, model_version: "v1", timestamp: "2026-05-09T08:00:01.000Z" } } })
+      .mockResolvedValueOnce({ data: { data: { interactions: [{ food_item: "rendang", food_display: "Rendang", medication: "Warfarin", severity: "high", severity_label: "Tinggi", interaction_description: "Perlu perhatian.", recommendation: "Hindari konsumsi bersamaan." }], recommended_foods: [], foods_to_avoid: [], overall_risk_level: "high", overall_recommendation: "Hindari konsumsi bersamaan.", disclaimer: "Konsultasikan ke tenaga kesehatan." } } })
+      .mockRejectedValueOnce({ response: { status: 502, data: { message: "Data gizi tidak tersedia" } } });
+
+    const file = new File(["image"], "food.jpg", { type: "image/jpeg" });
+    const analysis = await scanFoodImage(file);
+
+    expect(analysis.scan.foodName).toBe("Rendang");
+    expect(analysis.interactions).toHaveLength(1);
+    expect(analysis.nutritionItems).toBeUndefined();
+    expect(analysis.nutritionTotal).toBeUndefined();
+  });
+
+  it("maps analyzed medication count and recommendations from scan detail API", async () => {
+    mockedGet.mockResolvedValueOnce({
+      data: {
+        data: {
+          id: "scan-1",
+          patientId: "patient-1",
+          imageUrl: "/uploads/scan-1.jpg",
+          overallRiskLevel: "rendah",
+          modelVersion: "v1",
+          inferenceTimeMs: 120,
+          createdAt: "2026-05-09T08:00:00.000Z",
+          detectedItems: [{ id: "item-1", label: "kangkung", labelDisplay: "Kangkung", confidence: 0.9 }],
+          interactions: [],
+          patientMedications: ["ATORVASTATIN"],
+          analyzedMedicationCount: 1,
+          recommendedFoods: [{ food_name: "apel", severity_score: 0, risk_level: "aman", worst_category: null }],
+          foodsToAvoid: [{ food_name: "gudeg", severity_score: 3, risk_level: "sedang", worst_category: "statin" }],
+        },
+      },
+    });
+
+    const analysis = await getFoodScanAnalysisFromApi("scan-1");
+
+    expect(analysis.analyzedMedicationCount).toBe(1);
+    expect(analysis.analyzedMedications).toEqual(["ATORVASTATIN"]);
+    expect(analysis.recommendedFoods).toEqual([{ foodName: "apel", severityScore: 0, riskLevel: "aman", worstCategory: null }]);
+    expect(analysis.foodsToAvoid).toEqual([{ foodName: "gudeg", severityScore: 3, riskLevel: "sedang", worstCategory: "statin" }]);
+  });
+
+  it("maps safe foods when no interactions are returned", async () => {
+    mockedGet.mockResolvedValueOnce({ data: { data: [{ id: "patient-1", fullName: "Budi Santoso" }] } });
+    mockedPost
+      .mockResolvedValueOnce({ data: { data: { image_id: "img-1", upload_url: "/uploads/img-1.jpg", timestamp: "2026-05-09T08:00:00.000Z" } } })
+      .mockResolvedValueOnce({ data: { data: { scan_id: "scan-1", detected_items: [{ label: "kangkung", label_display: "Kangkung", confidence: 0.95 }], inference_time_ms: 120, model_version: "v1", timestamp: "2026-05-09T08:00:01.000Z" } } })
+      .mockResolvedValueOnce({ data: { data: { interactions: [], patient_medications: ["ATORVASTATIN"], analyzed_medications_count: 1, safe_items: [{ food_item: "kangkung", food_display: "Kangkung", status: "aman" }], recommended_foods: [], foods_to_avoid: [], overall_risk_level: "low", overall_recommendation: "Tidak ditemukan interaksi signifikan pada makanan yang terdeteksi.", disclaimer: "Konsultasikan ke tenaga kesehatan." } } })
+      .mockResolvedValueOnce({ data: { data: { items: [], total: { calories: 0, protein_g: 0, fat_g: 0, carbs_g: 0 } } } });
+
+    const file = new File(["image"], "food.jpg", { type: "image/jpeg" });
+    const analysis = await scanFoodImage(file);
+
+    expect(analysis.interactions).toEqual([]);
+    expect(analysis.safeFoods).toEqual([{ foodItem: "kangkung", foodDisplay: "Kangkung", status: "aman" }]);
+    expect(analysis.analyzedMedicationCount).toBe(1);
   });
 });

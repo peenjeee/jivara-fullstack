@@ -82,11 +82,29 @@ export default function ActivityLogPage({ initialPatientName = "", initialCatego
       const assignments = Object.fromEntries(patients.flatMap((patient) => patient.assignedNurseId ? [[patient.id, patient.assignedNurseId]] : []));
 
       if (readOnly) {
-        const [auditActivities, alertActivities] = await Promise.all([
+        const [auditActivities, alertActivities, foodScans] = await Promise.all([
           getAuditActivitiesFromApi({ page: 1, limit: serverPageSize }),
           getAlertActivitiesFromApi({ page: 1, limit: serverPageSize }),
+          getFoodScansFromApi({ page: 1, limit: serverPageSize }).catch(() => []),
         ]);
-        return { activities: [...alertActivities, ...auditActivities].map((activity) => ({ ...activity, read: readIds.has(activity.id) || activity.read })), assignments };
+        const patientById = new Map(patients.map((patient) => [patient.id, patient]));
+        const foodScanActivities = foodScans.map((scan): ActivityLogRecord => {
+          const patient = patientById.get(scan.patientId);
+          return {
+            id: `food-scan-${scan.id}`,
+            title: scan.risk === "High Risk" ? "Scan makanan berisiko" : "Scan makanan selesai",
+            description: scan.result,
+            category: "Scan Makanan",
+            severity: scan.risk === "High Risk" ? "Peringatan" : "Sukses",
+            timestamp: scan.scannedAt,
+            patientId: scan.patientId,
+            patientName: patient?.name,
+            patientAvatar: patient?.avatar,
+            scanId: scan.id,
+            read: false,
+          };
+        });
+        return { activities: [...alertActivities, ...foodScanActivities, ...auditActivities].map((activity) => ({ ...activity, read: readIds.has(activity.id) || activity.read })), assignments };
       }
 
       const patientById = new Map(patients.map((patient) => [patient.id, patient]));
@@ -160,12 +178,12 @@ export default function ActivityLogPage({ initialPatientName = "", initialCatego
       const patients = await getPatientsFromApi();
       const readIds = await getActivityReadIdsFromApi().catch(() => new Set<string>());
       const patientById = new Map(patients.map((patient) => [patient.id, patient]));
-      const [alertActivities, auditActivities, logResponse, foodScans] = await Promise.all([
-        getAlertActivitiesFromApi({ page: nextPage, limit: serverPageSize }).catch(() => []),
-        getAuditActivitiesFromApi({ page: nextPage, limit: serverPageSize }).catch(() => []),
-        readOnly ? Promise.resolve({ data: { data: [] } }) : api.get<PaginatedResponse<MedicationLogResponse>>("/medication-logs", { params: { page: nextPage, limit: serverPageSize } }).catch(() => ({ data: { data: [] } })),
-        readOnly ? Promise.resolve([]) : getFoodScansFromApi({ page: nextPage, limit: serverPageSize }).catch(() => []),
-      ]);
+        const [alertActivities, auditActivities, logResponse, foodScans] = await Promise.all([
+          getAlertActivitiesFromApi({ page: nextPage, limit: serverPageSize }).catch(() => []),
+          getAuditActivitiesFromApi({ page: nextPage, limit: serverPageSize }).catch(() => []),
+          readOnly ? Promise.resolve({ data: { data: [] } }) : api.get<PaginatedResponse<MedicationLogResponse>>("/medication-logs", { params: { page: nextPage, limit: serverPageSize } }).catch(() => ({ data: { data: [] } })),
+          getFoodScansFromApi({ page: nextPage, limit: serverPageSize }).catch(() => []),
+        ]);
       const medicationActivities = logResponse.data.data.map((log): ActivityLogRecord => {
         const patient = patientById.get(log.patientId);
         return {

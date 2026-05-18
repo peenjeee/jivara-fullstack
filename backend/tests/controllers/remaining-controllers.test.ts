@@ -10,7 +10,7 @@ const services = vi.hoisted(() => ({
   audit: { listAuditLogs: vi.fn() },
   adherence: { getAdherenceStats: vi.fn(), getAggregateAdherenceStats: vi.fn() },
   publicStats: { getPublicStats: vi.fn() },
-  food: { listFoodScans: vi.fn(), getFoodScanById: vi.fn(), getInteractionAnalytics: vi.fn(), uploadFoodImage: vi.fn(), detectFood: vi.fn(), checkInteraction: vi.fn(), estimateNutrition: vi.fn() },
+  food: { listFoodScans: vi.fn(), getFoodScanById: vi.fn(), uploadFoodImage: vi.fn(), detectFood: vi.fn(), checkInteraction: vi.fn(), estimateNutrition: vi.fn() },
   storage: { uploadFoodScanImage: vi.fn(), deleteLocalUploadIfExists: vi.fn() },
   notification: {
     subscribeDevice: vi.fn(), subscribeUserDevice: vi.fn(), setNotificationPreference: vi.fn(), getNotificationPreference: vi.fn(),

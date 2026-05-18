@@ -5,14 +5,13 @@ import { Save } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { FormDataSkeleton } from "@/components/ui/PageSkeletons";
 import { getUserNotificationPreferenceFromApi, updateUserNotificationPreferenceViaApi, type UserNotificationPreferenceKey } from "@/lib/notificationSettingsApi";
-import { enableUserPushNotifications } from "@/lib/pushNotifications";
+import { enableUserPushNotifications, supportsBrowserPushNotifications } from "@/lib/pushNotifications";
 import { showToast } from "@/lib/swal";
 import { useAuthStore } from "@/store/auth";
-import { useIsStandalonePwa } from "@/hooks";
 import ToggleRow from "@/components/settings/ToggleRow";
 
 export default function AdminNotificationSettingsForm() {
-  const isStandalonePwa = useIsStandalonePwa();
+  const supportsPush = supportsBrowserPushNotifications();
   const role = useAuthStore((state) => state.user?.role);
   const isSuperAdmin = role === "super_admin";
   const preferenceKey: UserNotificationPreferenceKey = isSuperAdmin ? "super_admin_approval" : "admin_critical_activity";
@@ -41,7 +40,7 @@ export default function AdminNotificationSettingsForm() {
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!isStandalonePwa) return;
+    if (!supportsPush) return;
     setIsSaving(true);
 
     try {
@@ -57,7 +56,7 @@ export default function AdminNotificationSettingsForm() {
 
   const handleToggle = async (enabled: boolean) => {
     setNotificationEnabled(enabled);
-    if (!isStandalonePwa) return;
+    if (!supportsPush) return;
 
     setIsSaving(true);
     try {
@@ -82,13 +81,13 @@ export default function AdminNotificationSettingsForm() {
         checked={notificationEnabled}
         onChange={(enabled) => { void handleToggle(enabled); }}
       />
-      {!isStandalonePwa && (
+      {!supportsPush && (
         <p className="rounded-2xl bg-warning/10 px-4 py-3 text-sm font-bold leading-6 text-warning-dark">
-          Buka Jivara sebagai PWA untuk menyimpan pengaturan notifikasi.
+          Browser ini belum mendukung push notification atau Jivara belum dibuka melalui HTTPS.
         </p>
       )}
       <div className="flex justify-end pt-2">
-        <Button type="submit" icon={<Save size={18} />} loading={isSaving} disabled={!isStandalonePwa}>Simpan</Button>
+        <Button type="submit" icon={<Save size={18} />} loading={isSaving} disabled={!supportsPush}>Simpan</Button>
       </div>
     </form>
   );

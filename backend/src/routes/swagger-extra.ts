@@ -204,6 +204,36 @@
  *     responses:
  *       200:
  *         description: Detail scan makanan berhasil diambil
+ *         content:
+ *           application/json:
+ *             example:
+ *               status: berhasil
+ *               data:
+ *                 id: cd4725ca-6926-4a9e-aff3-b7774aae78af
+ *                 patientId: d2945f3f-d09c-4d9f-8ed2-1b9914328746
+ *                 imageUrl: https://your-project.supabase.co/storage/v1/object/public/food-scans/food-scans/2026-05-18/example.jpg
+ *                 overallRiskLevel: rendah
+ *                 modelVersion: yolov11-food-v1
+ *                 inferenceTimeMs: 320
+ *                 createdAt: 2026-05-18T17:58:10.276Z
+ *                 detectedItems:
+ *                   - id: item-1
+ *                     label: rendang
+ *                     labelDisplay: Rendang
+ *                     confidence: 0.94
+ *                 interactions: []
+ *                 patientMedications: ["ATORVASTATIN"]
+ *                 analyzedMedicationCount: 1
+ *                 recommendedFoods:
+ *                   - food_name: apel
+ *                     severity_score: 0
+ *                     risk_level: aman
+ *                     worst_category: null
+ *                 foodsToAvoid:
+ *                   - food_name: gudeg
+ *                     severity_score: 3
+ *                     risk_level: sedang
+ *                     worst_category: statin
  *       404:
  *         description: Scan makanan tidak ditemukan
  */

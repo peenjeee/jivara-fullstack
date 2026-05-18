@@ -104,6 +104,10 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "jivara-production.up.railway.app",
       },
+      {
+        protocol: "https",
+        hostname: "nizqnlcqmzqhfxulnwix.supabase.co",
+      },
     ],
   },
   async headers() {

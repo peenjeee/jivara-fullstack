@@ -37,7 +37,6 @@ const { pass, controllers, validators } = vi.hoisted(() => {
       updatePrescription: ok,
       deletePrescription: ok,
       listFoodScans: ok,
-      getInteractionAnalytics: ok,
       getFoodScan: ok,
       uploadFoodImage: ok,
       detectFood: ok,

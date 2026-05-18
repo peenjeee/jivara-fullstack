@@ -1,6 +1,7 @@
 import type { NextRequest, NextResponse } from "next/server";
 
 const isProduction = process.env.NODE_ENV === "production";
+const defaultBackendApiUrl = "https://api.jivara.web.id/api/v1";
 
 export const ACCESS_COOKIE = "jivara-token";
 export const REFRESH_COOKIE = "jivara-refresh-token";
@@ -69,6 +70,9 @@ export const setLogoutCookie = (response: NextResponse, request?: NextRequest) =
   });
 };
 
-export const getBackendApiUrl = () => process.env.NODE_ENV === "development"
-  ? "http://localhost:3001/api/v1"
-  : "https://api.jivara.web.id/api/v1";
+export const getBackendApiUrl = () => {
+  const configuredUrl = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL;
+  if (configuredUrl) return configuredUrl;
+  if (process.env.NODE_ENV === "development") return "http://localhost:3001/api/v1";
+  return defaultBackendApiUrl;
+};

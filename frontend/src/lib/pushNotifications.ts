@@ -41,6 +41,11 @@ export const getNotificationPatientId = async () => {
   return patient.id;
 };
 
+export const supportsBrowserPushNotifications = () => {
+  if (typeof window === "undefined") return false;
+  return window.isSecureContext && "Notification" in window && "PushManager" in window && "serviceWorker" in navigator;
+};
+
 const getServiceWorkerRegistration = async () => {
   if (!("serviceWorker" in navigator)) {
     throw new Error("Browser belum mendukung Service Worker.");
@@ -82,13 +87,13 @@ const getPushSubscription = async (registration: ServiceWorkerRegistration, publ
         serviceWorkerState: registration.active?.state || registration.installing?.state || registration.waiting?.state || null,
       };
       console.warn("[Jivara Push] Subscription failed", { ...diagnostics, errorMessage: message });
-      throw new Error(`Gagal mengaktifkan notifikasi. Pastikan aplikasi dibuka dari PWA.`);
+      throw new Error("Gagal mengaktifkan notifikasi di browser ini. Pastikan menggunakan HTTPS dan browser mendukung push notification.");
     }
   }
 };
 
 export const enableMedicationPushNotifications = async () => {
-  if (!("Notification" in window) || !("PushManager" in window)) {
+  if (!supportsBrowserPushNotifications()) {
     throw new Error("Browser belum mendukung push notification.");
   }
 
@@ -114,7 +119,7 @@ export const enableMedicationPushNotifications = async () => {
 };
 
 export const enableUserPushNotifications = async () => {
-  if (!("Notification" in window) || !("PushManager" in window)) {
+  if (!supportsBrowserPushNotifications()) {
     throw new Error("Browser belum mendukung push notification.");
   }
 
@@ -158,9 +163,7 @@ export const disableDefaultPushPreference = async (user: Pick<User, "role">) => 
 
 export const tryEnableDefaultPushNotifications = async (user: Pick<User, "role">, options: { requestPermission?: boolean } = {}) => {
   if (typeof window === "undefined") return;
-  const isIosStandalone = Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
-  if (!window.matchMedia("(display-mode: standalone)").matches && !isIosStandalone) return;
-  if (!("Notification" in window) || !("PushManager" in window)) return;
+  if (!supportsBrowserPushNotifications()) return;
   if (Notification.permission === "denied") return;
   if (Notification.permission === "default" && options.requestPermission !== true) return;
 

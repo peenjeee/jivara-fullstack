@@ -100,6 +100,8 @@ describe("food scan feature", () => {
     vi.mocked(scanFoodImage).mockResolvedValueOnce(analysis);
 
     render(<FoodScanPage />);
+    expect(screen.queryByRole("button", { name: /scan sekarang/i })).not.toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: /aktifkan kamera/i }));
 
     await screen.findByTestId("camera-preview");
@@ -108,8 +110,21 @@ describe("food scan feature", () => {
 
     await waitFor(() => expect(scanFoodImage).toHaveBeenCalledTimes(1));
     expect(vi.mocked(scanFoodImage).mock.calls[0][0]).toBeInstanceOf(File);
-    expect(await screen.findByText("Susu")).toBeInTheDocument();
+    expect(await screen.findByText("Susu", {}, { timeout: 3000 })).toBeInTheDocument();
     expect(showToast).toHaveBeenCalledWith("Scan makanan selesai.", "success");
+    expect(usePatientDashboardStore.getState().lastScan?.id).toBe("scan-1");
+  });
+
+  it("uploads a gallery image through the same food scan flow", async () => {
+    vi.mocked(scanFoodImage).mockResolvedValueOnce(analysis);
+
+    render(<FoodScanPage />);
+    const file = new File(["image"], "meal.png", { type: "image/png" });
+    fireEvent.change(screen.getByLabelText(/upload gambar makanan/i), { target: { files: [file] } });
+
+    await waitFor(() => expect(scanFoodImage).toHaveBeenCalledWith(file));
+    expect(await screen.findByText("Susu")).toBeInTheDocument();
+    expect(showToast).toHaveBeenCalledWith("Upload gambar selesai.", "success");
     expect(usePatientDashboardStore.getState().lastScan?.id).toBe("scan-1");
   });
 

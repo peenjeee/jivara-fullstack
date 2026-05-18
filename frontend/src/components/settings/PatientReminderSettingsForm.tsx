@@ -4,13 +4,12 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Save } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { FormDataSkeleton } from "@/components/ui/PageSkeletons";
-import { useIsStandalonePwa } from "@/hooks";
-import { enableMedicationPushNotifications, getMedicationPushPreference, setMedicationPushPreference } from "@/lib/pushNotifications";
+import { enableMedicationPushNotifications, getMedicationPushPreference, setMedicationPushPreference, supportsBrowserPushNotifications } from "@/lib/pushNotifications";
 import { showToast } from "@/lib/swal";
 import ToggleRow from "./ToggleRow";
 
 export default function PatientReminderSettingsForm() {
-  const isStandalonePwa = useIsStandalonePwa();
+  const supportsPush = supportsBrowserPushNotifications();
   const [medicineReminder, setMedicineReminder] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -36,13 +35,13 @@ export default function PatientReminderSettingsForm() {
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!isStandalonePwa) return;
+    if (!supportsPush) return;
     setIsSaving(true);
 
     try {
       if (medicineReminder) {
-        if (!isStandalonePwa) {
-          showToast("Reminder obat hanya bisa diaktifkan dari aplikasi PWA.", "warning");
+        if (!supportsPush) {
+          showToast("Browser ini belum mendukung push notification atau belum berjalan di HTTPS.", "warning");
           return;
         }
 
@@ -62,7 +61,7 @@ export default function PatientReminderSettingsForm() {
 
   const handleToggle = async (enabled: boolean) => {
     setMedicineReminder(enabled);
-    if (!isStandalonePwa) return;
+    if (!supportsPush) return;
 
     setIsSaving(true);
     try {
@@ -92,13 +91,13 @@ export default function PatientReminderSettingsForm() {
         checked={medicineReminder}
         onChange={(enabled) => { void handleToggle(enabled); }}
       />
-      {!isStandalonePwa && (
+      {!supportsPush && (
         <p className="rounded-2xl bg-warning/10 px-4 py-3 text-sm font-bold leading-6 text-warning-dark">
-          Buka Jivara sebagai PWA untuk menyimpan pengaturan notifikasi.
+          Browser ini belum mendukung push notification atau Jivara belum dibuka melalui HTTPS.
         </p>
       )}
       <div className="flex justify-end pt-2">
-        <Button type="submit" icon={<Save size={18} />} loading={isSaving} disabled={!isStandalonePwa}>Simpan</Button>
+        <Button type="submit" icon={<Save size={18} />} loading={isSaving} disabled={!supportsPush}>Simpan</Button>
       </div>
     </form>
   );

@@ -6,6 +6,7 @@ import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import { getDashboardRole, isOperationalAdminRole } from "@/components/dashboard/navigation";
 import type { FoodScanAnalysis } from "@/helpers/foodScans";
+import { getApiErrorMessage } from "@/lib/apiErrors";
 import { scanFoodImage } from "@/lib/foodScanApi";
 import type { FoodScanRecord } from "@/lib/mocks/foodScans";
 import { showToast } from "@/lib/swal";
@@ -34,6 +35,24 @@ export default function FoodScanPage() {
 
   if (!hasAuthHydrated || isOperationalAdminRole(dashboardRole) || dashboardRole === "super_admin") return null;
 
+  const analyzeFoodImage = async (file: File, successMessage: string, failureMessage: string) => {
+    setIsScanning(true);
+
+    try {
+      const analysis = await scanFoodImage(file);
+      setScanAnalysis(analysis);
+      setScanResult(analysis.scan);
+      setLastScan(analysis.scan);
+      showToast(successMessage, "success");
+    } catch (error) {
+      setScanAnalysis(null);
+      setScanResult(null);
+      showToast(getApiErrorMessage(error, failureMessage), "error");
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
   const runScan = async () => {
     if (isScanning) return;
 
@@ -47,22 +66,19 @@ export default function FoodScanPage() {
       return;
     }
 
-    setIsScanning(true);
-
     try {
       const file = await camera.captureFoodImage();
-      const analysis = await scanFoodImage(file);
-      setScanAnalysis(analysis);
-      setScanResult(analysis.scan);
-      setLastScan(analysis.scan);
-      showToast("Scan makanan selesai.", "success");
-    } catch {
+      await analyzeFoodImage(file, "Scan makanan selesai.", "Scan makanan gagal.");
+    } catch (error) {
       setScanAnalysis(null);
       setScanResult(null);
-      showToast("Scan makanan gagal.", "error");
-    } finally {
-      setIsScanning(false);
+      showToast(error instanceof Error && error.message ? error.message : "Scan makanan gagal.", "error");
     }
+  };
+
+  const uploadImage = async (file: File) => {
+    if (isScanning) return;
+    await analyzeFoodImage(file, "Upload gambar selesai.", "Upload gambar gagal.");
   };
 
   return (
@@ -84,6 +100,7 @@ export default function FoodScanPage() {
           onRetryCamera={camera.retryCamera}
           onScan={runScan}
           onSelectCamera={camera.selectCamera}
+          onUploadImage={uploadImage}
           webcamRef={camera.webcamRef}
         />
         <FoodScanResultPanel isScanning={isScanning} result={scanResult} analysis={scanAnalysis} />

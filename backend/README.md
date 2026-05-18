@@ -42,6 +42,8 @@ Ini adalah repositori layanan API (Backend) untuk platform Jivara. Backend ini d
 
    | Variabel | Fungsi |
    | --- | --- |
+   | `FOOD_AI_INFERENCE_URL` | Endpoint YOLO detection yang menerima `scanId`, `patientId`, dan `imageUrl` |
+   | `FOOD_REASONING_API_URL` | Base URL AI reasoning untuk `/interaction-check`, `/nutrition`, dan `/recommend` |
    | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Web Push Notification PWA |
    | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_STORAGE_BUCKET` | Upload foto scan makanan ke Supabase Storage production |
    | `SUPABASE_STORAGE_PUBLIC_URL` | Opsional, public URL/CDN bucket storage |
@@ -101,7 +103,6 @@ API utama tersedia dengan prefix versioning `/api/v1`. Prefix lama `/api` masih 
 | `PATCH /api/notifications/preferences` | Enable/disable push notification pasien |
 | `POST /api/notifications/events` | Tracking klik/open Web Push dari service worker |
 | `GET /api/notifications/analytics` | Open rate, CTR, dan rata-rata TTO notifikasi |
-| `GET /api/food-scans/analytics/interactions` | Agregat severity, makanan, dan obat yang terkait interaksi |
 
 ---
 
@@ -111,7 +112,6 @@ API utama tersedia dengan prefix versioning `/api/v1`. Prefix lama `/api` masih 
 - Endpoint `GET /api/v1/notifications/public-key` membutuhkan env `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, dan `VAPID_SUBJECT`; generate key dengan `npm run vapid:generate`, lalu set di Railway/backend production.
 - Untuk Railway/production, jangan mengandalkan filesystem lokal `uploads/`; gunakan Supabase Storage dengan env storage di atas.
 - Endpoint `/api/notifications/events` sengaja tidak membutuhkan bearer token karena dipanggil dari service worker saat user mengklik notifikasi.
-- `GET /api/food-scans/analytics/interactions` dibatasi untuk role `nurse` dan `admin`, dan tetap mengikuti scope akses pasien.
 - Pasien yang dibuat oleh role `nurse` otomatis dibuatkan assignment aktif ke nurse pembuat agar tetap muncul setelah refresh.
 - Untuk data lama yang sudah terlanjur dibuat tanpa assignment, jalankan `npm run backfill:patient-assignments` untuk dry-run, lalu `npm run backfill:patient-assignments -- --apply` untuk insert assignment aktif.
 
@@ -133,6 +133,7 @@ backend/
 │   ├── types/
 │   ├── validators/
 │   └── app.ts
+├── tests/
 ├── drizzle.config.ts
 ├── package.json
 └── tsconfig.json

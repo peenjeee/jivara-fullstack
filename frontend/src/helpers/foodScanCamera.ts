@@ -21,9 +21,19 @@ export const getPreferredCameraId = (devices: readonly Pick<MediaDeviceInfo, "de
 };
 
 export const dataUrlToFile = async (dataUrl: string, fileName: string) => {
-  const response = await fetch(dataUrl);
-  const blob = await response.blob();
-  return new File([blob], fileName, { type: blob.type || "image/jpeg" });
+  const matches = dataUrl.match(/^data:([^;,]+)?(?:;base64)?,(.*)$/);
+  if (!matches) throw new Error("Format gambar kamera tidak valid.");
+
+  const mimeType = matches[1] || "image/jpeg";
+  const encodedData = matches[2] || "";
+  const binary = atob(encodedData);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return new File([bytes], fileName, { type: mimeType });
 };
 
 export const isSecureCameraContext = () => {
