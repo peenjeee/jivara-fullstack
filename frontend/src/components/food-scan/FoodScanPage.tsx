@@ -85,7 +85,7 @@ export default function FoodScanPage() {
     <DashboardPageShell>
       <DashboardPageHeader title="Scan Makanan" />
 
-      <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+      <div className="mt-6 grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <FoodScanCameraCard
           cameraDevices={camera.cameraDevices}
           cameraError={camera.cameraError}
