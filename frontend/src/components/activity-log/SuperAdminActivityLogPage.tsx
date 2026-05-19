@@ -50,7 +50,7 @@ export default function SuperAdminActivityLogPage() {
 
   useEffect(() => {
     let isMounted = true;
-    getSuperAdminApprovalActivitiesFromApi()
+    getSuperAdminApprovalActivitiesFromApi({ forceRefresh: true })
       .then((nextActivities) => {
         if (isMounted) setActivities(nextActivities);
       })

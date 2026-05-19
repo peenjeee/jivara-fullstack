@@ -108,6 +108,7 @@ describe("food scan feature", () => {
     fireEvent.click(screen.getByRole("button", { name: /scan sekarang/i }));
 
     await waitFor(() => expect(scanFoodImage).toHaveBeenCalledTimes(1));
+    expect(getScreenshot).toHaveBeenCalledWith();
     expect(vi.mocked(scanFoodImage).mock.calls[0][0]).toBeInstanceOf(File);
     expect(await screen.findByText("Susu", {}, { timeout: 3000 })).toBeInTheDocument();
     expect(showToast).toHaveBeenCalledWith("Scan makanan selesai.", "success");

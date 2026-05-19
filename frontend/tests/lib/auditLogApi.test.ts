@@ -57,4 +57,30 @@ describe("auditLogApi", () => {
     expect(activities[0]).toMatchObject({ id: "approve", title: "Admin disetujui", category: "Administrasi", severity: "Sukses" });
     expect(activities[0]?.description).toContain("Admin A");
   });
+
+  it("can bypass the cached super-admin approval activity snapshot", async () => {
+    mockedGet
+      .mockResolvedValueOnce({ data: { data: [] } })
+      .mockResolvedValueOnce({
+        data: {
+          data: [
+            {
+              id: "approve",
+              userName: "Super Admin",
+              action: "admin.approved",
+              resourceType: "admin_approval",
+              resourceId: "admin-1",
+              changes: { after: { fullName: "Admin A" } },
+              createdAt: "2026-05-09T08:00:00.000Z",
+            },
+          ],
+        },
+      });
+
+    expect(await getSuperAdminApprovalActivitiesFromApi()).toHaveLength(0);
+    const refreshedActivities = await getSuperAdminApprovalActivitiesFromApi({ forceRefresh: true });
+
+    expect(mockedGet).toHaveBeenCalledTimes(2);
+    expect(refreshedActivities).toHaveLength(1);
+  });
 });

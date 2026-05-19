@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import AdminApprovalsPage from "@/components/admin/AdminApprovalsPage";
+import { clearAuditLogCache } from "@/lib/auditLogApi";
 import api from "@/lib/axios";
 import { showConfirm, showError, showToast } from "@/lib/swal";
 import { useAuthStore } from "@/store/auth";
@@ -17,6 +18,10 @@ vi.mock("@/lib/axios", () => ({
     get: vi.fn(),
     post: vi.fn(),
   },
+}));
+
+vi.mock("@/lib/auditLogApi", () => ({
+  clearAuditLogCache: vi.fn(),
 }));
 
 vi.mock("@/lib/swal", () => ({
@@ -45,6 +50,7 @@ describe("admin approvals feature", () => {
     mockedGet.mockReset();
     mockedPost.mockReset();
     vi.mocked(showConfirm).mockReset();
+    vi.mocked(clearAuditLogCache).mockReset();
     vi.mocked(showError).mockClear();
     vi.mocked(showToast).mockClear();
     useAuthStore.setState({
@@ -65,6 +71,7 @@ describe("admin approvals feature", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Setujui Admin Baru" })[0]);
 
     await waitFor(() => expect(mockedPost).toHaveBeenCalledWith("/auth/admin-approvals/admin-1/approve"));
+    expect(clearAuditLogCache).toHaveBeenCalledOnce();
     expect(showToast).toHaveBeenCalledWith("Admin berhasil disetujui.", "success");
     expect(screen.getByText("Tidak ada pengajuan admin yang menunggu persetujuan.")).toBeInTheDocument();
   });
