@@ -15,7 +15,7 @@ interface FoodScanResultPanelProps {
 
 export default function FoodScanResultPanel({ analysis, isScanning, result }: FoodScanResultPanelProps) {
   return (
-    <motion.section className="min-h-[460px] rounded-[32px] bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.08)] sm:p-8" initial={{ opacity: 0, y: 22 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: 0.16 }}>
+    <motion.section className="min-h-[460px] min-w-0 rounded-[32px] bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.08)] sm:p-8" initial={{ opacity: 0, y: 22 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: 0.16 }}>
       <AnimatePresence mode="wait">
         {isScanning ? (
           <motion.div key="loading" className="min-h-[420px]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
