@@ -104,7 +104,7 @@ export function useFoodScanCamera() {
   }, []);
 
   const captureFoodImage = useCallback(async () => {
-    let screenshot = webcamRef.current?.getScreenshot({ width: 1280, height: 720 });
+    let screenshot = webcamRef.current?.getScreenshot();
 
     if (!screenshot) {
       const video = (webcamRef.current as (Webcam & { video?: HTMLVideoElement }) | null)?.video ?? document.querySelector<HTMLVideoElement>('[data-food-scan-camera] video');

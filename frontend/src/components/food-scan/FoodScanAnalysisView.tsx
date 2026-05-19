@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { motion } from "motion/react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Apple, BrainCircuit, Clock, Pill, ShieldAlert, Utensils } from "lucide-react";
 import DetailItem from "@/components/ui/DetailItem";
 import type { FoodScanAnalysis } from "@/helpers/foodScans";
@@ -50,10 +50,27 @@ export default function FoodScanAnalysisView({ scanId, imageSizes = "(max-width:
 }
 
 function FoodScanHero({ scan, risk, imageSizes }: { readonly scan: FoodScanAnalysis["scan"]; readonly risk: FoodScanRisk; readonly imageSizes: string }) {
+  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
+  const imageWidth = imageDimensions?.width ?? 1280;
+  const imageHeight = imageDimensions?.height ?? 1280;
+
   return (
     <motion.section className="overflow-hidden rounded-3xl bg-surface" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}>
-      <div className="relative mx-auto aspect-square w-full max-w-[520px] overflow-hidden rounded-3xl">
-        <Image src={scan.image} alt={scan.foodName} fill sizes={imageSizes} className="object-contain" />
+      <div data-food-scan-result-image-frame className="mx-auto w-full max-w-[520px] overflow-hidden rounded-3xl bg-black/5">
+        <Image
+          src={scan.image}
+          alt={scan.foodName}
+          width={imageWidth}
+          height={imageHeight}
+          sizes={imageSizes}
+          className="h-auto max-h-[70vh] w-full object-contain"
+          onLoad={(event) => {
+            const image = event.currentTarget;
+            if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+              setImageDimensions({ width: image.naturalWidth, height: image.naturalHeight });
+            }
+          }}
+        />
       </div>
 
       <div className="p-5">

@@ -40,11 +40,12 @@ export const clearAuditLogCache = () => {
   auditRequest = null;
 };
 
-const getAuditLogs = async (params: { page?: number; limit?: number } = {}) => {
+const getAuditLogs = async (params: { page?: number; limit?: number; forceRefresh?: boolean } = {}) => {
   const page = params.page || 1;
   const limit = params.limit || 100;
   const useCache = page === 1 && limit === 100;
   const now = Date.now();
+  if (params.forceRefresh) clearAuditLogCache();
   if (useCache && auditCache && auditCache.expiresAt > now) return auditCache.data;
   if (useCache && auditRequest) return auditRequest;
 
@@ -130,7 +131,7 @@ const getRelatedNurseId = (log: AuditLogResponse) => {
     || getNestedString(changes, "sourceNurseId");
 };
 
-export const getAuditActivitiesFromApi = async (params: { page?: number; limit?: number } = {}): Promise<ActivityLogRecord[]> => {
+export const getAuditActivitiesFromApi = async (params: { page?: number; limit?: number; forceRefresh?: boolean } = {}): Promise<ActivityLogRecord[]> => {
   const logs = await getAuditLogs(params);
   const activities = logs.map((log) => ({
     id: log.id,
@@ -168,8 +169,8 @@ const getApprovalDescription = (log: AuditLogResponse) => {
   return `${actor} mengaktifkan kembali akun ${target}.`;
 };
 
-export const getSuperAdminApprovalActivitiesFromApi = async (): Promise<ActivityLogRecord[]> => {
-  const logs = await getAuditLogs();
+export const getSuperAdminApprovalActivitiesFromApi = async (params: { forceRefresh?: boolean } = {}): Promise<ActivityLogRecord[]> => {
+  const logs = await getAuditLogs({ forceRefresh: params.forceRefresh });
 
   return logs
     .filter((log) => approvalActions.has(log.action as ApprovalAction))

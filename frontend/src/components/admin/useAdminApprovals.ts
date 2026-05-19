@@ -2,6 +2,7 @@
 
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { getApiErrorMessage } from "@/lib/apiErrors";
+import { clearAuditLogCache } from "@/lib/auditLogApi";
 import api from "@/lib/axios";
 import { showConfirm, showError, showToast } from "@/lib/swal";
 import type { User } from "@/types/auth";
@@ -112,6 +113,7 @@ export function useAdminApprovals(canLoad: boolean) {
     try {
       await api.post(`/auth/admin-approvals/${encodeURIComponent(user.id)}/approve`);
       clearApprovalsCache();
+      clearAuditLogCache();
       setApprovals((current) => removePendingUser(current, user.id));
       setSummary((current) => ({ ...current, pending: Math.max(0, current.pending - 1), active: current.active + 1 }));
       showToast("Admin berhasil disetujui.", "success");
@@ -128,6 +130,7 @@ export function useAdminApprovals(canLoad: boolean) {
     try {
       await api.post(`/auth/admin-approvals/${encodeURIComponent(rejectingUser.id)}/reject`, { reason });
       clearApprovalsCache();
+      clearAuditLogCache();
       setApprovals((current) => removePendingUser(current, rejectingUser.id));
       setSummary((current) => ({ ...current, pending: Math.max(0, current.pending - 1), rejected: current.rejected + 1 }));
       setRejectingUser(null);
@@ -144,6 +147,7 @@ export function useAdminApprovals(canLoad: boolean) {
     try {
       await api.post(`/auth/admin-approvals/${encodeURIComponent(user.id)}/${endpoint}`);
       clearApprovalsCache();
+      clearAuditLogCache();
       setApprovals((current) => current.map((item) => item.id === user.id ? { ...item, accountStatus: status, ...(status === "pending" ? { rejectedReason: null, rejectedAt: null } : {}) } : item));
       setSummary((current) => {
         if (endpoint === "activate") return { ...current, suspended: Math.max(0, current.suspended - 1), active: current.active + 1 };
