@@ -247,13 +247,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
       logout();
       window.localStorage.removeItem("jivara-auth-storage");
-      window.sessionStorage.setItem("jivara-logout-success", "1");
 
       try {
         await axios.post("/api/v1/auth/logout", undefined, { timeout: 5000 });
       } catch {
       }
 
+      window.sessionStorage.setItem("jivara-logout-success", "1");
       redirectToLogin();
     }
   };

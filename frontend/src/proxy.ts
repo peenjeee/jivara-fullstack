@@ -55,6 +55,9 @@ async function createContentSecurityPolicy(nonce: string, pathname: string, host
   const styleElementSource = allowInlineStyles
     ? "style-src-elem 'self' 'unsafe-inline'"
     : `style-src-elem 'self' 'nonce-${nonce}' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'sha256-RpGvlRbRQP1LZDBLDKCjN1VY9+ac/RHqgjmDHc2Y6PA='`;
+  const styleAttributeSource = allowInlineStyles
+    ? "style-src-attr 'self' 'unsafe-inline'"
+    : "style-src-attr 'none'";
   const directives = [
     "default-src 'self'",
     "base-uri 'self'",
@@ -65,7 +68,7 @@ async function createContentSecurityPolicy(nonce: string, pathname: string, host
     scriptElementSource,
     styleSource,
     styleElementSource,
-    "style-src-attr 'self' 'unsafe-inline'",
+    styleAttributeSource,
     `img-src ${imageSources}`,
     "font-src 'self' data:",
     `connect-src ${connectSources}`,
@@ -86,6 +89,14 @@ const logoutCookieName = 'jivara-logged-out';
 function setHardeningHeaders(response: NextResponse) {
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  response.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
+  response.headers.set('Cross-Origin-Embedder-Policy', 'credentialless');
+  response.headers.set('Cross-Origin-Resource-Policy', 'same-origin');
+}
+
+function setLogoutResponseHeaders(response: NextResponse) {
+  response.headers.set('Cache-Control', 'no-store, max-age=0');
+  response.headers.set('Clear-Site-Data', '"cache"');
 }
 
 function expireAuthCookies(response: NextResponse) {
@@ -159,7 +170,7 @@ export async function proxy(request: NextRequest) {
     const response = NextResponse.redirect(new URL('/login', request.url));
     response.headers.set('Content-Security-Policy', contentSecurityPolicy);
     setHardeningHeaders(response);
-    response.headers.set('Cache-Control', 'no-store, max-age=0');
+    setLogoutResponseHeaders(response);
     supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
     expireAuthCookies(response);
     setLogoutMarker(response);

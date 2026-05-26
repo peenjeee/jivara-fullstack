@@ -44,7 +44,9 @@ app.use(cors({
 // Security: HTTP headers
 app.use(helmet({
   contentSecurityPolicy: false, // Dinonaktifkan agar Swagger UI bisa berjalan
-  crossOriginEmbedderPolicy: false,
+  crossOriginEmbedderPolicy: { policy: 'credentialless' },
+  crossOriginOpenerPolicy: { policy: 'same-origin' },
+  crossOriginResourcePolicy: { policy: 'same-site' },
 }));
 
 // Security: Rate limiting untuk mencegah brute-force & abuse

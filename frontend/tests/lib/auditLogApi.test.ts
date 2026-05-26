@@ -53,6 +53,7 @@ describe("auditLogApi", () => {
 
     const activities = await getSuperAdminApprovalActivitiesFromApi();
 
+    expect(mockedGet).toHaveBeenCalledWith("/audit-logs", { params: { page: 1, limit: 100, user_role: "super_admin" } });
     expect(activities).toHaveLength(1);
     expect(activities[0]).toMatchObject({ id: "approve", title: "Admin disetujui", category: "Administrasi", severity: "Sukses" });
     expect(activities[0]?.description).toContain("Admin A");

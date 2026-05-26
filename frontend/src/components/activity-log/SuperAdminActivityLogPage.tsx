@@ -14,7 +14,7 @@ import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import ToolbarCard from "@/components/ui/ToolbarCard";
 import { FORM_PILL_INPUT_CLASS } from "@/components/ui/formStyles";
 import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
-import { getAuditActivityPageFromApi, type ApprovalLogStatus } from "@/lib/auditLogApi";
+import { getSuperAdminApprovalActivityPageFromApi, type ApprovalLogStatus } from "@/lib/auditLogApi";
 import type { ActivityLogRecord } from "@/lib/mocks/activityLogs";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import ActivityDetailModal from "./ActivityDetailModal";
@@ -107,11 +107,10 @@ export default function SuperAdminActivityLogPage() {
     dispatch({ type: "patch", payload: page === 1 ? { isLoading: true } : { isLoadingMore: true } });
 
     try {
-      const response = await getAuditActivityPageFromApi({
+      const response = await getSuperAdminApprovalActivityPageFromApi({
         page,
         limit: pageSize,
         status: currentState.filter === "all" ? undefined : currentState.filter,
-        userRole: "super_admin",
         date: currentState.date,
         search: debouncedSearch,
         forceRefresh: page === 1,

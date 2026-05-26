@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { clearAuthCookies, getBackendApiUrl, REFRESH_COOKIE, setLogoutCookie } from '../cookies';
 
+const LOGOUT_CLEAR_SITE_DATA = '"cache", "storage"';
+
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
   const refreshToken = cookieStore.get(REFRESH_COOKIE)?.value;
@@ -10,7 +12,7 @@ export async function POST(request: NextRequest) {
   clearAuthCookies(response, request);
   setLogoutCookie(response, request);
   response.headers.set('Cache-Control', 'no-store, max-age=0');
-  response.headers.set('Clear-Site-Data', '"cache"');
+  response.headers.set('Clear-Site-Data', LOGOUT_CLEAR_SITE_DATA);
 
   if (refreshToken) {
     void fetch(`${getBackendApiUrl()}/auth/logout`, {

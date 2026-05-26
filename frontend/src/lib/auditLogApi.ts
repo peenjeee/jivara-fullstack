@@ -266,6 +266,8 @@ export const getSuperAdminApprovalActivityPageFromApi = async (params: { page?: 
   const { data: logs, meta } = await getAuditLogs({
     page,
     limit,
+    status: status === "all" ? undefined : status,
+    severityFilter: severity === "all" ? undefined : severity,
     date: params.date,
     search: params.search,
     forceRefresh: params.forceRefresh,
