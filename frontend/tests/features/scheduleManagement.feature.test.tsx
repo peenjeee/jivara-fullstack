@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import SchedulePage from "@/components/schedule/SchedulePage";
 import { getPatientsFromApi } from "@/lib/patientApi";
-import { getSchedulesFromApi, setScheduleActiveViaApi } from "@/lib/scheduleApi";
+import { getSchedulePatientGroupsPageFromApi, getSchedulesFromApi, setScheduleActiveViaApi } from "@/lib/scheduleApi";
 import { showToast } from "@/lib/swal";
 import type { PatientRecord } from "@/lib/mocks/patients";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
@@ -18,6 +18,7 @@ vi.mock("@/lib/patientApi", () => ({
 vi.mock("@/lib/scheduleApi", () => ({
   createSchedulesViaApi: vi.fn(),
   deactivateScheduleViaApi: vi.fn(),
+  getSchedulePatientGroupsPageFromApi: vi.fn(),
   getSchedulesFromApi: vi.fn(),
   setScheduleActiveViaApi: vi.fn(),
   updateScheduleViaApi: vi.fn(),
@@ -51,13 +52,24 @@ describe("schedule management feature", () => {
   beforeEach(() => {
     vi.mocked(getPatientsFromApi).mockReset();
     vi.mocked(getSchedulesFromApi).mockReset();
+    vi.mocked(getSchedulePatientGroupsPageFromApi).mockReset();
     vi.mocked(setScheduleActiveViaApi).mockReset();
     vi.mocked(showToast).mockClear();
   });
 
   it("loads schedules and filters by patient or medicine", async () => {
     vi.mocked(getPatientsFromApi).mockResolvedValueOnce(patients);
-    vi.mocked(getSchedulesFromApi).mockResolvedValueOnce([schedule]);
+    vi.mocked(getSchedulePatientGroupsPageFromApi)
+      .mockResolvedValueOnce({
+        patients: [patients[0]],
+        schedules: [schedule],
+        meta: { page: 1, limit: 10, total: 1, summary: { active: 1, completed: 0, reminders: 0 } },
+      })
+      .mockResolvedValueOnce({
+        patients: [],
+        schedules: [],
+        meta: { page: 1, limit: 10, total: 0, summary: { active: 0, completed: 0, reminders: 0 } },
+      });
 
     render(<SchedulePage />);
 
@@ -65,12 +77,22 @@ describe("schedule management feature", () => {
     expect(screen.getAllByText("Jadwal Obat Aktif")).not.toHaveLength(0);
 
     fireEvent.change(screen.getByPlaceholderText("Cari nama pasien ..."), { target: { value: "zzz" } });
-    expect(screen.getAllByText("Tidak ada data jadwal.")).not.toHaveLength(0);
+    expect(await screen.findAllByText("Tidak ada data jadwal.")).not.toHaveLength(0);
   });
 
   it("opens schedule detail and toggles schedule status", async () => {
     vi.mocked(getPatientsFromApi).mockResolvedValueOnce(patients);
-    vi.mocked(getSchedulesFromApi).mockResolvedValueOnce([schedule]);
+    vi.mocked(getSchedulePatientGroupsPageFromApi)
+      .mockResolvedValueOnce({
+        patients: [patients[0]],
+        schedules: [schedule],
+        meta: { page: 1, limit: 10, total: 1, summary: { active: 1, completed: 0, reminders: 0 } },
+      })
+      .mockResolvedValueOnce({
+        patients: [patients[0]],
+        schedules: [{ ...schedule, status: "Nonaktif", reminderEnabled: false }],
+        meta: { page: 1, limit: 10, total: 1, summary: { active: 0, completed: 1, reminders: 0 } },
+      });
     vi.mocked(setScheduleActiveViaApi).mockResolvedValueOnce({ ...schedule, status: "Nonaktif", reminderEnabled: false });
 
     render(<SchedulePage />);

@@ -1,36 +1,81 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useReducer, type FormEvent } from "react";
 import { Save } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { FormDataSkeleton } from "@/components/ui/PageSkeletons";
 import { getUserNotificationPreferenceFromApi, updateUserNotificationPreferenceViaApi, type UserNotificationPreferenceKey } from "@/lib/notificationSettingsApi";
-import { enableUserPushNotifications, supportsBrowserPushNotifications } from "@/lib/pushNotifications";
-import { showToast } from "@/lib/swal";
+import { enableUserPushNotifications, getBlockedNotificationPermissionMessage, isBrowserPushPermissionDenied, supportsBrowserPushNotifications } from "@/lib/pushNotifications";
+import { showToast, showWarning } from "@/lib/swal";
 import { useAuthStore } from "@/store/auth";
 import ToggleRow from "@/components/settings/ToggleRow";
+
+const adminNotificationSettingsCache = new Map<UserNotificationPreferenceKey, boolean>();
+
+interface AdminNotificationSettingsState {
+  readonly notificationEnabled: boolean;
+  readonly isLoading: boolean;
+  readonly hasLoadedSettings: boolean;
+  readonly isSaving: boolean;
+}
+
+type AdminNotificationSettingsAction =
+  | { readonly type: "loadSuccess"; readonly enabled: boolean }
+  | { readonly type: "setNotificationEnabled"; readonly enabled: boolean }
+  | { readonly type: "setSaving"; readonly value: boolean };
+
+function createInitialAdminNotificationSettingsState(preferenceKey: UserNotificationPreferenceKey): AdminNotificationSettingsState {
+  const cachedEnabled = adminNotificationSettingsCache.get(preferenceKey);
+  return {
+    notificationEnabled: cachedEnabled ?? true,
+    isLoading: !adminNotificationSettingsCache.has(preferenceKey),
+    hasLoadedSettings: adminNotificationSettingsCache.has(preferenceKey),
+    isSaving: false,
+  };
+}
+
+function adminNotificationSettingsReducer(state: AdminNotificationSettingsState, action: AdminNotificationSettingsAction): AdminNotificationSettingsState {
+  switch (action.type) {
+    case "loadSuccess":
+      return {
+        ...state,
+        notificationEnabled: action.enabled,
+        isLoading: false,
+        hasLoadedSettings: true,
+      };
+    case "setNotificationEnabled":
+      return { ...state, notificationEnabled: action.enabled };
+    case "setSaving":
+      return { ...state, isSaving: action.value };
+    default:
+      return state;
+  }
+}
 
 export default function AdminNotificationSettingsForm() {
   const supportsPush = supportsBrowserPushNotifications();
   const role = useAuthStore((state) => state.user?.role);
   const isSuperAdmin = role === "super_admin";
   const preferenceKey: UserNotificationPreferenceKey = isSuperAdmin ? "super_admin_approval" : "admin_critical_activity";
-  const [notificationEnabled, setNotificationEnabled] = useState(true);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+  const [state, dispatch] = useReducer(adminNotificationSettingsReducer, preferenceKey, createInitialAdminNotificationSettingsState);
+  const { notificationEnabled, isLoading, hasLoadedSettings, isSaving } = state;
 
   useEffect(() => {
     let isMounted = true;
 
     getUserNotificationPreferenceFromApi(preferenceKey)
       .then((preference) => {
-        if (isMounted) setNotificationEnabled(preference.enabled);
+        const enabled = preference.enabled && !isBrowserPushPermissionDenied();
+        if (isMounted) dispatch({ type: "loadSuccess", enabled });
+        adminNotificationSettingsCache.set(preferenceKey, enabled);
+        if (preference.enabled && isBrowserPushPermissionDenied()) {
+          void updateUserNotificationPreferenceViaApi(preferenceKey, false);
+        }
       })
       .catch(() => {
-        if (isMounted) setNotificationEnabled(true);
-      })
-      .finally(() => {
-        if (isMounted) setIsLoading(false);
+        const enabled = !isBrowserPushPermissionDenied();
+        if (isMounted) dispatch({ type: "loadSuccess", enabled });
+        adminNotificationSettingsCache.set(preferenceKey, enabled);
       });
 
     return () => {
@@ -41,38 +86,55 @@ export default function AdminNotificationSettingsForm() {
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!supportsPush) return;
-    setIsSaving(true);
+
+    if (notificationEnabled && isBrowserPushPermissionDenied()) {
+      dispatch({ type: "setNotificationEnabled", enabled: false });
+      await updateUserNotificationPreferenceViaApi(preferenceKey, false).catch(() => undefined);
+      await showWarning(getBlockedNotificationPermissionMessage(), "Izin Notifikasi Diblokir");
+      return;
+    }
+
+    dispatch({ type: "setSaving", value: true });
 
     try {
       if (notificationEnabled) await enableUserPushNotifications();
       await updateUserNotificationPreferenceViaApi(preferenceKey, notificationEnabled);
       showToast(`Preferensi notifikasi ${isSuperAdmin ? "Super Admin" : "admin"} berhasil disimpan.`);
     } catch {
-      showToast(`Preferensi notifikasi ${isSuperAdmin ? "Super Admin" : "admin"} gagal disimpan.`, "error");
+      showToast("Preferensi notifikasi gagal disimpan. Pastikan Browser sudah izin dan mendukung notifikasi.", "error");
     } finally {
-      setIsSaving(false);
+      dispatch({ type: "setSaving", value: false });
     }
   };
 
   const handleToggle = async (enabled: boolean) => {
-    setNotificationEnabled(enabled);
     if (!supportsPush) return;
 
-    setIsSaving(true);
+    if (enabled && isBrowserPushPermissionDenied()) {
+      dispatch({ type: "setNotificationEnabled", enabled: false });
+      await updateUserNotificationPreferenceViaApi(preferenceKey, false).catch(() => undefined);
+      await showWarning(getBlockedNotificationPermissionMessage(), "Izin Notifikasi Diblokir");
+      return;
+    }
+
+    dispatch({ type: "setNotificationEnabled", enabled });
+    adminNotificationSettingsCache.set(preferenceKey, enabled);
+    dispatch({ type: "setSaving", value: true });
     try {
       if (enabled) await enableUserPushNotifications();
       await updateUserNotificationPreferenceViaApi(preferenceKey, enabled);
       showToast(`Notifikasi ${isSuperAdmin ? "Super Admin" : "admin"} berhasil ${enabled ? "diaktifkan" : "dinonaktifkan"}.`);
     } catch {
-      setNotificationEnabled(false);
+      dispatch({ type: "setNotificationEnabled", enabled: false });
+      adminNotificationSettingsCache.set(preferenceKey, false);
       await updateUserNotificationPreferenceViaApi(preferenceKey, false).catch(() => undefined);
-      showToast(`Preferensi notifikasi ${isSuperAdmin ? "Super Admin" : "admin"} gagal disimpan.`, "error");
+      showToast("Preferensi notifikasi gagal disimpan. Pastikan Browser sudah izin dan mendukung notifikasi.", "error");
     } finally {
-      setIsSaving(false);
+      dispatch({ type: "setSaving", value: false });
     }
   };
 
-  return isLoading ? <FormDataSkeleton /> : (
+  return isLoading && !hasLoadedSettings ? <FormDataSkeleton /> : (
     <form onSubmit={handleSubmit} className="space-y-4" noValidate>
       <ToggleRow
         id={isSuperAdmin ? "superAdminApprovalNotification" : "adminCriticalActivity"}

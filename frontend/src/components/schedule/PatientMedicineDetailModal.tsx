@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import DetailItem from "@/components/ui/DetailItem";
 import Modal from "@/components/ui/Modal";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
@@ -15,7 +15,7 @@ export default function PatientMedicineDetailModal({ schedule, onClose }: Patien
   return (
     <Modal isOpen={Boolean(schedule)} title="Detail Jadwal Obat" onClose={onClose}>
       {schedule && (
-        <motion.article
+        <m.article
           className="rounded-3xl bg-surface p-5"
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -44,7 +44,7 @@ export default function PatientMedicineDetailModal({ schedule, onClose }: Patien
             <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-primary">Instruksi</p>
             <p className="mt-1 text-sm font-semibold leading-6 text-muted">{schedule.instructions || "Tidak ada instruksi khusus."}</p>
           </div>
-        </motion.article>
+        </m.article>
       )}
     </Modal>
   );

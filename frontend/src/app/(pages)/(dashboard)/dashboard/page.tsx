@@ -8,12 +8,12 @@ import { useAuthStore } from "@/store/auth";
 import { useSplashScreen } from "@/components/ui/AppSplashScreen";
 import { getDashboardRole } from "@/components/dashboard/navigation";
 
-const NurseDashboardPage = dynamic(() => import("@/components/dashboard/NurseDashboardPage"), { ssr: false, loading: () => <DashboardRouteFallback /> });
-const AdminDashboardPage = dynamic(() => import("@/components/admin/AdminDashboardPage"), { ssr: false, loading: () => <DashboardRouteFallback /> });
-const PatientDashboardPage = dynamic(() => import("@/components/patient-dashboard/PatientDashboardPage"), { ssr: false, loading: () => <DashboardRouteFallback /> });
+const NurseDashboardPage = dynamic(() => import("@/components/dashboard/NurseDashboardPage"), { ssr: false, loading: () => null });
+const AdminDashboardPage = dynamic(() => import("@/components/admin/AdminDashboardPage"), { ssr: false, loading: () => null });
+const PatientDashboardPage = dynamic(() => import("@/components/patient-dashboard/PatientDashboardPage"), { ssr: false, loading: () => null });
 
 export default function DashboardPage() {
-  const router = useRouter();
+  const { replace } = useRouter();
   const user = useAuthStore((state) => state.user);
   const hasAuthHydrated = useAuthStore((state) => state.hasHydrated);
   const dashboardRole = getDashboardRole(user?.role);
@@ -21,12 +21,12 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!hasAuthHydrated || !isSplashFinished || dashboardRole !== "super_admin") return;
-    router.replace("/admin-approvals");
-  }, [dashboardRole, hasAuthHydrated, isSplashFinished, router]);
+    replace("/admin-approvals");
+  }, [dashboardRole, hasAuthHydrated, isSplashFinished, replace]);
 
   if (!hasAuthHydrated || !isSplashFinished) return null;
 
-  if (dashboardRole === "super_admin") return <DashboardRouteFallback />;
+  if (dashboardRole === "super_admin") return <DashboardRouteFallback title="Persetujuan Admin" summaryCount={4} />;
   if (dashboardRole === "admin") return <AdminDashboardPage />;
   return dashboardRole === "nurse" ? <NurseDashboardPage /> : <PatientDashboardPage />;
 }

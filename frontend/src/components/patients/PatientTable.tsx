@@ -106,9 +106,9 @@ function PatientIdentity({ patient }: { readonly patient: PatientRecord }) {
   return (
     <div className="flex items-center gap-4">
       {patient.image ? (
-        <Image src={patient.image} alt="" width={42} height={42} sizes="42px" className="h-[42px] w-[42px] shrink-0 rounded-full object-cover" />
+        <Image src={patient.image} alt="" width={42} height={42} sizes="42px" className="size-[42px] shrink-0 rounded-full object-cover" />
       ) : (
-        <span className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full bg-emerald/10 text-sm font-extrabold text-emerald">
+        <span className="flex size-[42px] shrink-0 items-center justify-center rounded-full bg-emerald/10 text-sm font-extrabold text-emerald">
           {patient.avatar}
         </span>
       )}

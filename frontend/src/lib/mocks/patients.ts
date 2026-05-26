@@ -1,4 +1,4 @@
-export type PatientStatus = "On Ideal Schedule" | "Lagging Behind" | "Need Special Attention";
+export type PatientStatus = "On Ideal Schedule" | "Lagging Behind" | "Need Special Attention" | "Complete";
 
 export interface PatientRecord {
   readonly id: string;

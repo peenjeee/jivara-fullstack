@@ -8,17 +8,17 @@ import { useAuthStore } from "@/store/auth";
 import PatientListPage from "./PatientListPage";
 
 export default function PatientsRouteClient() {
-  const router = useRouter();
+  const { replace } = useRouter();
   const userRole = useAuthStore((state) => state.user?.role);
   const hasAuthHydrated = useAuthStore((state) => state.hasHydrated);
   const dashboardRole = getDashboardRole(userRole);
 
   useEffect(() => {
     if (!hasAuthHydrated || dashboardRole === "nurse" || isOperationalAdminRole(dashboardRole)) return;
-    router.replace("/dashboard");
-  }, [dashboardRole, hasAuthHydrated, router]);
+      replace("/dashboard");
+  }, [dashboardRole, hasAuthHydrated, replace]);
 
-  if (!hasAuthHydrated || (dashboardRole !== "nurse" && !isOperationalAdminRole(dashboardRole))) return <DashboardRouteFallback />;
+  if (!hasAuthHydrated || (dashboardRole !== "nurse" && !isOperationalAdminRole(dashboardRole))) return <DashboardRouteFallback title="Daftar Pasien" />;
 
   return <PatientListPage mode={isOperationalAdminRole(dashboardRole) ? "readonly" : "manage"} />;
 }

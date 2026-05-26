@@ -1,24 +1,37 @@
 "use client";
 
-import { useMemo } from "react";
-import { Doughnut } from "react-chartjs-2";
-import { ArcElement, Chart as ChartJS, Legend, Tooltip, type ChartData, type ChartOptions } from "chart.js";
-import { getActivityDistribution } from "@/helpers/patientDetails";
-import type { ActivityLogRecord } from "@/lib/mocks/activityLogs";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ActivityDistributionItem } from "@/helpers/patientDetails";
 import EmptyState from "@/components/ui/EmptyState";
 import PatientDetailSection from "./PatientDetailSection";
 
-ChartJS.register(ArcElement, Tooltip, Legend);
-ChartJS.defaults.font.family = "Inter, system-ui, sans-serif";
+type DoughnutComponent = typeof import("react-chartjs-2").Doughnut;
 
 interface PatientActivityDistributionChartProps {
-  readonly activities: readonly ActivityLogRecord[];
+  readonly distribution: readonly ActivityDistributionItem[];
 }
 
-export default function PatientActivityDistributionChart({ activities }: PatientActivityDistributionChartProps) {
-  const distribution = useMemo(() => getActivityDistribution(activities), [activities]);
+export default function PatientActivityDistributionChart({ distribution }: PatientActivityDistributionChartProps) {
+  const [DoughnutComponent, setDoughnutComponent] = useState<DoughnutComponent | null>(null);
+  const chartInitRef = useRef(false);
+
+  useEffect(() => {
+    if (chartInitRef.current) return;
+    chartInitRef.current = true;
+    async function init() {
+      const [chartjs, reactChartjs2] = await Promise.all([
+        import("chart.js") as Promise<typeof import("chart.js")>,
+        import("react-chartjs-2") as Promise<typeof import("react-chartjs-2")>,
+      ]);
+      chartjs.Chart.register(chartjs.ArcElement, chartjs.Tooltip, chartjs.Legend);
+      chartjs.Chart.defaults.font.family = "Inter, system-ui, sans-serif";
+      setDoughnutComponent(() => reactChartjs2.Doughnut);
+    }
+    void init();
+  }, []);
+
   const total = distribution.reduce((sum, item) => sum + item.value, 0);
-  const data = useMemo<ChartData<"doughnut">>(() => ({
+  const data = useMemo(() => ({
     labels: distribution.map((item) => item.label),
     datasets: [{
       data: distribution.map((item) => item.value),
@@ -28,7 +41,7 @@ export default function PatientActivityDistributionChart({ activities }: Patient
       hoverOffset: 8,
     }],
   }), [distribution]);
-  const options = useMemo<ChartOptions<"doughnut">>(() => ({
+  const options = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
     cutout: "68%",
@@ -42,11 +55,12 @@ export default function PatientActivityDistributionChart({ activities }: Patient
         titleFont: { family: "Inter, system-ui, sans-serif", size: 13, weight: 700 },
         bodyFont: { family: "Inter, system-ui, sans-serif", size: 13, weight: 700 },
         callbacks: {
-          label: (context) => `${context.parsed} Log`,
+          label: (context: { parsed: number }) => `${context.parsed} Log`,
         },
       },
     },
-  }), []);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any), []);
 
   return (
     <PatientDetailSection title="Distribusi Aktivitas" delay={0.22}>
@@ -54,7 +68,7 @@ export default function PatientActivityDistributionChart({ activities }: Patient
         <div className="grid gap-5 sm:grid-cols-[180px_1fr] sm:items-center lg:grid-cols-1 xl:grid-cols-[180px_1fr]">
           <div className="relative h-48">
             <div className="relative z-10 h-full">
-              <Doughnut data={data} options={options} />
+              {DoughnutComponent && <DoughnutComponent data={data} options={options} />}
             </div>
             <div className="pointer-events-none absolute inset-0 z-0 grid place-items-center text-center">
               <div>
@@ -64,11 +78,11 @@ export default function PatientActivityDistributionChart({ activities }: Patient
             </div>
           </div>
 
-          <div className="space-y-3">
+          <div className="flex flex-col gap-y-3">
             {distribution.map((item, index) => (
               <div key={item.label} className="flex items-center justify-between gap-3 px-1 py-2">
                 <span className="flex items-center gap-2 text-sm font-extrabold text-text-main">
-                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: ["#147245", "#419939", "#7baa2e"][index] }} />
+                  <span className="size-2.5 rounded-full" style={{ backgroundColor: ["#147245", "#419939", "#7baa2e"][index] }} />
                   {item.label}
                 </span>
                 <span className="text-sm font-black text-text-main">{item.value}</span>

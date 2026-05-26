@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import type { ReactNode } from "react";
 
 interface PwaTopLogoBarProps {
@@ -10,7 +10,7 @@ interface PwaTopLogoBarProps {
 
 export default function PwaTopLogoBar({ rightAction }: PwaTopLogoBarProps) {
   return (
-    <motion.header
+    <m.header
       className="fixed inset-x-0 top-0 z-[30000] h-[calc(76px+env(safe-area-inset-top))] bg-white/95 px-4 pt-[env(safe-area-inset-top)] shadow-[0_8px_26px_rgba(15,23,42,0.06)] backdrop-blur-xl lg:hidden"
       initial={{ opacity: 0, y: -18 }}
       animate={{ opacity: 1, y: 0 }}
@@ -19,11 +19,11 @@ export default function PwaTopLogoBar({ rightAction }: PwaTopLogoBarProps) {
       <div className="flex h-[76px] items-center justify-between">
         <Image src="/images/logo/notext.png" alt="Jivara" width={132} height={42} sizes="118px" priority className="h-auto w-[118px]" />
         {rightAction && (
-          <motion.div className="shrink-0" whileHover={{ y: -1 }} whileTap={{ scale: 0.96 }} transition={{ type: "spring", stiffness: 420, damping: 18 }}>
+          <m.div className="shrink-0" whileHover={{ y: -1 }} whileTap={{ scale: 0.96 }} transition={{ type: "spring", stiffness: 420, damping: 18 }}>
             {rightAction}
-          </motion.div>
+          </m.div>
         )}
       </div>
-    </motion.header>
+    </m.header>
   );
 }

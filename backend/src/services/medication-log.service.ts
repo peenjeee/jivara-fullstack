@@ -48,15 +48,19 @@ const parsePagination = (query: MedicationLogListQuery) => {
   return { page, limit, offset: (page - 1) * limit };
 };
 
-const getDateRange = (date?: string) => {
-  if (!date) return null;
+const getDateRange = (query: MedicationLogListQuery) => {
+  const startValue = query.startDate || query.start_date || query.date;
+  const endValue = query.endDate || query.end_date || startValue;
+  if (!startValue || !endValue) return null;
 
-  const start = new Date(`${date}T00:00:00.000Z`);
-  if (Number.isNaN(start.getTime())) return null;
+  const start = new Date(`${startValue}T00:00:00.000Z`);
+  const end = new Date(`${endValue}T00:00:00.000Z`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
 
-  const end = new Date(start);
-  end.setUTCDate(end.getUTCDate() + 1);
-  return { start, end };
+  const normalizedStart = start <= end ? start : end;
+  const normalizedEnd = start <= end ? end : start;
+  normalizedEnd.setUTCDate(normalizedEnd.getUTCDate() + 1);
+  return { start: normalizedStart, end: normalizedEnd };
 };
 
 const getScheduleById = async (scheduleId: string) => {
@@ -234,12 +238,15 @@ export const createMedicationLog = async (dto: MedicationLogCreateDTO, user?: Ac
     }
 
     if (dto.status === "confirmed") {
+      const willCompleteSchedule = Number(schedule.stock ?? 0) <= 1;
+      const completedAt = confirmedAt || scheduledTime || new Date();
       const [updatedSchedule] = await tx
         .update(medicationSchedules)
         .set({
           stock: sql`greatest(${medicationSchedules.stock} - 1, 0)`,
           isActive: sql`${medicationSchedules.stock} > 1`,
           reminderEnabled: sql`${medicationSchedules.stock} > 1`,
+          completedAt: willCompleteSchedule ? completedAt : schedule.completedAt,
           updatedAt: new Date(),
         })
         .where(and(
@@ -289,7 +296,7 @@ export const listMedicationLogs = async (query: MedicationLogListQuery, user?: A
   const { page, limit, offset } = parsePagination(query);
   const patientId = query.patientId || query.patient_id;
   const conditions = [];
-  const dateRange = getDateRange(query.date);
+  const dateRange = getDateRange(query);
   const scopedFilter = await scopedPatientFilter(medicationLogs.patientId, user, patientId);
 
   if (!scopedFilter.scope.allowed) {

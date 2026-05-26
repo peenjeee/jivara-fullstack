@@ -14,9 +14,11 @@ import { AdherenceQuery } from "../types/adherence.types";
 import { AccessUser, assertCanAccessPatient, getNurseIdForUser, getAssignedPatientIdsForNurse, getOrganizationIdForUser, patientScopeCondition } from "./access-control.service";
 
 const getPeriodDays = (period?: string) => {
+  if (period === "all") return null;
   if (period === "1y") return 365;
   if (period === "90d") return 90;
   if (period === "30d") return 30;
+  if (period === "14d") return 14;
   return 7;
 };
 
@@ -27,6 +29,25 @@ const getStartDate = (days: number) => {
   start.setUTCHours(0, 0, 0, 0);
   start.setUTCDate(start.getUTCDate() - days + 1);
   return start;
+};
+
+const getAllTimeOccurrenceDays = (
+  schedules: Array<{ createdAt: Date | null }>,
+  logs: Array<{ scheduledTime: Date }>,
+) => {
+  const dates = [
+    ...schedules.map((schedule) => schedule.createdAt),
+    ...logs.map((log) => log.scheduledTime),
+  ].filter((date): date is Date => date != null && !Number.isNaN(date.getTime()));
+
+  if (dates.length === 0) return 1;
+
+  const earliest = new Date(Math.min(...dates.map((date) => date.getTime())));
+  earliest.setUTCHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const days = Math.floor((today.getTime() - earliest.getTime()) / 86_400_000) + 1;
+  return Math.max(days, 1);
 };
 
 const buildDailyBreakdown = (days: number, occurrences: Array<{ scheduledTime: Date; status: string }>) => {
@@ -136,13 +157,13 @@ const getPatientName = async (patientId?: string) => {
 
 export const getAdherenceStats = async (query: AdherenceQuery, user?: AccessUser) => {
   const period = query.period || "7d";
-  const days = getPeriodDays(period);
-  const startDate = getStartDate(days);
+  const periodDays = getPeriodDays(period);
+  const startDate = periodDays ? getStartDate(periodDays) : null;
   const patientId = query.patientId || query.patient_id;
   const nurseId = user?.role === "nurse"
     ? await getNurseIdForUser(user.id)
     : query.nurseId || query.nurse_id;
-  const logConditions = [gte(medicationLogs.scheduledTime, startDate)];
+  const logConditions = startDate ? [gte(medicationLogs.scheduledTime, startDate)] : [];
   const scheduleConditions = [eq(medicationSchedules.isActive, true)];
 
   if (patientId) {
@@ -161,7 +182,7 @@ export const getAdherenceStats = async (query: AdherenceQuery, user?: AccessUser
         totalConfirmed: 0,
         totalMissed: 0,
         totalSnoozed: 0,
-        dailyBreakdown: buildDailyBreakdown(days, []),
+        dailyBreakdown: buildDailyBreakdown(periodDays ?? 1, []),
         trend: "stabil",
         reminderResponseRate: 0,
       };
@@ -188,10 +209,11 @@ export const getAdherenceStats = async (query: AdherenceQuery, user?: AccessUser
         scheduledTime: medicationLogs.scheduledTime,
       })
       .from(medicationLogs)
-      .where(and(...logConditions)),
+      .where(logConditions.length > 0 ? and(...logConditions) : undefined),
   ]);
 
-  const occurrences = buildScheduledOccurrences(days, schedules, logs);
+  const adherenceDays = periodDays ?? getAllTimeOccurrenceDays(schedules, logs);
+  const occurrences = buildScheduledOccurrences(adherenceDays, schedules, logs);
 
   const totalScheduled = occurrences.length;
   const totalConfirmed = occurrences.filter((occurrence) => occurrence.status === "confirmed").length;
@@ -199,7 +221,7 @@ export const getAdherenceStats = async (query: AdherenceQuery, user?: AccessUser
   const totalSnoozed = occurrences.filter((occurrence) => occurrence.status === "snoozed").length;
   const adherenceRate = totalScheduled > 0 ? Number(((totalConfirmed / totalScheduled) * 100).toFixed(1)) : 0;
   const reminderResponseRate = totalScheduled > 0 ? Number((((totalConfirmed + totalSnoozed) / totalScheduled) * 100).toFixed(1)) : 0;
-  const dailyBreakdown = buildDailyBreakdown(days, occurrences);
+  const dailyBreakdown = buildDailyBreakdown(adherenceDays, occurrences);
   const midpoint = Math.floor(dailyBreakdown.length / 2);
   const firstHalf = dailyBreakdown.slice(0, midpoint);
   const secondHalf = dailyBreakdown.slice(midpoint);
@@ -231,6 +253,7 @@ const emptyAggregateStats = (period: string) => ({
   totalActivePatients: 0,
   averageAdherenceRate: 0,
   totalScheduled: 0,
+  totalActiveSchedules: 0,
   totalConfirmed: 0,
   totalMissed: 0,
   totalSnoozed: 0,
@@ -241,17 +264,17 @@ const emptyAggregateStats = (period: string) => ({
 });
 
 export const getAggregateAdherenceStats = async (query: AdherenceQuery = {}, user?: AccessUser) => {
-  const period = query.period || "30d";
+  const period = query.period || "all";
   const days = getPeriodDays(period);
-  const startDate = getStartDate(days);
+  const startDate = days ? getStartDate(days) : null;
   const scope = await patientScopeCondition(user);
 
   if (!scope.allowed) return emptyAggregateStats(period);
 
   const patientConditions = [eq(patients.isActive, true)];
   const scheduleConditions = [eq(medicationSchedules.isActive, true)];
-  const logConditions = [gte(medicationLogs.scheduledTime, startDate)];
-  const foodScanConditions = [gte(foodScans.createdAt, startDate)];
+  const logConditions = startDate ? [gte(medicationLogs.scheduledTime, startDate)] : [];
+  const foodScanConditions = startDate ? [gte(foodScans.createdAt, startDate)] : [];
   const nurseConditions = [eq(nurses.isActive, true)];
 
   if (scope.patientIds) {
@@ -289,16 +312,16 @@ export const getAggregateAdherenceStats = async (query: AdherenceQuery = {}, use
         scheduledTime: medicationLogs.scheduledTime,
       })
       .from(medicationLogs)
-      .where(and(...logConditions)),
+      .where(logConditions.length > 0 ? and(...logConditions) : undefined),
     db
       .select({ total: count() })
       .from(foodScans)
-      .where(and(...foodScanConditions)),
+      .where(foodScanConditions.length > 0 ? and(...foodScanConditions) : undefined),
     db
       .select({ total: count() })
       .from(interactionResults)
       .innerJoin(foodScans, eq(interactionResults.scanId, foodScans.id))
-      .where(and(...foodScanConditions)),
+      .where(foodScanConditions.length > 0 ? and(...foodScanConditions) : undefined),
     db
       .select({
         nurseId: nurses.id,
@@ -315,7 +338,8 @@ export const getAggregateAdherenceStats = async (query: AdherenceQuery = {}, use
       .orderBy(desc(nurses.createdAt)),
   ]);
 
-  const occurrences = buildScheduledOccurrences(days, schedules, logs);
+  const adherenceDays = days ?? getAllTimeOccurrenceDays(schedules, logs);
+  const occurrences = buildScheduledOccurrences(adherenceDays, schedules, logs);
   const totalScheduled = occurrences.length;
   const totalConfirmed = occurrences.filter((occurrence) => occurrence.status === "confirmed").length;
   const totalMissed = occurrences.filter((occurrence) => occurrence.status === "missed").length;
@@ -349,7 +373,7 @@ export const getAggregateAdherenceStats = async (query: AdherenceQuery = {}, use
     const patientIds = Array.from(nurse.patientIds);
     const nurseSchedules = patientIds.flatMap((patientId) => schedulesByPatient.get(patientId) || []);
     const nurseLogs = patientIds.flatMap((patientId) => logsByPatient.get(patientId) || []);
-    const nurseOccurrences = buildScheduledOccurrences(days, nurseSchedules, nurseLogs);
+    const nurseOccurrences = buildScheduledOccurrences(adherenceDays, nurseSchedules, nurseLogs);
     const nurseScheduled = nurseOccurrences.length;
     const nurseConfirmed = nurseOccurrences.filter((occurrence) => occurrence.status === "confirmed").length;
 
@@ -366,6 +390,7 @@ export const getAggregateAdherenceStats = async (query: AdherenceQuery = {}, use
     totalActivePatients: activePatientRows[0]?.total || 0,
     averageAdherenceRate,
     totalScheduled,
+    totalActiveSchedules: schedules.length,
     totalConfirmed,
     totalMissed,
     totalSnoozed,

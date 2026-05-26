@@ -24,6 +24,15 @@ export const listMedicationSchedules = async (req: AuthRequest, res: Response) =
   }
 };
 
+export const listMedicationSchedulePatientGroups = async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await medicationScheduleService.listMedicationSchedulePatientGroups(req.query, req.user);
+    res.status(200).json({ status: "berhasil", data: { patients: result.patients, schedules: result.schedules }, meta: result.meta });
+  } catch (error) {
+    sendError(res, error);
+  }
+};
+
 export const getMedicationSchedule = async (req: AuthRequest, res: Response) => {
   try {
     const schedule = await medicationScheduleService.getMedicationScheduleById(getParam(req.params.id), req.user);

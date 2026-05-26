@@ -29,7 +29,8 @@ export default function DashboardAccountActions({ onLogout, hideSettings = false
         </Link>
       )}
       <button
-        className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-bold text-main transition-colors hover:bg-surface hover:text-danger"
+        type="button"
+        className="flex w-full items-center gap-3 rounded-2xl p-3 text-left text-sm font-bold text-main transition-colors hover:bg-surface hover:text-danger"
         onClick={onLogout}
       >
         <LogOut size={18} />

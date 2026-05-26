@@ -40,12 +40,18 @@ export async function mockCommonApi(page: Page) {
   });
 
   await page.route(/\/api\/(?:v\d+\/)?patients(?:\?.*)?$/, async (route) => {
+    const url = new URL(route.request().url());
+    const searchParam = url.searchParams.get("search")?.toLowerCase().trim() || "";
+    const allPatients = [
+      { id: "JVR-01", fullName: "Budi Santoso", email: "budi@test.local", phone: "6281", dateOfBirth: "1976-01-01", gender: "male", createdAt: "2026-05-09T08:00:00.000Z" },
+      { id: "JVR-02", fullName: "Ayu Lestari", email: "ayu@test.local", phone: "6282", dateOfBirth: "1980-01-01", gender: "female", createdAt: "2026-05-09T08:00:00.000Z" },
+    ];
+    const filtered = searchParam
+      ? allPatients.filter((p) => p.fullName.toLowerCase().includes(searchParam) || (p.email?.toLowerCase().includes(searchParam)))
+      : allPatients;
     await fulfillJson(route, {
-      data: [
-        { id: "JVR-01", fullName: "Budi Santoso", email: "budi@test.local", phone: "6281", dateOfBirth: "1976-01-01", gender: "male", createdAt: "2026-05-09T08:00:00.000Z" },
-        { id: "JVR-02", fullName: "Ayu Lestari", email: "ayu@test.local", phone: "6282", dateOfBirth: "1980-01-01", gender: "female", createdAt: "2026-05-09T08:00:00.000Z" },
-      ],
-      meta: { total: 2 },
+      data: filtered,
+      meta: { total: filtered.length },
     });
   });
 
@@ -59,10 +65,41 @@ export async function mockCommonApi(page: Page) {
     await fulfillJson(route, { data: [] });
   });
 
-  await page.route(/\/api\/(?:v\d+\/)?medication-schedules(?:\?.*)?$/, async (route) => {
+  await page.route(/\/api\/(?:v\d+\/)?notifications(?:\?.*)?$/, async (route) => {
     await fulfillJson(route, {
-      data: [{ id: "SCH-001", patientId: "JVR-01", drugName: "Metformin", dosage: "500 mg", frequency: 2, scheduledTimes: ["08:00"], instructions: "Sesudah makan", isActive: true, createdAt: "2026-05-09T08:00:00.000Z" }],
+      data: [{ id: "1", patientId: "JVR-01", type: "adherence", title: "Alert", body: "Budi belum minum obat.", status: "delivered", urgency: "critical", createdAt: "2026-05-09T08:00:00.000Z" }],
+      meta: { page: 1, limit: 100, total: 1 },
     });
+  });
+
+  await page.route(/\/api\/(?:v\d+\/)?medication-schedules(?:\/.*)?(?:\?.*)?$/, async (route) => {
+    const url = new URL(route.request().url());
+    const searchParam = url.searchParams.get("search")?.toLowerCase().trim() || "";
+    // Return patient-groups format if the path includes /patient-groups
+    if (url.pathname.includes("/patient-groups")) {
+      const allPatients = [
+        { id: "JVR-01", fullName: "Budi Santoso", email: "budi@test.local", phone: "6281", dateOfBirth: "1976-01-01", gender: "male", createdAt: "2026-05-09T08:00:00.000Z" },
+        { id: "JVR-02", fullName: "Ayu Lestari", email: "ayu@test.local", phone: "6282", dateOfBirth: "1980-01-01", gender: "female", createdAt: "2026-05-09T08:00:00.000Z" },
+      ];
+      const filteredPatients = searchParam
+        ? allPatients.filter((p) => p.fullName.toLowerCase().includes(searchParam))
+        : allPatients;
+      const filteredSchedules = searchParam
+        ? [{ id: "SCH-001", patientId: "JVR-01", drugName: "Metformin", dosage: "500 mg", frequency: 2, scheduledTimes: ["08:00"], instructions: "Sesudah makan", isActive: true, createdAt: "2026-05-09T08:00:00.000Z" }].filter((s) => filteredPatients.some((p) => p.id === s.patientId))
+        : [{ id: "SCH-001", patientId: "JVR-01", drugName: "Metformin", dosage: "500 mg", frequency: 2, scheduledTimes: ["08:00"], instructions: "Sesudah makan", isActive: true, createdAt: "2026-05-09T08:00:00.000Z" }];
+      await fulfillJson(route, {
+        data: {
+          patients: filteredPatients,
+          schedules: filteredSchedules,
+        },
+        meta: { page: 1, limit: 10, total: filteredSchedules.length },
+      });
+    } else {
+      // Plain schedule list fallback
+      await fulfillJson(route, {
+        data: [{ id: "SCH-001", patientId: "JVR-01", drugName: "Metformin", dosage: "500 mg", frequency: 2, scheduledTimes: ["08:00"], instructions: "Sesudah makan", isActive: true, createdAt: "2026-05-09T08:00:00.000Z" }],
+      });
+    }
   });
 
   await page.route(/\/api\/(?:v\d+\/)?nurses(?:\?.*)?$/, async (route) => {

@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
-import { Bell, ClipboardList, Siren, TrendingUp } from "lucide-react";
+import { Bell, ClipboardList, TrendingUp } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import { DetailDataSkeleton } from "@/components/ui/PageSkeletons";
@@ -24,9 +24,15 @@ interface PatientDetailPageProps {
   readonly patientId?: string;
 }
 
+const patientDetailViewCache = new Map<string, PatientDetailData>();
+
 export default function PatientDetailPage({ data, patientId }: PatientDetailPageProps) {
-  const [detailData, setDetailData] = useState(data);
-  const [isLoading, setIsLoading] = useState(Boolean(patientId));
+  const cacheKey = patientId ?? data.patient.id;
+  const [detail, setDetail] = useState(() => ({
+    data: patientDetailViewCache.get(cacheKey) ?? data,
+    loaded: !(Boolean(patientId) && !patientDetailViewCache.has(cacheKey)),
+  }));
+  const { data: detailData, loaded: isLoaded } = detail;
 
   useEffect(() => {
     if (!patientId) return;
@@ -35,19 +41,18 @@ export default function PatientDetailPage({ data, patientId }: PatientDetailPage
 
     getPatientDetailFromApi(patientId)
       .then((nextData) => {
-        if (isMounted) setDetailData(nextData);
+        if (!isMounted) return;
+        patientDetailViewCache.set(cacheKey, nextData);
+        setDetail({ data: nextData, loaded: true });
       })
       .catch(() => {
-        if (isMounted) setDetailData(data);
-      })
-      .finally(() => {
-        if (isMounted) setIsLoading(false);
+        if (isMounted) setDetail((prev) => ({ ...prev, loaded: true }));
       });
 
     return () => {
       isMounted = false;
     };
-  }, [data, patientId]);
+  }, [cacheKey, data, patientId]);
 
   const summary = getPatientSummary(detailData);
   const stats = [
@@ -60,8 +65,8 @@ export default function PatientDetailPage({ data, patientId }: PatientDetailPage
       progress: detailData.patient.adherence,
     },
     {
-      label: "Obat Aktif Pasien",
-      value: String(summary.activeMedicineCount),
+      label: "Total Obat Pasien",
+      value: String(summary.totalMedicineCount),
       tone: "safe",
       color: "leaf",
       icon: ClipboardList,
@@ -73,13 +78,6 @@ export default function PatientDetailPage({ data, patientId }: PatientDetailPage
       color: "lime",
       icon: Bell,
     },
-    {
-      label: "Notifikasi Peringatan/Kritis",
-      value: String(summary.criticalActivityCount),
-      tone: summary.criticalActivityCount > 0 ? "critical" : "safe",
-      color: summary.criticalActivityCount > 0 ? "danger" : "primary",
-      icon: Siren,
-    },
   ] as const;
 
   return (
@@ -89,9 +87,9 @@ export default function PatientDetailPage({ data, patientId }: PatientDetailPage
     
       />
 
-      {isLoading ? <DetailDataSkeleton /> : <>
+      {!isLoaded ? <DetailDataSkeleton summaryCount={3} /> : <>
       <PatientProfileHero patient={detailData.patient} />
-      <SummaryCardGrid stats={stats} className="xl:!grid-cols-4" />
+      <SummaryCardGrid stats={stats} />
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.8fr)]">
         <div className="min-w-0 space-y-6">
@@ -100,7 +98,7 @@ export default function PatientDetailPage({ data, patientId }: PatientDetailPage
         </div>
 
         <div className="min-w-0 space-y-6">
-          <PatientActivityDistributionChart activities={detailData.activities} />
+          <PatientActivityDistributionChart distribution={detailData.activityDistribution} />
           <PatientFoodScanPanel scans={detailData.scans} patientName={detailData.patient.name} />
           <PatientRecentActivity activities={detailData.activities} patientName={detailData.patient.name} />
         </div>

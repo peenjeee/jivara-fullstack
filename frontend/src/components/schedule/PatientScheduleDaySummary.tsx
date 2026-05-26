@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { AlertTriangle, CalendarCheck2, CalendarClock, CheckCircle2, Eye } from "lucide-react";
 import { getConfirmedCount, getDayStatus, getReadableDate, getTotalDoseCount } from "@/helpers/patientSchedule";
+import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
 import PatientMedicineDetailModal from "./PatientMedicineDetailModal";
 
@@ -23,6 +24,7 @@ const statusContent = {
 } as const;
 
 export default function PatientScheduleDaySummary({ selectedDate, schedulesForDate, allSchedules, confirmedScheduleDates }: PatientScheduleDaySummaryProps) {
+  const shouldAnimate = useDashboardEntranceMotion();
   const [selectedSchedule, setSelectedSchedule] = useState<MedicationScheduleRecord | null>(null);
   const status = getDayStatus(allSchedules, selectedDate, confirmedScheduleDates, new Date());
   const content = statusContent[status];
@@ -41,11 +43,9 @@ export default function PatientScheduleDaySummary({ selectedDate, schedulesForDa
   const inactiveSchedules = allSchedules.filter((s) => s.status === "Nonaktif");
 
   return (
-    <motion.section
+    <m.section
       className="rounded-[32px] bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.08)] sm:p-8"
-      initial={{ opacity: 0, y: 22 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: 0.18 }}
+      {...getDashboardEntranceMotion(shouldAnimate, 0.18, 22)}
     >
       <div className="flex items-start gap-4">
         <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${content.className}`}>
@@ -58,7 +58,7 @@ export default function PatientScheduleDaySummary({ selectedDate, schedulesForDa
         </div>
       </div>
 
-      <div className="mt-6 rounded-[28px] bg-primary/5 px-5 py-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+      <div className="mt-6 rounded-[28px] bg-primary/5 p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
         <div className="flex items-center justify-between gap-4">
           <p className="text-sm font-extrabold text-text-main">Progress Obat</p>
           <p className="text-sm font-bold text-muted">{confirmedCount}/{totalDoses} dosis selesai</p>
@@ -71,9 +71,9 @@ export default function PatientScheduleDaySummary({ selectedDate, schedulesForDa
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm font-semibold text-muted">
-          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-primary" />Selesai</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[var(--blue)]" />Akan datang</span>
-          <span className="inline-flex items-center gap-1.5 text-danger"><span className="h-2.5 w-2.5 rounded-full bg-danger" />Terlewat</span>
+          <span className="inline-flex items-center gap-1.5"><span className="size-2.5 rounded-full bg-primary" />Selesai</span>
+          <span className="inline-flex items-center gap-1.5"><span className="size-2.5 rounded-full bg-[var(--blue)]" />Akan datang</span>
+          <span className="inline-flex items-center gap-1.5 text-danger"><span className="size-2.5 rounded-full bg-danger" />Terlewat</span>
         </div>
       </div>
 
@@ -92,7 +92,7 @@ export default function PatientScheduleDaySummary({ selectedDate, schedulesForDa
               <p className="min-w-0 truncate text-sm font-extrabold text-text-main">{schedule.medicineName}</p>
               <button
                 type="button"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-line/60 hover:text-text-main"
+                className="flex size-9 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-line/60 hover:text-text-main"
                 onClick={() => setSelectedSchedule(schedule)}
                 aria-label={`Lihat detail ${schedule.medicineName}`}
               >
@@ -120,7 +120,7 @@ export default function PatientScheduleDaySummary({ selectedDate, schedulesForDa
               <p className="min-w-0 truncate text-sm font-extrabold text-text-main">{schedule.medicineName}</p>
               <button
                 type="button"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-line/60 hover:text-text-main"
+                className="flex size-9 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-line/60 hover:text-text-main"
                 onClick={() => setSelectedSchedule(schedule)}
                 aria-label={`Lihat detail ${schedule.medicineName}`}
               >
@@ -148,7 +148,7 @@ export default function PatientScheduleDaySummary({ selectedDate, schedulesForDa
               <p className="min-w-0 truncate text-sm font-extrabold text-text-main">{schedule.medicineName}</p>
               <button
                 type="button"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-line/60 hover:text-text-main"
+                className="flex size-9 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-line/60 hover:text-text-main"
                 onClick={() => setSelectedSchedule(schedule)}
                 aria-label={`Lihat detail ${schedule.medicineName}`}
               >
@@ -162,6 +162,6 @@ export default function PatientScheduleDaySummary({ selectedDate, schedulesForDa
       </div>
 
       <PatientMedicineDetailModal schedule={selectedSchedule} onClose={() => setSelectedSchedule(null)} />
-    </motion.section>
+    </m.section>
   );
 }

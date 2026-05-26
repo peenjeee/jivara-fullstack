@@ -18,6 +18,7 @@ export interface ActivityLogRecord {
   readonly scheduleId?: string;
   readonly medicineName?: string;
   readonly scanId?: string;
+  readonly alertId?: string;
   readonly sourceNurseId?: string;
   readonly targetNurseId?: string;
   readonly read: boolean;

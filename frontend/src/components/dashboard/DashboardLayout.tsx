@@ -8,7 +8,6 @@ import axios from "axios";
 import { LogOut } from "lucide-react";
 import { SimpleFooter } from "@/components/landing/Footer";
 import ForcePasswordChangeModal from "@/components/auth/ForcePasswordChangeModal";
-import { disableDefaultPushPreference, tryEnableDefaultPushNotifications } from "@/lib/pushNotifications";
 import { showConfirm } from "@/lib/swal";
 import { useAuthStore } from "@/store/auth";
 import type { User } from "@/types/auth";
@@ -33,23 +32,21 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [isRedirectingToLogin, setIsRedirectingToLogin] = useState(false);
   const [isRestoringSession, setIsRestoringSession] = useState(false);
   const isSyncingRef = useRef(false);
-  const autoPushUserIdRef = useRef<string | null>(null);
-  const notificationPromptUserIdRef = useRef<string | null>(null);
   const lastUserStatusSyncAtRef = useRef(0);
   const userStatusSyncBlockedUntilRef = useRef(0);
   const isNavigatingAwayRef = useRef(false);
   const isRestoringSessionRef = useRef(false);
   const isStandalonePwa = useIsStandalonePwa();
   const pathname = usePathname();
-  const router = useRouter();
+  const { replace } = useRouter();
   const userRole = user?.role;
 
   const isCurrentRouteAllowed = isPathAllowedForRole(pathname, userRole);
   const fallbackPath = getFallbackPathForRole(userRole);
 
   const redirectToLogin = useCallback(() => {
-    router.replace("/login?loggedOut=1");
-  }, [router]);
+    replace("/login?loggedOut=1");
+  }, [replace]);
 
   const handleRouteClickCapture = (event: MouseEvent<HTMLDivElement>) => {
     if (!userRole || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -70,7 +67,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
     event.preventDefault();
     event.stopPropagation();
-    router.replace(getFallbackPathForRole(userRole));
+    replace(getFallbackPathForRole(userRole));
   };
 
   const navigateToLogin = useCallback(async () => {
@@ -81,7 +78,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     window.localStorage.removeItem("jivara-auth-storage");
 
     try {
-      await axios.post("/api/auth/logout", undefined, { timeout: 5000 });
+      await axios.post("/api/v1/auth/logout", undefined, { timeout: 5000 });
     } catch {
     }
 
@@ -98,9 +95,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       let response;
 
       try {
-        response = await axios.post("/api/auth/status", undefined, { timeout: 5000 });
+        response = await axios.post("/api/v1/auth/status", undefined, { timeout: 5000 });
       } catch {
-        response = await axios.post("/api/auth/refresh", undefined, { timeout: 8000 });
+        response = await axios.post("/api/v1/auth/refresh", undefined, { timeout: 8000 });
       }
 
       if (isNavigatingAwayRef.current) return;
@@ -122,6 +119,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     }
   }, [hasHydrated, isLoggingOut, navigateToLogin, setAuth, user]);
 
+  const restoreSessionRef = useRef(restoreSession);
+  useEffect(() => { restoreSessionRef.current = restoreSession; }, [restoreSession]);
+
   const syncCurrentUser = useCallback(async () => {
     if (!hasHydrated || isLoggingOut || isNavigatingAwayRef.current) return;
 
@@ -136,15 +136,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     lastUserStatusSyncAtRef.current = now;
 
     try {
-      const response = await axios.post("/api/auth/status", undefined, { timeout: 8000 });
+      const response = await axios.post("/api/v1/auth/status", undefined, { timeout: 8000 });
       const currentUser: User = response.data.data.user;
 
-      if (isNavigatingAwayRef.current) return;
+      if (!isNavigatingAwayRef.current) updateUser(currentUser);
 
-      updateUser(currentUser);
-
-      if (currentUser.role === "admin" && (currentUser.accountStatus ?? "active") !== "active") {
-        router.replace("/account-status");
+      if (!isNavigatingAwayRef.current && currentUser.role === "admin" && (currentUser.accountStatus ?? "active") !== "active") {
+        replace("/account-status");
         return;
       }
     } catch (error: unknown) {
@@ -160,7 +158,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     } finally {
       isSyncingRef.current = false;
     }
-  }, [hasHydrated, isLoggingOut, router, updateUser, userRole, navigateToLogin]);
+  }, [hasHydrated, isLoggingOut, replace, updateUser, userRole, navigateToLogin]);
 
   useEffect(() => {
     if (hasHydrated) return;
@@ -176,18 +174,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     if (user && hasHydrated) return;
     if (isNavigatingAwayRef.current) return;
 
-    const timer = window.setTimeout(async () => {
-      setIsRedirectingToLogin(true);
-      logout();
-      window.localStorage.removeItem("jivara-auth-storage");
-      try {
-        await axios.post("/api/auth/logout", undefined, { timeout: 2000 });
-      } catch {
-      }
-      redirectToLogin();
-    }, MAX_LOADING_SECONDS * 1000);
+    const timer = window.setTimeout(() => void navigateToLogin(), MAX_LOADING_SECONDS * 1000);
     return () => window.clearTimeout(timer);
-  }, [user, hasHydrated, logout, redirectToLogin]);
+  }, [user, hasHydrated, navigateToLogin]);
 
   useEffect(() => {
     if (!hasHydrated || !userRole || isNavigatingAwayRef.current) return;
@@ -225,42 +214,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       return;
     }
 
-    if (!isCurrentRouteAllowed) router.replace(fallbackPath);
-  }, [fallbackPath, hasHydrated, isCurrentRouteAllowed, router, user, isLoggingOut, restoreSession]);
-
-  useEffect(() => {
-    if (!hasHydrated || !user || isLoggingOut || isNavigatingAwayRef.current) return;
-    if (autoPushUserIdRef.current === user.id) return;
-
-    autoPushUserIdRef.current = user.id;
-    void tryEnableDefaultPushNotifications(user, { requestPermission: false });
-  }, [hasHydrated, isLoggingOut, user]);
-
-  useEffect(() => {
-    if (!hasHydrated || !user || isLoggingOut || isNavigatingAwayRef.current) return;
-    if (notificationPromptUserIdRef.current === user.id) return;
-    if (!("Notification" in window) || Notification.permission !== "default") return;
-
-    notificationPromptUserIdRef.current = user.id;
-    void showConfirm(
-      "Izinkan Notifikasi?",
-      "Aktifkan notifikasi Jivara agar reminder obat dan peringatan penting bisa muncul otomatis di perangkat ini.",
-      "Izinkan",
-    ).then((result) => {
-      if (!result.isConfirmed) {
-        void disableDefaultPushPreference(user);
-        return;
-      }
-      void tryEnableDefaultPushNotifications(user, { requestPermission: true });
-    });
-  }, [hasHydrated, isLoggingOut, user]);
+    if (!isCurrentRouteAllowed) replace(fallbackPath);
+  }, [fallbackPath, hasHydrated, isCurrentRouteAllowed, replace, user, isLoggingOut, restoreSession]);
 
   useEffect(() => {
     if (user || isLoggingOut || isNavigatingAwayRef.current) return;
 
     const handleResume = () => {
       if (document.visibilityState === "visible") {
-        void restoreSession();
+        void restoreSessionRef.current();
       }
     };
 
@@ -273,7 +235,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       window.removeEventListener("pageshow", handleResume);
       document.removeEventListener("visibilitychange", handleResume);
     };
-  }, [isLoggingOut, restoreSession, user]);
+  }, [isLoggingOut, user]);
 
   const handleLogout = async () => {
     const result = await showConfirm("Keluar Akun?", "Anda perlu masuk kembali untuk mengakses data Anda.", "Ya, Keluar");
@@ -285,9 +247,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
       logout();
       window.localStorage.removeItem("jivara-auth-storage");
+      window.sessionStorage.setItem("jivara-logout-success", "1");
 
       try {
-        await axios.post("/api/auth/logout", undefined, { timeout: 5000 });
+        await axios.post("/api/v1/auth/logout", undefined, { timeout: 5000 });
       } catch {
       }
 
@@ -298,8 +261,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   if (isLoggingOut) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-surface" aria-label="Keluar akun">
-        <div className="flex flex-col items-center space-y-4">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+        <div className="flex flex-col items-center gap-y-4">
+          <div className="size-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
           <p className="text-sm font-medium text-text-secondary">Sedang keluar ...</p>
         </div>
       </div>
@@ -309,8 +272,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   if (!hasHydrated || !user || isRestoringSession) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-surface" aria-label="Memuat halaman">
-        <div className="flex flex-col items-center space-y-4">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+        <div className="flex flex-col items-center gap-y-4">
+          <div className="size-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
           <p className="text-sm font-medium text-text-secondary">
             {isRedirectingToLogin ? "Mengarahkan ke halaman masuk ..." : "Mohon tunggu ..."}
           </p>
@@ -327,7 +290,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       {isStandalonePwa && (
         <PwaTopLogoBar
           rightAction={(
-            <button type="button" onClick={handleLogout} className="group inline-flex h-10 w-10 items-center justify-center rounded-full text-text-main transition-colors hover:!text-danger" aria-label="Keluar akun">
+            <button type="button" onClick={handleLogout} className="group inline-flex size-10 items-center justify-center rounded-full text-text-main transition-colors hover:!text-danger" aria-label="Keluar akun">
               <LogOut size={19} className="transition-colors group-hover:!text-danger" />
             </button>
           )}

@@ -19,8 +19,7 @@ interface BulkReassignModalProps {
 
 export default function BulkReassignModal({ isOpen, selectedCount, sourceNurseId, nurses, onClose, onSubmit }: BulkReassignModalProps) {
   const targetOptions = nurses
-    .filter((nurse) => nurse.status === "Aktif" && nurse.id !== sourceNurseId)
-    .map((nurse) => ({ label: nurse.fullName, value: nurse.id }));
+    .flatMap((nurse) => (nurse.status === "Aktif" && nurse.id !== sourceNurseId ? [{ label: nurse.fullName, value: nurse.id }] : []));
   const [targetNurseId, setTargetNurseId] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 

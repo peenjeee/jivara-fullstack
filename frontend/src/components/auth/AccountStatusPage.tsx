@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { AlertTriangle, CheckCircle2, Clock3 } from "lucide-react";
 import axios from "axios";
 import AuthCard from "@/components/ui/AuthCard";
@@ -56,7 +56,7 @@ export const clearAccountStatusCache = () => {
 };
 
 export default function AccountStatusPage() {
-  const router = useRouter();
+  const { replace } = useRouter();
   const user = useAuthStore((state) => state.user);
   const hasAuthHydrated = useAuthStore((state) => state.hasHydrated);
   const updateUser = useAuthStore((state) => state.updateUser);
@@ -79,7 +79,7 @@ export default function AccountStatusPage() {
       } else if (accountStatusRequest) {
         updatedUser = (await accountStatusRequest).user;
       } else {
-        accountStatusRequest = axios.post<{ data: { user: User } }>("/api/auth/status")
+        accountStatusRequest = axios.post<{ data: { user: User } }>("/api/v1/auth/status")
           .then((res) => {
             const result = { user: res.data.data.user };
             accountStatusCache = { data: result, expiresAt: Date.now() + accountStatusCacheTtl };
@@ -96,12 +96,12 @@ export default function AccountStatusPage() {
 
       if (updatedUser?.role === "admin" && (updatedUser.accountStatus ?? "active") === "active") {
         if (showFeedback) showToast("Akun Anda sudah aktif.", "success");
-        router.replace("/dashboard");
+        replace("/dashboard");
         return;
       }
 
       if (updatedUser?.role !== "admin") {
-        router.replace("/dashboard");
+        replace("/dashboard");
         return;
       }
 
@@ -113,22 +113,18 @@ export default function AccountStatusPage() {
       setRefreshing(false);
       setHasCheckedStatus(true);
     }
-  }, [router, updateUser]);
+  }, [replace, updateUser]);
 
   useEffect(() => {
     if (!hasAuthHydrated) return;
     if (!user) {
-      router.replace("/login");
+      replace("/login");
       return;
     }
     if (user.role !== "admin") {
-      router.replace("/dashboard");
+      replace("/dashboard");
     }
-
-    if (hasCheckedStatus && statusCheckSucceeded && (user.accountStatus ?? "active") === "active") {
-      router.replace("/dashboard");
-    }
-  }, [hasAuthHydrated, hasCheckedStatus, router, statusCheckSucceeded, user]);
+  }, [hasAuthHydrated, replace, user]);
 
   useEffect(() => {
     if (!hasAuthHydrated || !user || user.role !== "admin" || hasAutoRefreshedRef.current) return;
@@ -142,7 +138,7 @@ export default function AccountStatusPage() {
     return (
       <AuthCard title="Status Akun">
         <div className="space-y-4 text-center">
-          <div className="mx-auto h-16 w-16 animate-pulse rounded-3xl bg-line/70" />
+          <div className="mx-auto size-16 animate-pulse rounded-3xl bg-line/70" />
           <div className="mx-auto h-7 w-44 animate-pulse rounded-xl bg-line/70" />
           <div className="mx-auto h-4 w-64 max-w-full animate-pulse rounded-xl bg-line/60" />
           <div className="h-11 w-full animate-pulse rounded-full bg-line/60" />
@@ -155,7 +151,7 @@ export default function AccountStatusPage() {
     <AuthCard
       title="Status Akun"
     >
-      <motion.div className="text-center" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}>
+      <m.div className="text-center" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}>
         <div className={`mx-auto grid h-16 w-16 place-items-center rounded-3xl ${content.tone}`}>
           <Icon size={50} />
         </div>
@@ -169,7 +165,7 @@ export default function AccountStatusPage() {
         <Button type="button" className="mt-7 w-full" loading={refreshing} onClick={() => refreshStatus()}>
           Perbarui Status
         </Button>
-      </motion.div>
+      </m.div>
     </AuthCard>
   );
 }

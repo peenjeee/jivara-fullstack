@@ -26,8 +26,8 @@ router.use(authenticateToken);
  *         name: period
  *         schema:
  *           type: string
- *           enum: [7d, 30d, 90d, 1y]
- *           default: 30d
+ *           enum: [7d, 14d, 30d, 90d, 1y, all]
+ *           default: all
  *     responses:
  *       200:
  *         description: Statistik aggregate berhasil diambil
@@ -57,7 +57,7 @@ router.get("/aggregate", authorizeRoles("admin", "super_admin"), adherenceContro
  *         name: period
  *         schema:
  *           type: string
- *           enum: [7d, 30d, 90d, 1y]
+ *           enum: [7d, 14d, 30d, 90d, 1y, all]
  *     responses:
  *       200:
  *         description: Statistik adherence berhasil diambil

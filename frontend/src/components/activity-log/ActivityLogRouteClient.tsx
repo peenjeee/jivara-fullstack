@@ -1,13 +1,12 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import DashboardRouteFallback from "@/components/dashboard/DashboardRouteFallback";
 import { getDashboardRole, isOperationalAdminRole } from "@/components/dashboard/navigation";
 import { useAuthStore } from "@/store/auth";
 
-const ActivityLogPage = dynamic(() => import("./ActivityLogPage"), { ssr: false, loading: () => <DashboardRouteFallback /> });
-const PatientActivityLogPage = dynamic(() => import("./PatientActivityLogPage"), { ssr: false, loading: () => <DashboardRouteFallback /> });
-const SuperAdminActivityLogPage = dynamic(() => import("./SuperAdminActivityLogPage"), { ssr: false, loading: () => <DashboardRouteFallback /> });
+const ActivityLogPage = dynamic(() => import("./ActivityLogPage"), { ssr: false, loading: () => null });
+const PatientActivityLogPage = dynamic(() => import("./PatientActivityLogPage"), { ssr: false, loading: () => null });
+const SuperAdminActivityLogPage = dynamic(() => import("./SuperAdminActivityLogPage"), { ssr: false, loading: () => null });
 
 interface ActivityLogRouteClientProps {
   readonly initialPatientName?: string;
@@ -23,7 +22,7 @@ export default function ActivityLogRouteClient({ initialPatientName, initialCate
   if (dashboardRole === "super_admin") return <SuperAdminActivityLogPage />;
 
   return dashboardRole === "nurse" || isOperationalAdminRole(dashboardRole) ? (
-    <ActivityLogPage initialPatientName={initialPatientName} initialCategory={initialCategory} readOnly={isOperationalAdminRole(dashboardRole)} showNurseFilter={dashboardRole !== "nurse"} />
+    <ActivityLogPage initialPatientName={initialPatientName} initialCategory={initialCategory} auditUserRole={dashboardRole} readOnly={isOperationalAdminRole(dashboardRole)} showNurseFilter={dashboardRole !== "nurse"} />
   ) : (
     <PatientActivityLogPage initialCategory={initialCategory} />
   );

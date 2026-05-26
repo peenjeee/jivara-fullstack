@@ -1,8 +1,10 @@
 "use client";
 
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { addMonths, getCalendarDays, getMonthLabel, type PatientCalendarDay } from "@/helpers/patientSchedule";
+import SelectField from "@/components/ui/SelectField";
+import { addMonths, getCalendarDays, type PatientCalendarDay } from "@/helpers/patientSchedule";
+import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
 
 interface PatientMedicationCalendarProps {
@@ -15,25 +17,36 @@ interface PatientMedicationCalendarProps {
 }
 
 const weekDays = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
+const monthOptions = Array.from({ length: 12 }, (_, index) => ({
+  value: String(index),
+  label: new Date(2026, index, 1).toLocaleDateString("id-ID", { month: "short" }),
+}));
+
+const getYearOptions = (date: Date) => {
+  const currentYear = new Date().getFullYear();
+  const selectedYear = date.getFullYear();
+  const startYear = Math.min(currentYear - 5, selectedYear - 2);
+  const endYear = Math.max(currentYear + 5, selectedYear + 2);
+  return Array.from({ length: endYear - startYear + 1 }, (_, index) => startYear + index);
+};
 
 export default function PatientMedicationCalendar({ month, selectedDate, schedules, confirmedScheduleDates, onMonthChange, onDateSelect }: PatientMedicationCalendarProps) {
+  const shouldAnimate = useDashboardEntranceMotion();
   const today = new Date();
   const calendarDays = getCalendarDays(month, selectedDate, schedules, confirmedScheduleDates, today);
 
   return (
-    <motion.section
+    <m.section
       className="rounded-[32px] bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.08)] sm:p-8"
-      initial={{ opacity: 0, y: 22 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: 0.12 }}
+      {...getDashboardEntranceMotion(shouldAnimate, 0.12, 22)}
     >
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="grid grid-cols-[40px_minmax(0,1fr)_40px] items-center gap-3 lg:w-auto lg:min-w-64">
-          <button type="button" className="flex h-10 w-10 items-center justify-center rounded-2xl text-text-main transition-colors hover:bg-surface" onClick={() => onMonthChange(addMonths(month, -1))} aria-label="Bulan sebelumnya">
+          <button type="button" className="flex size-10 items-center justify-center rounded-2xl text-text-main transition-colors hover:bg-surface" onClick={() => onMonthChange(addMonths(month, -1))} aria-label="Bulan sebelumnya">
             <ChevronLeft size={20} />
           </button>
-          <h2 className="text-center font-display text-xl font-extrabold tracking-[-0.04em] text-text-main sm:text-2xl lg:min-w-44">{getMonthLabel(month)}</h2>
-          <button type="button" className="flex h-10 w-10 items-center justify-center rounded-2xl text-text-main transition-colors hover:bg-surface" onClick={() => onMonthChange(addMonths(month, 1))} aria-label="Bulan berikutnya">
+          <MonthYearSelect month={month} onChange={(nextMonth) => onMonthChange(nextMonth)} />
+          <button type="button" className="flex size-10 items-center justify-center rounded-2xl text-text-main transition-colors hover:bg-surface" onClick={() => onMonthChange(addMonths(month, 1))} aria-label="Bulan berikutnya">
             <ChevronRight size={20} />
           </button>
         </div>
@@ -52,7 +65,34 @@ export default function PatientMedicationCalendar({ month, selectedDate, schedul
       <div className="mt-3 grid grid-cols-7 gap-2">
         {calendarDays.map((day) => <CalendarDayButton key={day.dateKey} day={day} onSelect={onDateSelect} />)}
       </div>
-    </motion.section>
+    </m.section>
+  );
+}
+
+function MonthYearSelect({ month, onChange }: { readonly month: Date; readonly onChange: (month: Date) => void }) {
+  const years = getYearOptions(month).map((year) => ({ label: String(year), value: String(year) }));
+
+  return (
+    <div className="flex min-w-0 items-center justify-center gap-2">
+      <div className="w-24">
+        <SelectField
+          id="patientScheduleMonth"
+          value={String(month.getMonth())}
+          options={monthOptions}
+          className="justify-center rounded-xl bg-transparent px-2 py-1 font-display text-xl font-extrabold text-text-main hover:bg-surface sm:text-2xl"
+          onChange={(value) => onChange(new Date(month.getFullYear(), Number(value), 1))}
+        />
+      </div>
+      <div className="w-28">
+        <SelectField
+          id="patientScheduleYear"
+          value={String(month.getFullYear())}
+          options={years}
+          className="justify-center rounded-xl bg-transparent px-2 py-1 font-display text-xl font-extrabold text-text-main hover:bg-surface sm:text-2xl"
+          onChange={(value) => onChange(new Date(Number(value), month.getMonth(), 1))}
+        />
+      </div>
+    </div>
   );
 }
 

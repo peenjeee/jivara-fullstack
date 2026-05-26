@@ -21,7 +21,7 @@ export default function ProfileSettingsForm() {
   const { user, setAuth } = useAuthStore();
   const [fullName, setFullName] = useState(user?.fullName ?? previewUser.fullName);
   const [email, setEmail] = useState(user?.email ?? previewUser.email);
-  const [phone, setPhone] = useState(numericPhone(user?.phone ?? previewUser.phone));
+  const [phone, setPhone] = useState(() => numericPhone(user?.phone ?? previewUser.phone));
   const [isSaving, setIsSaving] = useState(false);
 
   const updatePhone = (value: string) => {

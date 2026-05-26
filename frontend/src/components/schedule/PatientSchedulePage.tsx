@@ -1,61 +1,95 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef } from "react";
 import { AlarmClock, CalendarClock, Pill } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
-import { ActivityDataSkeleton, SummaryCardsSkeleton } from "@/components/ui/PageSkeletons";
+import { PatientScheduleContentSkeleton, SummaryCardsSkeleton } from "@/components/ui/PageSkeletons";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import type { SummaryCardItem } from "@/components/ui/SummaryCard";
 import { getDateKey, getMonthStart, getScheduleDoseWindow, getSchedulesForDate, isSameDate } from "@/helpers/patientSchedule";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
-import { confirmMedicationScheduleViaApi, getConfirmedScheduleDates, getPatientDashboardData } from "@/lib/patientDashboardApi";
+import { confirmMedicationScheduleViaApi, getConfirmedScheduleDates, getPatientScheduleData } from "@/lib/patientDashboardApi";
 import { showConfirm, showToast } from "@/lib/swal";
 import { usePatientDashboardStore } from "@/store/patientDashboard";
 import PatientDailyMedicineList from "./PatientDailyMedicineList";
 import PatientMedicationCalendar from "./PatientMedicationCalendar";
 import PatientScheduleDaySummary from "./PatientScheduleDaySummary";
 
+let patientScheduleViewCache: {
+  selectedDate: Date;
+  visibleMonth: Date;
+  patientSchedules: MedicationScheduleRecord[];
+  confirmedScheduleDates: Record<string, string[]>;
+} | null = null;
+
+interface PatientScheduleState {
+  readonly selectedDate: Date;
+  readonly visibleMonth: Date;
+  readonly patientSchedules: MedicationScheduleRecord[];
+  readonly isLoading: boolean;
+  readonly hasLoadedSchedules: boolean;
+}
+
+type PatientScheduleAction = { readonly type: "patch"; readonly payload: Partial<PatientScheduleState> };
+
+function patientScheduleReducer(state: PatientScheduleState, action: PatientScheduleAction): PatientScheduleState {
+  return action.type === "patch" ? { ...state, ...action.payload } : state;
+}
+
 export default function PatientSchedulePage() {
   const today = new Date();
-  const [selectedDate, setSelectedDate] = useState(today);
-  const [visibleMonth, setVisibleMonth] = useState(getMonthStart(today));
   const lastScan = usePatientDashboardStore((state) => state.lastScan);
   const confirmedScheduleDates = usePatientDashboardStore((state) => state.confirmedScheduleDates);
-  const setConfirmedScheduleDates = usePatientDashboardStore((state) => state.setConfirmedScheduleDates);
-  const setPatientId = usePatientDashboardStore((state) => state.setPatientId);
-  const confirmScheduleForDate = usePatientDashboardStore((state) => state.confirmScheduleForDate);
-  const [patientSchedules, setPatientSchedules] = useState<MedicationScheduleRecord[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const setScheduleContext = usePatientDashboardStore((state) => state.setScheduleContext);
+  const [state, dispatch] = useReducer(patientScheduleReducer, {
+    selectedDate: patientScheduleViewCache?.selectedDate ?? today,
+    visibleMonth: patientScheduleViewCache?.visibleMonth ?? getMonthStart(today),
+    patientSchedules: patientScheduleViewCache?.patientSchedules ?? [],
+    isLoading: !patientScheduleViewCache,
+    hasLoadedSchedules: Boolean(patientScheduleViewCache),
+  });
+  const { selectedDate, visibleMonth, patientSchedules, isLoading, hasLoadedSchedules } = state;
+  const stateRef = useRef(state);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   useEffect(() => {
     let isMounted = true;
 
-    getPatientDashboardData()
+    getPatientScheduleData(visibleMonth)
       .then((data) => {
         if (!isMounted) return;
-        setPatientId(data.patient.id);
-        setPatientSchedules(data.schedules);
-        setConfirmedScheduleDates(getConfirmedScheduleDates(data.medicationLogs));
+        const nextConfirmedScheduleDates = getConfirmedScheduleDates(data.medicationLogs);
+        setScheduleContext({ patientId: data.patient.id, confirmedScheduleDates: nextConfirmedScheduleDates });
+        dispatch({ type: "patch", payload: { patientSchedules: data.schedules, hasLoadedSchedules: true, isLoading: false } });
+        patientScheduleViewCache = {
+          selectedDate: stateRef.current.selectedDate,
+          visibleMonth,
+          patientSchedules: data.schedules,
+          confirmedScheduleDates: nextConfirmedScheduleDates,
+        };
       })
       .catch(() => {
         if (!isMounted) return;
-        setPatientId(null);
-        setPatientSchedules([]);
-        setConfirmedScheduleDates({});
-      })
-      .finally(() => {
-        if (isMounted) setIsLoading(false);
+        setScheduleContext({ patientId: null, confirmedScheduleDates: {} });
+        dispatch({ type: "patch", payload: { patientSchedules: [], hasLoadedSchedules: true, isLoading: false } });
       });
 
     return () => {
       isMounted = false;
     };
-  }, [setConfirmedScheduleDates, setPatientId]);
+  }, [setScheduleContext, visibleMonth]);
   const schedulesForSelectedDate = useMemo(() => getSchedulesForDate(patientSchedules, selectedDate), [patientSchedules, selectedDate]);
   const selectedDateKey = getDateKey(selectedDate);
   const confirmedScheduleIds = confirmedScheduleDates[selectedDateKey] ?? [];
   const activeSchedules = patientSchedules.filter((schedule) => schedule.status === "Aktif");
+  useEffect(() => {
+    if (!hasLoadedSchedules) return;
+    patientScheduleViewCache = { selectedDate, visibleMonth, patientSchedules, confirmedScheduleDates: { ...confirmedScheduleDates } as Record<string, string[]> };
+  }, [confirmedScheduleDates, hasLoadedSchedules, patientSchedules, selectedDate, visibleMonth]);
   const scheduleStats: SummaryCardItem[] = [
     {
       label: "Jadwal Obat Aktif",
@@ -81,8 +115,7 @@ export default function PatientSchedulePage() {
   ];
 
   const handleDateSelect = (date: Date) => {
-    setSelectedDate(date);
-    setVisibleMonth(getMonthStart(date));
+    dispatch({ type: "patch", payload: { selectedDate: date, visibleMonth: getMonthStart(date) } });
   };
 
   const handleConfirmSchedule = async (scheduleId: string) => {
@@ -106,10 +139,16 @@ export default function PatientSchedulePage() {
 
     try {
       await confirmMedicationScheduleViaApi(schedule, selectedDate, doseWindow.doseIndex);
-      confirmScheduleForDate(selectedDateKey, scheduleId);
-      setPatientSchedules((currentSchedules) => currentSchedules.map((currentSchedule) => currentSchedule.id === scheduleId
-        ? { ...currentSchedule, stock: Math.max(currentSchedule.stock - 1, 0), status: currentSchedule.stock <= 1 ? "Selesai" : currentSchedule.status, reminderEnabled: currentSchedule.stock <= 1 ? false : currentSchedule.reminderEnabled }
-        : currentSchedule));
+      const refreshedData = await getPatientScheduleData(visibleMonth);
+      const nextConfirmedScheduleDates = getConfirmedScheduleDates(refreshedData.medicationLogs);
+      setScheduleContext({ patientId: refreshedData.patient.id, confirmedScheduleDates: nextConfirmedScheduleDates });
+      dispatch({ type: "patch", payload: { patientSchedules: refreshedData.schedules } });
+      patientScheduleViewCache = {
+        selectedDate,
+        visibleMonth,
+        patientSchedules: refreshedData.schedules,
+        confirmedScheduleDates: nextConfirmedScheduleDates,
+      };
     } catch {
       return;
     }
@@ -120,36 +159,38 @@ export default function PatientSchedulePage() {
   return (
     <DashboardPageShell>
       <DashboardPageHeader title="Jadwal Obat" />
-      {isLoading ? <SummaryCardsSkeleton /> : <SummaryCardGrid stats={scheduleStats} />}
+      {isLoading && !hasLoadedSchedules ? <SummaryCardsSkeleton /> : <SummaryCardGrid stats={scheduleStats} />}
 
-      <div className="mt-6 space-y-6">
-        {isLoading ? <ActivityDataSkeleton rows={3} /> : <PatientDailyMedicineList
-          selectedDate={selectedDate}
-          schedules={schedulesForSelectedDate}
-          canConfirm={Boolean(lastScan?.hasDetectedFood)}
-          hasFoodScan={Boolean(lastScan)}
-          confirmedScheduleIds={confirmedScheduleIds}
-          confirmedScheduleDates={confirmedScheduleDates}
-          onConfirm={(schedule) => handleConfirmSchedule(schedule.id)}
-        />}
-      </div>
+      {isLoading && !hasLoadedSchedules ? <div className="mt-6"><PatientScheduleContentSkeleton /></div> : <>
+        <div className="mt-6 space-y-6">
+          <PatientDailyMedicineList
+            selectedDate={selectedDate}
+            schedules={schedulesForSelectedDate}
+            canConfirm={Boolean(lastScan?.hasDetectedFood)}
+            hasFoodScan={Boolean(lastScan)}
+            confirmedScheduleIds={confirmedScheduleIds}
+            confirmedScheduleDates={confirmedScheduleDates}
+            onConfirm={(schedule) => handleConfirmSchedule(schedule.id)}
+          />
+        </div>
 
-      <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(340px,0.72fr)]">
-        {isLoading ? <ActivityDataSkeleton rows={6} /> : <PatientMedicationCalendar
-          month={visibleMonth}
-          selectedDate={selectedDate}
-          schedules={patientSchedules}
-          confirmedScheduleDates={confirmedScheduleDates}
-          onMonthChange={setVisibleMonth}
-          onDateSelect={handleDateSelect}
-        />}
-        {isLoading ? <ActivityDataSkeleton rows={4} /> : <PatientScheduleDaySummary
-          selectedDate={selectedDate}
-          schedulesForDate={schedulesForSelectedDate}
-          allSchedules={patientSchedules}
-          confirmedScheduleDates={confirmedScheduleDates}
-        />}
-      </div>
+        <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(340px,0.72fr)]">
+          <PatientMedicationCalendar
+            month={visibleMonth}
+            selectedDate={selectedDate}
+            schedules={patientSchedules}
+            confirmedScheduleDates={confirmedScheduleDates}
+            onMonthChange={(month) => dispatch({ type: "patch", payload: { visibleMonth: month } })}
+            onDateSelect={handleDateSelect}
+          />
+          <PatientScheduleDaySummary
+            selectedDate={selectedDate}
+            schedulesForDate={schedulesForSelectedDate}
+            allSchedules={patientSchedules}
+            confirmedScheduleDates={confirmedScheduleDates}
+          />
+        </div>
+      </>}
     </DashboardPageShell>
   );
 }

@@ -38,6 +38,22 @@ router.use(authenticateToken);
  *           type: string
  *           enum: [warning, critical]
  *       - in: query
+ *         name: date
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Filter satu tanggal update. Untuk range gunakan start_date dan end_date.
+ *       - in: query
+ *         name: start_date
+ *         schema:
+ *           type: string
+ *           format: date
+ *       - in: query
+ *         name: end_date
+ *         schema:
+ *           type: string
+ *           format: date
+ *       - in: query
  *         name: page
  *         schema:
  *           type: integer

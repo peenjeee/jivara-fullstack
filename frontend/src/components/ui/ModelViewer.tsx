@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef } from "react";
 
 interface ModelViewerProps {
   src: string;
@@ -43,11 +43,20 @@ export default function ModelViewer({
   environmentImage = "neutral",
   style,
 }: ModelViewerProps) {
+  type ModelViewerState = { loaded: boolean; error: boolean };
+  type ModelViewerAction = { type: "loading" } | { type: "loaded" } | { type: "error" };
+
+  const modelViewerReducer = (_state: ModelViewerState, action: ModelViewerAction): ModelViewerState => {
+    switch (action.type) {
+      case "loading": return { loaded: false, error: false };
+      case "loaded": return { loaded: true, error: false };
+      case "error": return { loaded: false, error: true };
+    }
+  };
+
   const containerRef = useRef<HTMLDivElement>(null);
   const modelRef = useRef<HTMLElement | null>(null);
-  const [ready, setReady] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState(false);
+  const [state, dispatch] = useReducer(modelViewerReducer, { loaded: false, error: false });
 
   // Suppress Three.js texture blob rejection noise (non-fatal)
   useEffect(() => {
@@ -65,13 +74,80 @@ export default function ModelViewer({
     let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
     const idleWindow = window as IdleWindow;
 
+    const createModelViewer = () => {
+      if (cancelled || !containerRef.current) return;
+
+      dispatch({ type: "loading" });
+
+      if (modelRef.current) {
+        modelRef.current.remove();
+        modelRef.current = null;
+      }
+
+      const mv = document.createElement("model-viewer");
+      mv.setAttribute("src", src);
+      mv.setAttribute("alt", alt);
+      mv.setAttribute("loading", "eager");
+      mv.setAttribute("reveal", "auto");
+      mv.setAttribute("interaction-prompt", "none");
+      mv.setAttribute("shadow-intensity", shadowIntensity);
+      mv.setAttribute("shadow-softness", shadowSoftness);
+      mv.setAttribute("exposure", exposure);
+      mv.setAttribute("environment-image", environmentImage);
+
+      if (autoRotate) {
+        mv.setAttribute("auto-rotate", "");
+        mv.setAttribute("auto-rotate-delay", "0");
+        mv.setAttribute("rotation-per-second", "36deg");
+      }
+      if (cameraControls) mv.setAttribute("camera-controls", "");
+      if (disableZoom) mv.setAttribute("disable-zoom", "");
+      if (disablePan) mv.setAttribute("disable-pan", "");
+      if (cameraOrbit) mv.setAttribute("camera-orbit", cameraOrbit);
+      if (fieldOfView) {
+        mv.setAttribute("field-of-view", fieldOfView);
+        mv.setAttribute("min-field-of-view", fieldOfView);
+        mv.setAttribute("max-field-of-view", fieldOfView);
+      }
+      if (poster) mv.setAttribute("poster", poster);
+
+      mv.style.width = "100%";
+      mv.style.height = "100%";
+      mv.style.outline = "none";
+      mv.style.border = "none";
+      mv.style.background = "transparent";
+      mv.style.setProperty("--poster-color", "transparent");
+
+      // Hide default progress bar
+      const hideBar = document.createElement("div");
+      hideBar.slot = "progress-bar";
+      mv.appendChild(hideBar);
+
+      // Hide default poster/spinner
+      const hidePoster = document.createElement("div");
+      hidePoster.slot = "poster";
+      mv.appendChild(hidePoster);
+
+      // Fade in once model is fully loaded
+      mv.style.opacity = "0";
+      mv.style.transition = "opacity 0.4s ease";
+      const handleLoad = () => {
+        mv.style.opacity = "1";
+        dispatch({ type: "loaded" });
+      };
+      mv.addEventListener("load", handleLoad);
+
+      containerRef.current.appendChild(mv);
+      modelRef.current = mv;
+    };
+
     const loadModelViewer = () => {
       import("@google/model-viewer")
         .then(() => {
-          if (!cancelled) setReady(true);
+          if (!cancelled) createModelViewer();
         })
         .catch(() => {
-          if (!cancelled) setError(true);
+          if (!cancelled) dispatch({ type: "error" });
         });
     };
 
@@ -88,82 +164,9 @@ export default function ModelViewer({
       cancelled = true;
       if (fallbackTimer) clearTimeout(fallbackTimer);
     };
-  }, []);
+  }, [src, alt, poster, autoRotate, cameraControls, disableZoom, disablePan, cameraOrbit, fieldOfView, shadowIntensity, shadowSoftness, exposure, environmentImage]);
 
-  useEffect(() => {
-    if (!ready || !containerRef.current) return;
-
-    setLoaded(false);
-
-    if (modelRef.current) {
-      modelRef.current.remove();
-      modelRef.current = null;
-    }
-
-    const mv = document.createElement("model-viewer");
-    mv.setAttribute("src", src);
-    mv.setAttribute("alt", alt);
-    mv.setAttribute("loading", "eager");
-    mv.setAttribute("reveal", "auto");
-    mv.setAttribute("interaction-prompt", "none");
-    mv.setAttribute("shadow-intensity", shadowIntensity);
-    mv.setAttribute("shadow-softness", shadowSoftness);
-    mv.setAttribute("exposure", exposure);
-    mv.setAttribute("environment-image", environmentImage);
-
-    if (autoRotate) {
-      mv.setAttribute("auto-rotate", "");
-      mv.setAttribute("auto-rotate-delay", "0");
-      mv.setAttribute("rotation-per-second", "36deg");
-    }
-    if (cameraControls) mv.setAttribute("camera-controls", "");
-    if (disableZoom) mv.setAttribute("disable-zoom", "");
-    if (disablePan) mv.setAttribute("disable-pan", "");
-    if (cameraOrbit) mv.setAttribute("camera-orbit", cameraOrbit);
-    if (fieldOfView) {
-      mv.setAttribute("field-of-view", fieldOfView);
-      mv.setAttribute("min-field-of-view", fieldOfView);
-      mv.setAttribute("max-field-of-view", fieldOfView);
-    }
-    if (poster) mv.setAttribute("poster", poster);
-
-    mv.style.width = "100%";
-    mv.style.height = "100%";
-    mv.style.outline = "none";
-    mv.style.border = "none";
-    mv.style.background = "transparent";
-    mv.style.setProperty("--poster-color", "transparent");
-
-    // Hide default progress bar
-    const hideBar = document.createElement("div");
-    hideBar.slot = "progress-bar";
-    mv.appendChild(hideBar);
-
-    // Hide default poster/spinner
-    const hidePoster = document.createElement("div");
-    hidePoster.slot = "poster";
-    mv.appendChild(hidePoster);
-
-    // Fade in once model is fully loaded
-    mv.style.opacity = "0";
-    mv.style.transition = "opacity 0.4s ease";
-    mv.addEventListener("load", () => {
-      mv.style.opacity = "1";
-      setLoaded(true);
-    });
-
-    containerRef.current.appendChild(mv);
-    modelRef.current = mv;
-
-    return () => {
-      if (modelRef.current) {
-        modelRef.current.remove();
-        modelRef.current = null;
-      }
-    };
-  }, [ready, src, alt, poster, autoRotate, cameraControls, disableZoom, disablePan, cameraOrbit, fieldOfView, shadowIntensity, shadowSoftness, exposure, environmentImage]);
-
-  if (error) return null;
+  if (state.error) return null;
 
   return (
     <div ref={containerRef} className={`relative overflow-hidden ${className}`} style={style}>
@@ -174,7 +177,7 @@ export default function ModelViewer({
           aria-hidden="true"
           fill
           sizes="(min-width: 1024px) 460px, 70vw"
-          className={`pointer-events-none object-contain transition-opacity duration-500 ${loaded ? "opacity-0" : "opacity-100"}`}
+          className={`pointer-events-none object-contain transition-opacity duration-500 ${state.loaded ? "opacity-0" : "opacity-100"}`}
           priority
         />
       )}

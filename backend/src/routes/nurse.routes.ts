@@ -50,6 +50,43 @@ router.use(authenticateToken);
  *     responses:
  *       200:
  *         description: Daftar perawat berhasil diambil
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: berhasil
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                         format: uuid
+ *                       fullName:
+ *                         type: string
+ *                       email:
+ *                         type: string
+ *                         format: email
+ *                       phone:
+ *                         type: string
+ *                       gender:
+ *                         type: string
+ *                         enum: [male, female]
+ *                       isActive:
+ *                         type: boolean
+ *                       assignedPatients:
+ *                         type: integer
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *                       lastLoginAt:
+ *                         type: string
+ *                         nullable: true
+ *                         format: date-time
  *       403:
  *         description: Hanya admin yang dapat mengakses endpoint ini
  */
@@ -73,6 +110,41 @@ router.get("/", authorizeRoles("admin", "super_admin"), nurseController.listNurs
  *     responses:
  *       200:
  *         description: Detail perawat berhasil diambil
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: berhasil
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                       format: uuid
+ *                     fullName:
+ *                       type: string
+ *                     email:
+ *                       type: string
+ *                       format: email
+ *                     phone:
+ *                       type: string
+ *                     gender:
+ *                       type: string
+ *                       enum: [male, female]
+ *                     isActive:
+ *                       type: boolean
+ *                     assignedPatients:
+ *                       type: integer
+ *                     createdAt:
+ *                       type: string
+ *                       format: date-time
+ *                     lastLoginAt:
+ *                       type: string
+ *                       nullable: true
+ *                       format: date-time
  *       404:
  *         description: Perawat tidak ditemukan
  */

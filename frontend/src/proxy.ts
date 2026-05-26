@@ -16,11 +16,11 @@ async function createSha256Hash(value: string) {
   return btoa(String.fromCharCode(...new Uint8Array(hash)));
 }
 
-async function createContentSecurityPolicy(nonce: string, pathname: string) {
-  const isDev = process.env.NODE_ENV === 'development';
+async function createContentSecurityPolicy(nonce: string, pathname: string, hostname: string) {
+  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' || hostname === '::1';
+  const isDev = process.env.NODE_ENV === 'development' || isLocalhost;
   const isLandingPage = pathname === '/';
   const allowInlineStyles = isDev || isLandingPage;
-  const allowEval = isDev;
   const apiOrigin = getConfiguredApiOrigin();
   const shouldUpgradeInsecureRequests = !apiOrigin?.startsWith('http://');
   const connectSources = [
@@ -38,21 +38,34 @@ async function createContentSecurityPolicy(nonce: string, pathname: string) {
     'data:',
     'blob:',
     'https://images.unsplash.com',
+    'https://www.jivara.web.id',
     ...(apiOrigin ? [apiOrigin] : []),
   ].join(' ');
 
   const jsonLdHash = await createSha256Hash(JSON_LD_SCRIPT);
+  const scriptSource = isDev
+    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: http://localhost:* http://127.0.0.1:* https://ajax.googleapis.com"
+    : `script-src 'self' 'nonce-${nonce}' 'sha256-${jsonLdHash}' 'strict-dynamic' https://ajax.googleapis.com`;
+  const scriptElementSource = isDev
+    ? "script-src-elem 'self' 'unsafe-inline' blob: http://localhost:* http://127.0.0.1:* https://ajax.googleapis.com"
+    : `script-src-elem 'self' 'nonce-${nonce}' 'sha256-${jsonLdHash}' https://ajax.googleapis.com`;
+  const styleSource = allowInlineStyles
+    ? "style-src 'self' 'unsafe-inline'"
+    : `style-src 'self' 'nonce-${nonce}' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'sha256-RpGvlRbRQP1LZDBLDKCjN1VY9+ac/RHqgjmDHc2Y6PA='`;
+  const styleElementSource = allowInlineStyles
+    ? "style-src-elem 'self' 'unsafe-inline'"
+    : `style-src-elem 'self' 'nonce-${nonce}' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'sha256-RpGvlRbRQP1LZDBLDKCjN1VY9+ac/RHqgjmDHc2Y6PA='`;
   const directives = [
     "default-src 'self'",
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
     "object-src 'none'",
-    `script-src 'self' 'nonce-${nonce}' 'sha256-${jsonLdHash}' 'strict-dynamic' https://ajax.googleapis.com${allowEval ? " 'unsafe-eval'" : ''}`,
-    `script-src-elem 'self' 'nonce-${nonce}' 'sha256-${jsonLdHash}' https://ajax.googleapis.com${allowEval ? " 'unsafe-eval'" : ''}`,
-    `style-src 'self' ${allowInlineStyles ? "'unsafe-inline'" : `'nonce-${nonce}' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'sha256-RpGvlRbRQP1LZDBLDKCjN1VY9+ac/RHqgjmDHc2Y6PA='`}`,
-    `style-src-elem 'self' ${allowInlineStyles ? "'unsafe-inline'" : `'nonce-${nonce}' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'sha256-RpGvlRbRQP1LZDBLDKCjN1VY9+ac/RHqgjmDHc2Y6PA='`}`,
-    `style-src-attr 'self'${allowInlineStyles ? " 'unsafe-inline'" : ""}`,
+    scriptSource,
+    scriptElementSource,
+    styleSource,
+    styleElementSource,
+    "style-src-attr 'self' 'unsafe-inline'",
     `img-src ${imageSources}`,
     "font-src 'self' data:",
     `connect-src ${connectSources}`,
@@ -69,6 +82,11 @@ const protectedRoutes = ['/dashboard', '/patients', '/schedule', '/activity-log'
 const authRoutes = ['/login', '/register'];
 const authCookieNames = ['jivara-token', 'jivara-refresh-token', 'jivara-role', 'jivara-account-status'];
 const logoutCookieName = 'jivara-logged-out';
+
+function setHardeningHeaders(response: NextResponse) {
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+}
 
 function expireAuthCookies(response: NextResponse) {
   for (const name of authCookieNames) {
@@ -129,17 +147,18 @@ export async function proxy(request: NextRequest) {
   const hasRefreshToken = Boolean(refreshToken && refreshToken !== 'undefined' && refreshToken !== 'null');
   const hasSession = !hasLogoutMarker && (hasValidToken || hasRefreshToken);
   const { pathname } = request.nextUrl;
-  const contentSecurityPolicy = await createContentSecurityPolicy(nonce, pathname);
+  const contentSecurityPolicy = await createContentSecurityPolicy(nonce, pathname, request.nextUrl.hostname);
   requestHeaders.set('Content-Security-Policy', contentSecurityPolicy);
   requestHeaders.set('x-pathname', pathname);
 
-  const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
-  const isAuthRoute = authRoutes.some(route => pathname.startsWith(route));
+  const isProtectedRoute = protectedRoutes.some((route) => pathname.startsWith(route));
+  const isAuthRoute = authRoutes.some((route) => pathname.startsWith(route));
   const isExplicitLogout = isAuthRoute && request.nextUrl.searchParams.get('loggedOut') === '1';
 
   if (isExplicitLogout) {
     const response = NextResponse.redirect(new URL('/login', request.url));
     response.headers.set('Content-Security-Policy', contentSecurityPolicy);
+    setHardeningHeaders(response);
     response.headers.set('Cache-Control', 'no-store, max-age=0');
     supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
     expireAuthCookies(response);
@@ -152,6 +171,7 @@ export async function proxy(request: NextRequest) {
     url.searchParams.set('callbackUrl', pathname);
     const response = NextResponse.redirect(url);
     response.headers.set('Content-Security-Policy', contentSecurityPolicy);
+    setHardeningHeaders(response);
     supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
     if (hasLogoutMarker) expireAuthCookies(response);
     return response;
@@ -160,6 +180,7 @@ export async function proxy(request: NextRequest) {
   if (isAuthRoute && hasSession) {
     const response = NextResponse.redirect(new URL('/dashboard', request.url));
     response.headers.set('Content-Security-Policy', contentSecurityPolicy);
+    setHardeningHeaders(response);
     supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
     return response;
   }
@@ -170,6 +191,7 @@ export async function proxy(request: NextRequest) {
     },
   });
   response.headers.set('Content-Security-Policy', contentSecurityPolicy);
+  setHardeningHeaders(response);
   supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
   if (hasLogoutMarker) expireAuthCookies(response);
   return response;

@@ -53,5 +53,6 @@ export interface FoodScanAnalysis {
   readonly safeFoods?: readonly FoodSafeItem[];
   readonly recommendedFoods?: readonly FoodRecommendation[];
   readonly foodsToAvoid?: readonly FoodRecommendation[];
+  readonly disclaimer?: string;
   readonly overallRisk: FoodScanRisk;
 }

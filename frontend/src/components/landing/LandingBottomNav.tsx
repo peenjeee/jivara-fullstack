@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { Home, Info, LayoutList, PanelsTopLeft, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -21,7 +21,7 @@ export default function LandingBottomNav() {
   const activeSection = useLandingActiveSection();
 
   return (
-    <motion.nav
+    <m.nav
       aria-label="Navigasi bawah landing PWA"
       className="fixed inset-x-3 bottom-3 z-[30000] rounded-[28px] border border-line bg-white/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_18px_45px_rgba(15,23,42,0.18)] backdrop-blur-xl lg:hidden"
       initial={{ opacity: 0, y: 28 }}
@@ -34,7 +34,7 @@ export default function LandingBottomNav() {
           const isActive = pathname === "/" && activeSection === item.sectionId;
 
           return (
-            <motion.div
+            <m.div
               key={item.href}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -50,16 +50,16 @@ export default function LandingBottomNav() {
                   isActive ? "text-primary" : "text-muted hover:text-primary"
                 }`}
               >
-                <motion.span animate={isActive ? { y: -1 } : { y: 0 }} transition={{ type: "spring", stiffness: 420, damping: 22 }}>
+                <m.span animate={isActive ? { y: -1 } : { y: 0 }} transition={{ type: "spring", stiffness: 420, damping: 22 }}>
                   <Icon size={20} strokeWidth={2.4} className={isActive ? "text-primary" : "text-text-main transition-colors group-hover:text-primary"} />
-                </motion.span>
+                </m.span>
                 <span className={`max-w-full truncate transition-colors ${isActive ? "text-primary" : "text-text-main group-hover:text-primary"}`}>{item.label}</span>
               </Link>
-            </motion.div>
+            </m.div>
           );
         })}
       </div>
-    </motion.nav>
+    </m.nav>
   );
 }
 
@@ -79,7 +79,8 @@ function useLandingActiveSection() {
           }
         });
 
-        const [nextSection] = [...visibleSections.entries()].sort((first, second) => second[1] - first[1])[0] ?? ["top"];
+        const visibleEntries = [...visibleSections.entries()];
+        const [nextSection] = visibleEntries.length > 0 ? visibleEntries.reduce((best, entry) => entry[1] > best[1] ? entry : best) : ["top"] as [LandingSectionId | "top"];
         setActiveSection(nextSection as LandingSectionId);
       },
       { rootMargin: "-28% 0px -55% 0px", threshold: [0.12, 0.25, 0.5, 0.75] },

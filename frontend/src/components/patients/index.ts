@@ -9,4 +9,4 @@ export { default as PatientTable } from "./PatientTable";
 export { default as PatientToolbar } from "./PatientToolbar";
 export type { PatientAction } from "./PatientActions";
 export type { PatientFilter } from "./PatientToolbar";
-export type { AddPatientValues } from "./AddPatientForm";
+export type { AddPatientValues } from "./addPatientFormUtils";

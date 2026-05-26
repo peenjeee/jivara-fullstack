@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { CalendarClock } from "lucide-react";
 import DetailItem from "@/components/ui/DetailItem";
+import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
 import type { PatientRecord } from "@/lib/mocks/patients";
 import PatientStatusBadge from "../PatientStatusBadge";
 
@@ -13,14 +14,13 @@ interface PatientProfileHeroProps {
 }
 
 export default function PatientProfileHero({ patient }: PatientProfileHeroProps) {
-  const scheduleHref = `/schedule?patientName=${encodeURIComponent(patient.name)}`;
+  const shouldAnimate = useDashboardEntranceMotion();
+  const scheduleHref = `/schedule?patientId=${encodeURIComponent(patient.id)}`;
 
   return (
-    <motion.section
+    <m.section
       className="mt-6 overflow-hidden rounded-[32px] bg-surface p-5 shadow-[0_18px_45px_rgba(15,23,42,0.08)] sm:p-7"
-      initial={{ opacity: 0, y: 24 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.08 }}
+      {...getDashboardEntranceMotion(shouldAnimate, 0.08, 24)}
     >
       <div>
         <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
@@ -45,13 +45,14 @@ export default function PatientProfileHero({ patient }: PatientProfileHeroProps)
           </Link>
         </div>
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <DetailItem label="Umur, Gender" value={`${patient.age} tahun, ${patient.gender}`} />
+          <DetailItem label="Kunjungan Terakhir" value={patient.lastVisit} />
           <DetailItem label="Telepon" value={patient.phone ?? "Belum tersedia"} />
           <DetailItem label="Email" value={patient.email ?? "Belum tersedia"} />
           <DetailItem label="Alamat" value={patient.address ?? "Belum tersedia"} />
         </div>
       </div>
-    </motion.section>
+    </m.section>
   );
 }

@@ -20,8 +20,7 @@ export default function Switch({ id, name, checked, defaultChecked, onCheckedCha
         name={name ?? id}
         type="checkbox"
         value="on"
-        checked={checked}
-        defaultChecked={isControlled ? undefined : defaultChecked}
+        {...(isControlled ? { checked } : { defaultChecked })}
         onChange={(event) => onCheckedChange?.(event.target.checked)}
         aria-label={ariaLabel}
         className="peer sr-only"
@@ -32,7 +31,7 @@ export default function Switch({ id, name, checked, defaultChecked, onCheckedCha
       />
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow-[0_2px_8px_rgba(15,23,42,0.22)] transition-transform peer-checked:translate-x-5"
+        className="pointer-events-none absolute left-1 top-1 size-5 rounded-full bg-white shadow-[0_2px_8px_rgba(15,23,42,0.22)] transition-transform peer-checked:translate-x-5"
       />
     </span>
   );

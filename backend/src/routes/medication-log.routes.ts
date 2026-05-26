@@ -32,11 +32,37 @@ router.use(authenticateToken);
  *         schema:
  *           type: string
  *           example: 2026-05-10
+ *         description: Filter satu tanggal. Untuk range gunakan start_date dan end_date.
+ *       - in: query
+ *         name: start_date
+ *         schema:
+ *           type: string
+ *           format: date
+ *       - in: query
+ *         name: end_date
+ *         schema:
+ *           type: string
+ *           format: date
  *       - in: query
  *         name: status
  *         schema:
  *           type: string
  *           enum: [confirmed, missed, snoozed]
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *         description: Halaman data riwayat.
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 20
+ *         description: Jumlah data per halaman. Maksimal 100.
  *     responses:
  *       200:
  *         description: Riwayat intake berhasil diambil

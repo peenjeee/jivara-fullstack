@@ -1,5 +1,5 @@
 export interface PushSubscriptionDTO {
-  patientId: string;
+  patientId?: string;
   endpoint: string;
   keys: {
     p256dh: string;
@@ -18,7 +18,7 @@ export interface UserPushSubscriptionDTO {
 }
 
 export interface NotificationPreferenceDTO {
-  patientId: string;
+  patientId?: string;
   enabled: boolean;
 }
 

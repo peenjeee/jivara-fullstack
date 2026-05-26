@@ -7,17 +7,26 @@ export interface ActivityLogDateGroup {
 }
 
 export function getActivityDateKey(timestamp: string) {
-  return new Date(timestamp).toISOString().slice(0, 10);
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function getTodayDateKey() {
+  return getActivityDateKey(new Date().toISOString());
 }
 
 export function getActivityDateLabel(timestamp: string) {
   const date = new Date(timestamp);
-  const today = new Date();
+  const todayKey = getTodayDateKey();
   const yesterday = new Date();
-  yesterday.setDate(today.getDate() - 1);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayKey = getActivityDateKey(yesterday.toISOString());
 
-  if (getActivityDateKey(timestamp) === today.toISOString().slice(0, 10)) return "Hari Ini";
-  if (getActivityDateKey(timestamp) === yesterday.toISOString().slice(0, 10)) return "Kemarin";
+  if (getActivityDateKey(timestamp) === todayKey) return "Hari Ini";
+  if (getActivityDateKey(timestamp) === yesterdayKey) return "Kemarin";
 
   return date.toLocaleDateString("id-ID", {
     day: "2-digit",
@@ -45,7 +54,7 @@ export function groupActivityLogsByDate(logs: readonly ActivityLogRecord[]): Act
     .map(([dateKey, items]) => ({
       dateKey,
       label: getActivityDateLabel(items[0]?.timestamp ?? dateKey),
-      items: [...items].sort((first, second) => new Date(second.timestamp).getTime() - new Date(first.timestamp).getTime()),
+      items: items.toSorted((first, second) => new Date(second.timestamp).getTime() - new Date(first.timestamp).getTime()),
     }));
 }
 

@@ -26,6 +26,13 @@ export interface MedicationScheduleUpdateDTO {
 export interface MedicationScheduleListQuery {
   patient_id?: string;
   patientId?: string;
+  patient_ids?: string;
+  patientIds?: string;
   is_active?: string;
   isActive?: string;
+  page?: string;
+  limit?: string;
+  search?: string;
+  status?: string;
+  adherenceStatus?: string;
 }

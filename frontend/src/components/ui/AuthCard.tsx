@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 
 interface AuthCardProps {
   title: string;
@@ -11,7 +11,7 @@ interface AuthCardProps {
 
 const AuthCard = ({ title, children, footer }: AuthCardProps) => {
   return (
-    <motion.div
+    <m.div
       className="w-full max-w-md bg-white rounded-3xl p-8 lg:p-12 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.05)] "
       initial={{ opacity: 0, y: 28, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -28,7 +28,7 @@ const AuthCard = ({ title, children, footer }: AuthCardProps) => {
           {footer}
         </div>
       )}
-    </motion.div>
+    </m.div>
   );
 };
 

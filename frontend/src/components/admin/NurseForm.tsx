@@ -78,16 +78,16 @@ export default function NurseForm({ initialValues, mode = "add", onSubmit }: Nur
   return (
     <form className="space-y-5" onSubmit={handleSubmit} noValidate>
       <FormSection>
-        <FormField label="Nama Lengkap" required>
-          <input id="nurseFullName" name="nurseFullName" type="text" placeholder="Nama perawat" value={values.fullName} onChange={(event) => updateValue("fullName", event.target.value)} className={FORM_INPUT_CLASS} />
+        <FormField label="Nama Lengkap" htmlFor="nurseFullName" required>
+          <input id="nurseFullName" name="nurseFullName" type="text" placeholder="Nama perawat" value={values.fullName} onChange={(event) => updateValue("fullName", event.target.value)} className={FORM_INPUT_CLASS} aria-label="Nama Lengkap" />
         </FormField>
 
         <div className="grid gap-5 sm:grid-cols-2">
-          <FormField label="Email" required>
-            <input id="nurseEmail" name="nurseEmail" type="email" placeholder="perawat@email.com" value={values.email} onChange={(event) => updateValue("email", event.target.value)} className={FORM_INPUT_CLASS} autoComplete="username" />
+          <FormField label="Email" htmlFor="nurseEmail" required>
+            <input id="nurseEmail" name="nurseEmail" type="email" placeholder="perawat@email.com" value={values.email} onChange={(event) => updateValue("email", event.target.value)} className={FORM_INPUT_CLASS} autoComplete="username" aria-label="Email" />
           </FormField>
-          <FormField label="No. Telepon" required>
-            <input id="nursePhone" name="nursePhone" type="tel" inputMode="numeric" pattern="[0-9]*" placeholder="628..." value={values.phone} onChange={(event) => updatePhone(event.target.value)} className={FORM_INPUT_CLASS} />
+          <FormField label="No. Telepon" htmlFor="nursePhone" required>
+            <input id="nursePhone" name="nursePhone" type="tel" inputMode="numeric" pattern="[0-9]*" placeholder="628..." value={values.phone} onChange={(event) => updatePhone(event.target.value)} className={FORM_INPUT_CLASS} aria-label="No. Telepon" />
           </FormField>
         </div>
 
@@ -105,7 +105,8 @@ export default function NurseForm({ initialValues, mode = "add", onSubmit }: Nur
                     value={option}
                     checked={values.gender === option}
                     onChange={() => updateValue("gender", option)}
-                    className="h-5 w-5 appearance-none rounded-full border-2 border-muted bg-white bg-clip-content p-[3px] transition-all checked:border-primary checked:bg-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    className="size-5 appearance-none rounded-full border-2 border-muted bg-white bg-clip-content p-[3px] transition-all checked:border-primary checked:bg-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    aria-label={`Gender ${option}`}
                   />
                   <span className={values.gender === option ? "text-text-main" : "text-muted"}>{option}</span>
                 </label>
@@ -117,7 +118,7 @@ export default function NurseForm({ initialValues, mode = "add", onSubmit }: Nur
           </FormField>
         </div>
 
-        <FormField label={mode === "add" ? "Password Sementara" : "Password Sementara Baru"} required={mode === "add"}>
+          <FormField label={mode === "add" ? "Password Sementara" : "Password Sementara Baru"} htmlFor="nurseTemporaryPassword" required={mode === "add"}>
           <input
             id="nurseTemporaryPassword"
             name="nurseTemporaryPassword"
@@ -127,6 +128,7 @@ export default function NurseForm({ initialValues, mode = "add", onSubmit }: Nur
             placeholder={mode === "edit" ? "Kosongkan jika tidak diubah" : "********"}
             className={FORM_INPUT_CLASS}
             autoComplete="new-password"
+            aria-label={mode === "add" ? "Password Sementara" : "Password Sementara Baru"}
           />
         </FormField>
       </FormSection>

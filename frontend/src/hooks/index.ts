@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
 
 /**
  * Hook untuk melacak posisi scroll.
@@ -38,17 +38,13 @@ export const useLockBodyScroll = (lock: boolean) => {
  * Hook untuk mendeteksi app dibuka sebagai installed PWA/standalone.
  */
 export const useIsStandalonePwa = () => {
-  const [isStandalone, setIsStandalone] = useState(false);
-
-  useEffect(() => {
+  return useSyncExternalStore((onStoreChange) => {
     const mediaQuery = window.matchMedia("(display-mode: standalone)");
-    const getIsStandalone = () => mediaQuery.matches || Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
-    const updateStandaloneState = () => setIsStandalone(getIsStandalone());
+    mediaQuery.addEventListener("change", onStoreChange);
 
-    updateStandaloneState();
-    mediaQuery.addEventListener("change", updateStandaloneState);
-    return () => mediaQuery.removeEventListener("change", updateStandaloneState);
-  }, []);
-
-  return isStandalone;
+    return () => mediaQuery.removeEventListener("change", onStoreChange);
+  }, () => {
+    const mediaQuery = window.matchMedia("(display-mode: standalone)");
+    return mediaQuery.matches || Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
+  }, () => false);
 };

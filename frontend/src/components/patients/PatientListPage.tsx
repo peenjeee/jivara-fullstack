@@ -1,10 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { Plus } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
+import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
 import Button from "@/components/ui/Button";
 import { TableDataSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
 import AddPatientModal from "./AddPatientModal";
@@ -18,8 +19,9 @@ interface PatientListPageProps {
 }
 
 export default function PatientListPage({ mode = "manage" }: PatientListPageProps) {
-  const router = useRouter();
-  const patientList = usePatientList((patientId) => router.push(`/patients/${encodeURIComponent(patientId)}`));
+  const shouldAnimate = useDashboardEntranceMotion();
+  const { push } = useRouter();
+  const patientList = usePatientList((patientId) => push(`/patients/${encodeURIComponent(patientId)}`));
 
   return (
     <DashboardPageShell>
@@ -32,13 +34,11 @@ export default function PatientListPage({ mode = "manage" }: PatientListPageProp
         )}
       />
 
-      <motion.div
+      <m.div
         className="mt-6"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
+        {...getDashboardEntranceMotion(shouldAnimate, 0.1, 20)}
       >
-        {patientList.isLoading ? <ToolbarSkeleton /> : <PatientToolbar
+        {patientList.isLoading && !patientList.hasLoadedPatients ? <ToolbarSkeleton /> : <PatientToolbar
           search={patientList.search}
           activeFilter={patientList.activeFilter}
           hasActiveFilters={Boolean(patientList.search || patientList.activeFilter !== "all")}
@@ -46,21 +46,19 @@ export default function PatientListPage({ mode = "manage" }: PatientListPageProp
           onFilterChange={patientList.handleFilterChange}
           onReset={patientList.resetFilters}
         />}
-      </motion.div>
+      </m.div>
 
-      <motion.div
+      <m.div
         className="mt-6 overflow-hidden rounded-3xl shadow-[0_10px_30px_rgba(15,23,42,0.08)]"
-        initial={{ opacity: 0, y: 24 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.18 }}
+        {...getDashboardEntranceMotion(shouldAnimate, 0.18, 24)}
       >
         {patientList.isLoading ? <TableDataSkeleton /> : (
           <>
             <PatientTable patients={patientList.paginatedPatients} actions={mode === "readonly" ? ["view"] : ["view", "edit", "delete"]} processingAction={patientList.processingAction} onAction={patientList.handlePatientAction} embedded emptyMessage="Tidak ada data pasien." assignedNurseByPatientId={mode === "readonly" ? patientList.assignedNurseByPatientId : undefined} />
-            <PatientPagination currentPage={patientList.currentPage} totalPages={patientList.totalPages} totalItems={patientList.filteredPatients.length} pageSize={10} onPageChange={patientList.setCurrentPage} />
+            <PatientPagination currentPage={patientList.currentPage} totalPages={patientList.totalPages} totalItems={patientList.totalPatients} pageSize={patientList.pageSize} onPageChange={patientList.setCurrentPage} />
           </>
         )}
-      </motion.div>
+      </m.div>
       {mode === "manage" && <AddPatientModal isOpen={patientList.isAddModalOpen} onClose={() => patientList.setIsAddModalOpen(false)} onSubmit={patientList.handleAddPatient} />}
       <AddPatientModal
         isOpen={mode === "manage" && Boolean(patientList.editingPatient)}

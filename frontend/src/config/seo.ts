@@ -38,7 +38,7 @@ export const jsonLdGraph = {
         contactType: "customer support",
         availableLanguage: "Indonesian",
       },
-      sameAs: ["https://instagram.com/jivara.id"],
+      sameAs: ["https://instagram.com/jivara.health"],
     },
     {
       "@type": "SoftwareApplication",

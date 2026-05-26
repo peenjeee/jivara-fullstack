@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getApiErrorMessage } from "@/lib/apiErrors";
 import { clearAuditLogCache } from "@/lib/auditLogApi";
 import api from "@/lib/axios";
 import { showConfirm, showError, showToast } from "@/lib/swal";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import type { User } from "@/types/auth";
 
 export type AdminApprovalSummary = {
@@ -15,89 +16,114 @@ export type AdminApprovalSummary = {
 };
 
 export type ApprovalFilter = "all" | "pending" | "active" | "rejected" | "suspended";
-
 export const emptySummary: AdminApprovalSummary = { pending: 0, active: 0, rejected: 0, suspended: 0 };
 export const pageSize = 10;
 
 const approvalsCacheTtl = 15_000;
-let approvalsCache: { data: { users: User[]; summary: AdminApprovalSummary }; expiresAt: number } | null = null;
-let approvalsRequest: Promise<{ users: User[]; summary: AdminApprovalSummary }> | null = null;
+type AdminApprovalPage = { users: User[]; summary: AdminApprovalSummary; meta: { page: number; limit: number; total: number } };
+const approvalsCache = new Map<string, { data: AdminApprovalPage; expiresAt: number }>();
+const approvalsRequests = new Map<string, Promise<AdminApprovalPage>>();
+let approvalsViewCache: {
+  approvals: User[];
+  summary: AdminApprovalSummary;
+  totalApprovals: number;
+  search: string;
+  filter: ApprovalFilter;
+  currentPage: number;
+} | null = null;
 
 export const clearApprovalsCache = () => {
-  approvalsCache = null;
-  approvalsRequest = null;
+  approvalsCache.clear();
+  approvalsRequests.clear();
+  approvalsViewCache = null;
 };
 
-const removePendingUser = (users: User[], userId: string) => users.filter((item) => item.id !== userId);
-
 export function useAdminApprovals(canLoad: boolean) {
-  const [approvals, setApprovals] = useState<User[]>([]);
-  const [summary, setSummary] = useState<AdminApprovalSummary>(emptySummary);
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<ApprovalFilter>("pending");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [loading, setLoading] = useState(true);
+  const [approvals, setApprovals] = useState<User[]>(() => approvalsViewCache?.approvals ?? []);
+  const [summary, setSummary] = useState<AdminApprovalSummary>(() => approvalsViewCache?.summary ?? emptySummary);
+  const [totalApprovals, setTotalApprovals] = useState(() => approvalsViewCache?.totalApprovals ?? 0);
+  const [search, setSearch] = useState(() => approvalsViewCache?.search ?? "");
+  const [filter, setFilter] = useState<ApprovalFilter>(() => approvalsViewCache?.filter ?? "pending");
+  const [currentPage, setCurrentPage] = useState(() => approvalsViewCache?.currentPage ?? 1);
+  const [loading, setLoading] = useState(!approvalsViewCache);
+  const [hasLoadedApprovals, setHasLoadedApprovals] = useState(Boolean(approvalsViewCache));
+  const [hasLoadedSummary, setHasLoadedSummary] = useState(Boolean(approvalsViewCache));
   const [loadError, setLoadError] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [rejectingUser, setRejectingUser] = useState<User | null>(null);
-  const deferredSearch = useDeferredValue(search);
+  const debouncedSearch = useDebouncedValue(search);
 
-  const filteredApprovals = useMemo(() => {
-    const query = deferredSearch.trim().toLowerCase();
-    return approvals.filter((user) => {
-      const status = user.accountStatus ?? "active";
-      const matchesFilter = filter === "all" || status === filter;
-      const matchesSearch = !query || [user.fullName, user.email, user.phone ?? ""].some((value) => value.toLowerCase().includes(query));
-      return matchesFilter && matchesSearch;
-    });
-  }, [approvals, deferredSearch, filter]);
+  const totalPages = Math.max(1, Math.ceil(totalApprovals / pageSize));
+  const paginatedApprovals = approvals;
 
-  const totalPages = Math.max(1, Math.ceil(filteredApprovals.length / pageSize));
-  const paginatedApprovals = filteredApprovals.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-
-  const loadApprovals = useCallback(async () => {
-    setLoading(true);
+  const loadApprovals = useCallback(async (page = currentPage, forceRefresh = false) => {
+    const query = debouncedSearch.trim();
+    const canUseVisibleCache = !forceRefresh
+      && approvalsViewCache?.currentPage === page
+      && approvalsViewCache.search.trim() === query
+      && approvalsViewCache.filter === filter;
+    setLoading(!canUseVisibleCache);
     try {
       const now = Date.now();
-      let data: { users: User[]; summary: AdminApprovalSummary };
+      const cacheKey = `${page}:${pageSize}:${query}:${filter}`;
+      let data: AdminApprovalPage;
 
-      if (approvalsCache && approvalsCache.expiresAt > now) {
-        data = approvalsCache.data;
-      } else if (approvalsRequest) {
-        data = await approvalsRequest;
+      if (forceRefresh) {
+        approvalsCache.delete(cacheKey);
+        approvalsRequests.delete(cacheKey);
+      }
+
+      if (approvalsCache.has(cacheKey) && approvalsCache.get(cacheKey)!.expiresAt > now) {
+        data = approvalsCache.get(cacheKey)!.data;
+      } else if (approvalsRequests.has(cacheKey)) {
+        data = await approvalsRequests.get(cacheKey)!;
       } else {
-        approvalsRequest = api.get("/auth/admin-approvals")
+        const request = api.get("/auth/admin-approvals", { params: { page, limit: pageSize, ...(query ? { search: query } : {}), ...(filter !== "all" ? { status: filter } : {}) } })
           .then((response) => {
             const result = {
               users: response.data.data.users ?? [],
               summary: response.data.data.summary ?? emptySummary,
+              meta: response.data.meta ?? { page, limit: pageSize, total: response.data.data.users?.length ?? 0 },
             };
-            approvalsCache = { data: result, expiresAt: Date.now() + approvalsCacheTtl };
+            approvalsCache.set(cacheKey, { data: result, expiresAt: Date.now() + approvalsCacheTtl });
             return result;
           })
           .finally(() => {
-            approvalsRequest = null;
+            approvalsRequests.delete(cacheKey);
           });
-        data = await approvalsRequest;
+        approvalsRequests.set(cacheKey, request);
+        data = await request;
       }
 
       setLoadError(false);
       setApprovals(data.users);
       setSummary(data.summary);
+      setTotalApprovals(data.meta.total);
+      approvalsViewCache = {
+        approvals: data.users,
+        summary: data.summary,
+        totalApprovals: data.meta.total,
+        search,
+        filter,
+        currentPage: page,
+      };
     } catch (error) {
       setLoadError(true);
       setApprovals([]);
       setSummary(emptySummary);
+      setTotalApprovals(0);
       showError(getApiErrorMessage(error, "Gagal memuat daftar pengajuan admin."));
     } finally {
+      setHasLoadedApprovals(true);
+      setHasLoadedSummary(true);
       setLoading(false);
     }
-  }, []);
+  }, [currentPage, debouncedSearch, filter, search]);
 
   useEffect(() => {
     if (!canLoad) return;
-    void Promise.resolve().then(loadApprovals);
-  }, [canLoad, loadApprovals]);
+    void Promise.resolve().then(() => loadApprovals(currentPage));
+  }, [canLoad, currentPage, loadApprovals]);
 
   const resetFilters = () => {
     setSearch("");
@@ -114,8 +140,7 @@ export function useAdminApprovals(canLoad: boolean) {
       await api.post(`/auth/admin-approvals/${encodeURIComponent(user.id)}/approve`);
       clearApprovalsCache();
       clearAuditLogCache();
-      setApprovals((current) => removePendingUser(current, user.id));
-      setSummary((current) => ({ ...current, pending: Math.max(0, current.pending - 1), active: current.active + 1 }));
+      await loadApprovals(currentPage, true);
       showToast("Admin berhasil disetujui.", "success");
     } catch (error) {
       showError(getApiErrorMessage(error, "Gagal menyetujui pengajuan admin."));
@@ -131,8 +156,7 @@ export function useAdminApprovals(canLoad: boolean) {
       await api.post(`/auth/admin-approvals/${encodeURIComponent(rejectingUser.id)}/reject`, { reason });
       clearApprovalsCache();
       clearAuditLogCache();
-      setApprovals((current) => removePendingUser(current, rejectingUser.id));
-      setSummary((current) => ({ ...current, pending: Math.max(0, current.pending - 1), rejected: current.rejected + 1 }));
+      await loadApprovals(currentPage, true);
       setRejectingUser(null);
       showToast("Pengajuan admin ditolak.");
     } catch (error) {
@@ -142,18 +166,13 @@ export function useAdminApprovals(canLoad: boolean) {
     }
   };
 
-  const updateStatus = async (user: User, status: "active" | "suspended" | "pending", endpoint: "activate" | "suspend" | "restore") => {
+  const updateStatus = async (user: User, endpoint: "activate" | "suspend" | "restore") => {
     setProcessingId(user.id);
     try {
       await api.post(`/auth/admin-approvals/${encodeURIComponent(user.id)}/${endpoint}`);
       clearApprovalsCache();
       clearAuditLogCache();
-      setApprovals((current) => current.map((item) => item.id === user.id ? { ...item, accountStatus: status, ...(status === "pending" ? { rejectedReason: null, rejectedAt: null } : {}) } : item));
-      setSummary((current) => {
-        if (endpoint === "activate") return { ...current, suspended: Math.max(0, current.suspended - 1), active: current.active + 1 };
-        if (endpoint === "suspend") return { ...current, active: Math.max(0, current.active - 1), suspended: current.suspended + 1 };
-        return { ...current, rejected: Math.max(0, current.rejected - 1), pending: current.pending + 1 };
-      });
+      await loadApprovals(currentPage, true);
       showToast(endpoint === "activate" ? "Admin berhasil diaktifkan kembali." : endpoint === "suspend" ? "Admin berhasil disuspend." : "Pengajuan admin berhasil dipulihkan.", "success");
     } catch (error) {
       showError(getApiErrorMessage(error, endpoint === "activate" ? "Gagal mengaktifkan admin." : endpoint === "suspend" ? "Gagal suspend admin." : "Gagal memulihkan pengajuan admin."));
@@ -164,26 +183,28 @@ export function useAdminApprovals(canLoad: boolean) {
 
   const handleActivate = async (user: User) => {
     const result = await showConfirm("Aktifkan Admin?", `${user.fullName} akan aktif kembali sebagai admin Jivara.`, "Ya, Aktifkan");
-    if (result.isConfirmed) await updateStatus(user, "active", "activate");
+    if (result.isConfirmed) await updateStatus(user, "activate");
   };
   const handleSuspend = async (user: User) => {
     const result = await showConfirm("Suspend Admin?", `${user.fullName} tidak akan bisa mengakses dashboard admin sampai diaktifkan kembali.`, "Ya, Suspend");
-    if (result.isConfirmed) await updateStatus(user, "suspended", "suspend");
+    if (result.isConfirmed) await updateStatus(user, "suspend");
   };
   const handleRestore = async (user: User) => {
     const result = await showConfirm("Pulihkan Pengajuan?", `${user.fullName} akan dikembalikan ke status menunggu approval.`, "Ya, Pulihkan");
-    if (result.isConfirmed) await updateStatus(user, "pending", "restore");
+    if (result.isConfirmed) await updateStatus(user, "restore");
   };
 
   return {
     currentPage,
     filter,
-    filteredApprovals,
+    filteredApprovals: approvals,
     handleActivate,
     handleApprove,
     handleReject,
     handleRestore,
     handleSuspend,
+    hasLoadedApprovals,
+    hasLoadedSummary,
     loading,
     loadError,
     paginatedApprovals,
@@ -196,6 +217,8 @@ export function useAdminApprovals(canLoad: boolean) {
     setRejectingUser,
     setSearch,
     summary,
+    summaryLoading: loading,
     totalPages,
+    totalApprovals,
   };
 }

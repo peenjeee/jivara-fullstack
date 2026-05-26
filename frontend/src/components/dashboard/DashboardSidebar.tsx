@@ -15,7 +15,12 @@ interface DashboardSidebarProps {
 
 export default function DashboardSidebar({ activeItem, role, onLogout, onNavigate }: DashboardSidebarProps) {
   const patientId = usePatientDashboardStore((state) => state.patientId);
-  const unreadActivityCount = useActivityLogStore((state) => isAdminDashboardRole(role) ? 0 : getUnreadActivityCount(state.activities, role === "patient" ? patientId ?? undefined : undefined));
+  const globalUnreadActivityCount = useActivityLogStore((state) => state.unreadActivityCount);
+  const unreadActivityCount = useActivityLogStore((state) => {
+    if (isAdminDashboardRole(role)) return 0;
+    if (role === "nurse" && state.unreadActivityCount !== null) return state.unreadActivityCount;
+    return getUnreadActivityCount(state.activities, role === "patient" ? patientId ?? undefined : undefined);
+  });
   const isActivityLogLoading = useActivityLogStore((state) => state.isLoading);
   const navItems = getDashboardNavItems(role);
 
@@ -41,7 +46,7 @@ export default function DashboardSidebar({ activeItem, role, onLogout, onNavigat
             item={item}
             isActive={activeItem === item.label}
             badgeCount={item.href === "/activity-log" ? unreadActivityCount : 0}
-            isBadgeLoading={item.href === "/activity-log" && !isAdminDashboardRole(role) && isActivityLogLoading}
+            isBadgeLoading={item.href === "/activity-log" && !isAdminDashboardRole(role) && globalUnreadActivityCount === null && isActivityLogLoading}
             onSelect={() => onNavigate?.()}
           />
         ))}

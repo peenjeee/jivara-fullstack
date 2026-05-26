@@ -20,6 +20,7 @@ export default function SearchField({ id, name, value, placeholder, className = 
         name={name ?? id}
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        aria-label={placeholder}
         className="w-full bg-transparent text-sm font-semibold text-text-main outline-none placeholder:text-muted"
         placeholder={placeholder}
       />

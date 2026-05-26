@@ -1,7 +1,7 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { motion } from "motion/react";
+import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
+import { m } from "motion/react";
 import { CheckCircle2, ClipboardList, Clock3 } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
@@ -13,107 +13,209 @@ import SearchField from "@/components/ui/SearchField";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import ToolbarCard from "@/components/ui/ToolbarCard";
 import { FORM_PILL_INPUT_CLASS } from "@/components/ui/formStyles";
-import { getActivityDateKey } from "@/helpers/activityLogs";
-import { getSuperAdminApprovalActivitiesFromApi } from "@/lib/auditLogApi";
+import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
+import { getAuditActivityPageFromApi, type ApprovalLogStatus } from "@/lib/auditLogApi";
 import type { ActivityLogRecord } from "@/lib/mocks/activityLogs";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import ActivityDetailModal from "./ActivityDetailModal";
 import ActivityFeed from "./ActivityFeed";
 
-type ApprovalLogFilter = "all" | "incoming" | "approved" | "rejected" | "suspended";
+type SuperAdminLogFilter = ApprovalLogStatus;
 
-const pageSize = 8;
-const filters: { readonly label: string; readonly value: ApprovalLogFilter }[] = [
+const pageSize = 10;
+const filters: { readonly label: string; readonly value: SuperAdminLogFilter }[] = [
   { label: "Semua", value: "all" },
-  { label: "Pengajuan Masuk", value: "incoming" },
-  { label: "Diterima", value: "approved" },
-  { label: "Ditolak", value: "rejected" },
+  { label: "Menunggu", value: "pending" },
+  { label: "Diterima", value: "active" },
+  { label: "Tolak", value: "rejected" },
   { label: "Suspend", value: "suspended" },
 ];
 
-const matchesFilter = (activity: ActivityLogRecord, filter: ApprovalLogFilter) => {
-  if (filter === "all") return true;
-  if (filter === "incoming") return activity.title === "Pengajuan admin masuk";
-  if (filter === "approved") return activity.title === "Admin disetujui" || activity.title === "Admin diaktifkan kembali";
-  if (filter === "rejected") return activity.title === "Admin ditolak";
-  return activity.title === "Admin disuspend";
-};
+let superAdminLogViewCache: {
+  activities: ActivityLogRecord[];
+  search: string;
+  filter: SuperAdminLogFilter;
+  date: string;
+  activityPage: number;
+  totalAuditLogCount: number;
+  totalFilteredLogCount: number;
+  totalIncomingApprovalCount: number;
+  totalProcessedTodayCount: number;
+} | null = null;
+
+interface SuperAdminActivityLogState {
+  readonly activities: ActivityLogRecord[];
+  readonly search: string;
+  readonly filter: SuperAdminLogFilter;
+  readonly date: string;
+  readonly selectedActivity: ActivityLogRecord | null;
+  readonly isLoading: boolean;
+  readonly hasLoadedActivities: boolean;
+  readonly hasLoadedSummary: boolean;
+  readonly isLoadingMore: boolean;
+  readonly activityPage: number;
+  readonly totalAuditLogCount: number;
+  readonly totalFilteredLogCount: number;
+  readonly totalIncomingApprovalCount: number;
+  readonly totalProcessedTodayCount: number;
+}
+
+type SuperAdminActivityLogAction = { readonly type: "patch"; readonly payload: Partial<SuperAdminActivityLogState> };
+
+function superAdminActivityLogReducer(state: SuperAdminActivityLogState, action: SuperAdminActivityLogAction): SuperAdminActivityLogState {
+  return action.type === "patch" ? { ...state, ...action.payload } : state;
+}
 
 export default function SuperAdminActivityLogPage() {
-  const [activities, setActivities] = useState<ActivityLogRecord[]>([]);
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<ApprovalLogFilter>("all");
-  const [date, setDate] = useState("");
-  const [visibleCount, setVisibleCount] = useState(pageSize);
-  const [selectedActivity, setSelectedActivity] = useState<ActivityLogRecord | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const deferredSearch = useDeferredValue(search);
+  const shouldAnimate = useDashboardEntranceMotion();
+  const [state, dispatch] = useReducer(superAdminActivityLogReducer, {
+    activities: superAdminLogViewCache?.activities ?? [],
+    search: superAdminLogViewCache?.search ?? "",
+    filter: superAdminLogViewCache?.filter ?? "all",
+    date: superAdminLogViewCache?.date ?? "",
+    selectedActivity: null,
+    isLoading: !superAdminLogViewCache,
+    hasLoadedActivities: Boolean(superAdminLogViewCache),
+    hasLoadedSummary: Boolean(superAdminLogViewCache),
+    isLoadingMore: false,
+    activityPage: superAdminLogViewCache?.activityPage ?? 1,
+    totalAuditLogCount: superAdminLogViewCache?.totalAuditLogCount ?? 0,
+    totalFilteredLogCount: superAdminLogViewCache?.totalFilteredLogCount ?? 0,
+    totalIncomingApprovalCount: superAdminLogViewCache?.totalIncomingApprovalCount ?? 0,
+    totalProcessedTodayCount: superAdminLogViewCache?.totalProcessedTodayCount ?? 0,
+  });
+  const { activities, search, filter, date, selectedActivity, isLoading, hasLoadedActivities, hasLoadedSummary, isLoadingMore, activityPage, totalAuditLogCount, totalFilteredLogCount, totalIncomingApprovalCount, totalProcessedTodayCount } = state;
+  const loadingPagesRef = useRef(new Set<string>());
+  const loadedQueryRef = useRef<string | null>(superAdminLogViewCache ? `${superAdminLogViewCache.activityPage}:${superAdminLogViewCache.filter}:${superAdminLogViewCache.date}:${superAdminLogViewCache.search}` : null);
+  const failedQueryRef = useRef<string | null>(null);
+  const loadedSummaryRef = useRef(Boolean(superAdminLogViewCache));
+  const stateRef = useRef(state);
+  const debouncedSearch = useDebouncedValue(search);
 
   useEffect(() => {
-    let isMounted = true;
-    getSuperAdminApprovalActivitiesFromApi({ forceRefresh: true })
-      .then((nextActivities) => {
-        if (isMounted) setActivities(nextActivities);
-      })
-      .catch(() => {
-        if (isMounted) setActivities([]);
-      })
-      .finally(() => {
-        if (isMounted) setIsLoading(false);
+    stateRef.current = state;
+  }, [state]);
+
+  const loadPage = useCallback(async (page: number) => {
+    const currentState = stateRef.current;
+    const pageKey = `${page}:${currentState.filter}:${currentState.date}:${debouncedSearch}`;
+    if (page === 1 && loadedQueryRef.current === pageKey) return;
+    if (page === 1 && failedQueryRef.current === pageKey) return;
+    if (loadingPagesRef.current.has(pageKey)) return;
+
+    loadingPagesRef.current.add(pageKey);
+    dispatch({ type: "patch", payload: page === 1 ? { isLoading: true } : { isLoadingMore: true } });
+
+    try {
+      const response = await getAuditActivityPageFromApi({
+        page,
+        limit: pageSize,
+        status: currentState.filter === "all" ? undefined : currentState.filter,
+        userRole: "super_admin",
+        date: currentState.date,
+        search: debouncedSearch,
+        forceRefresh: page === 1,
       });
 
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+      const visibleActivities = page === 1 ? response.activities : [...currentState.activities, ...response.activities];
+      const hasActiveFilters = Boolean(currentState.search || currentState.date || currentState.filter !== "all");
+      const shouldRefreshSummary = page === 1 && (!hasActiveFilters || !loadedSummaryRef.current);
 
-  const todayKey = new Date().toISOString().slice(0, 10);
+      if (page === 1) {
+        loadedQueryRef.current = pageKey;
+        failedQueryRef.current = null;
+        if (shouldRefreshSummary) loadedSummaryRef.current = true;
+      }
+
+      dispatch({
+        type: "patch",
+        payload: {
+          activities: visibleActivities,
+          activityPage: page,
+          totalFilteredLogCount: response.meta.total,
+          ...(shouldRefreshSummary ? {
+            hasLoadedSummary: true,
+            totalAuditLogCount: response.meta.total,
+            totalIncomingApprovalCount: response.meta.summary?.pending ?? 0,
+            totalProcessedTodayCount: response.meta.summary?.processedToday ?? 0,
+          } : {}),
+        },
+      });
+
+      superAdminLogViewCache = {
+        activities: visibleActivities,
+        search: currentState.search,
+        filter: currentState.filter,
+        date: currentState.date,
+        activityPage: page,
+        totalAuditLogCount: shouldRefreshSummary ? response.meta.total : (superAdminLogViewCache?.totalAuditLogCount ?? currentState.totalAuditLogCount),
+        totalFilteredLogCount: response.meta.total,
+        totalIncomingApprovalCount: shouldRefreshSummary ? (response.meta.summary?.pending ?? 0) : (superAdminLogViewCache?.totalIncomingApprovalCount ?? currentState.totalIncomingApprovalCount),
+        totalProcessedTodayCount: shouldRefreshSummary ? (response.meta.summary?.processedToday ?? 0) : (superAdminLogViewCache?.totalProcessedTodayCount ?? currentState.totalProcessedTodayCount),
+      };
+    } catch {
+      if (page === 1) {
+        failedQueryRef.current = pageKey;
+        dispatch({ type: "patch", payload: { activities: [], totalFilteredLogCount: 0 } });
+      }
+    } finally {
+      loadingPagesRef.current.delete(pageKey);
+      dispatch({ type: "patch", payload: page === 1 ? { hasLoadedActivities: true, isLoading: false } : { isLoadingMore: false } });
+    }
+  }, [debouncedSearch]);
+
+  useEffect(() => {
+    const timerId = window.setTimeout(() => {
+      void loadPage(1);
+    }, 0);
+
+    return () => window.clearTimeout(timerId);
+  }, [date, debouncedSearch, filter, loadPage]);
+
   const filteredActivities = useMemo(() => {
-    const query = deferredSearch.trim().toLowerCase();
-    return activities
-      .filter((activity) => {
-        const matchesSearch = !query || [activity.title, activity.description].some((value) => value.toLowerCase().includes(query));
-        const matchesDate = !date || getActivityDateKey(activity.timestamp) === date;
-        return matchesSearch && matchesDate && matchesFilter(activity, filter);
-      })
-      .sort((first, second) => new Date(second.timestamp).getTime() - new Date(first.timestamp).getTime());
-  }, [activities, date, deferredSearch, filter]);
+    return activities.toSorted((first, second) => new Date(second.timestamp).getTime() - new Date(first.timestamp).getTime());
+  }, [activities]);
 
   const stats = [
-    { label: "Total Semua Aktivitas", value: String(activities.length), tone: "neutral" as const, color: "pine" as const, icon: ClipboardList },
-    { label: "Approval Akun Masuk", value: String(activities.filter((activity) => activity.title === "Pengajuan admin masuk").length), tone: "safe" as const, color: "leaf" as const, icon: Clock3 },
-    { label: "Sudah Diproses Hari Ini", value: String(activities.filter((activity) => getActivityDateKey(activity.timestamp) === todayKey && activity.title !== "Pengajuan admin masuk").length), tone: "safe" as const, color: "lime" as const, icon: CheckCircle2 },
+    { label: "Total Semua Aktivitas", value: String(totalAuditLogCount), tone: "neutral" as const, color: "pine" as const, icon: ClipboardList },
+    { label: "Approval Akun Masuk", value: String(totalIncomingApprovalCount), tone: "safe" as const, color: "leaf" as const, icon: Clock3 },
+    { label: "Sudah Diproses Hari Ini", value: String(totalProcessedTodayCount), tone: "critical" as const, color: "lime" as const, icon: CheckCircle2 },
   ];
 
   const hasActiveFilters = Boolean(search || date || filter !== "all");
+  const hasMoreFromServer = activityPage * pageSize < totalFilteredLogCount;
 
   const resetFilters = () => {
-    setSearch("");
-    setFilter("all");
-    setDate("");
-    setVisibleCount(pageSize);
+    loadedQueryRef.current = null;
+    dispatch({ type: "patch", payload: { search: "", filter: "all", date: "" } });
+  };
+
+  const loadMoreActivities = () => {
+    if (!hasMoreFromServer || isLoadingMore) return;
+    void loadPage(activityPage + 1);
   };
 
   return (
-      <DashboardPageShell>
+    <DashboardPageShell>
       <DashboardPageHeader title="Log Aktivitas" />
-      {isLoading ? <SummaryCardsSkeleton /> : <SummaryCardGrid stats={stats} />}
+      {!hasLoadedSummary ? <SummaryCardsSkeleton /> : <SummaryCardGrid stats={stats} />}
 
-      <motion.div className="mt-6" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: 0.32 }}>
-        {isLoading ? <ToolbarSkeleton /> : <ToolbarCard>
+      <m.div className="mt-6" {...getDashboardEntranceMotion(shouldAnimate, 0.32, 20)}>
+        {isLoading && !hasLoadedActivities ? <ToolbarSkeleton /> : <ToolbarCard>
           <div className="grid gap-3 lg:grid-cols-[1fr_190px_auto] lg:items-center">
-            <SearchField id="superAdminActivitySearch" value={search} placeholder="Cari aktivitas ..." onChange={(value) => { setSearch(value); setVisibleCount(pageSize); }} />
-            <DatePickerField id="superAdminActivityDate" value={date} popoverAlign="right" className={FORM_PILL_INPUT_CLASS} onChange={(value) => { setDate(value); setVisibleCount(pageSize); }} />
+            <SearchField id="superAdminActivitySearch" value={search} placeholder="Cari aktivitas ..." onChange={(value) => { failedQueryRef.current = null; dispatch({ type: "patch", payload: { search: value } }); }} />
+            <DatePickerField id="superAdminActivityDate" value={date} mode="range" popoverAlign="right" className={FORM_PILL_INPUT_CLASS} onChange={(value) => { failedQueryRef.current = null; dispatch({ type: "patch", payload: { date: value } }); }} />
             {hasActiveFilters && <Button type="button" size="sm" variant="outline" onClick={resetFilters} className="w-full lg:w-auto">Reset</Button>}
           </div>
-          <FilterPills options={filters} activeValue={filter} onChange={(value) => { setFilter(value); setVisibleCount(pageSize); }} className="mt-4" />
+          <FilterPills options={filters} activeValue={filter} onChange={(value) => { failedQueryRef.current = null; dispatch({ type: "patch", payload: { filter: value } }); }} className="mt-4" />
         </ToolbarCard>}
-      </motion.div>
+      </m.div>
 
-      <motion.div className="mt-6" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.4 }}>
-        {isLoading ? <ActivityDataSkeleton /> : <ActivityFeed activities={filteredActivities} visibleCount={visibleCount} readOnly onLoadMore={() => setVisibleCount((count) => count + pageSize)} onMarkRead={() => {}} onViewDetail={setSelectedActivity} />}
-      </motion.div>
+      <m.div className="mt-6" {...getDashboardEntranceMotion(shouldAnimate, 0.4, 24)}>
+        {isLoading ? <ActivityDataSkeleton /> : <ActivityFeed activities={filteredActivities} visibleCount={filteredActivities.length} readOnly hasMore={hasMoreFromServer} isLoadingMore={isLoadingMore} onLoadMore={loadMoreActivities} onMarkRead={() => {}} onViewDetail={(activity) => dispatch({ type: "patch", payload: { selectedActivity: activity } })} />}
+      </m.div>
 
-      <ActivityDetailModal activity={selectedActivity} onClose={() => setSelectedActivity(null)} />
+      <ActivityDetailModal activity={selectedActivity} onClose={() => dispatch({ type: "patch", payload: { selectedActivity: null } })} />
     </DashboardPageShell>
   );
 }

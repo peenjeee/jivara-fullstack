@@ -10,16 +10,16 @@ interface AuthNavigationProviderProps {
 }
 
 export default function AuthNavigationProvider({ children }: AuthNavigationProviderProps) {
-  const router = useRouter();
+  const { replace } = useRouter();
 
   useEffect(() => {
     const handleAuthExpired = () => {
-      router.replace("/login?loggedOut=1");
+      replace("/login?loggedOut=1");
     };
 
     window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
-  }, [router]);
+  }, [replace]);
 
   return <>{children}</>;
 }

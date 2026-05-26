@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Lock, LogIn, Mail } from "lucide-react";
 import axios from "axios";
 import { getApiErrorMessage, isRateLimitError } from "@/lib/apiErrors";
-import { tryEnableDefaultPushNotifications } from "@/lib/pushNotifications";
+import { promptForFirstLoginPushNotifications } from "@/lib/pushNotifications";
 import { closeAlert, showError, showLoading, showToast, showWarning } from "@/lib/swal";
 import { useAuthStore } from "@/store/auth";
 import AuthCard from "@/components/ui/AuthCard";
@@ -20,11 +20,15 @@ function getPostLoginPath(user: { readonly role?: string | null; readonly accoun
   return callbackUrl?.startsWith("/") ? callbackUrl : "/dashboard";
 }
 
+function shouldPromptForLoginPushNotifications(user: { readonly role?: string | null; readonly accountStatus?: string | null }) {
+  return user.role !== "admin" || (user.accountStatus ?? "active") === "active";
+}
+
 export default function LoginForm() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
+  const { push, replace } = useRouter();
   const { hasHydrated, user, setAuth, setHasHydrated, logout } = useAuthStore();
   const hasTriedRestoreRef = useRef(false);
 
@@ -44,6 +48,11 @@ export default function LoginForm() {
     if (!hasHydrated || hasTriedRestoreRef.current) return;
     hasTriedRestoreRef.current = true;
     const searchParams = new URLSearchParams(window.location.search);
+    const shouldShowLogoutToast = window.sessionStorage.getItem("jivara-logout-success") === "1";
+    if (shouldShowLogoutToast) {
+      window.sessionStorage.removeItem("jivara-logout-success");
+      showToast("Anda berhasil keluar.", "success");
+    }
 
     const reason = searchParams.get("reason");
     if (reason === "unauthenticated" && user) {
@@ -57,7 +66,7 @@ export default function LoginForm() {
 
     const callbackUrl = searchParams.get("callbackUrl");
     const targetPath = getPostLoginPath(user, callbackUrl);
-    router.replace(targetPath);
+    replace(targetPath);
 
     const fallbackTimer = window.setTimeout(() => {
       if (window.location.pathname !== targetPath) {
@@ -66,7 +75,7 @@ export default function LoginForm() {
     }, 1500);
 
     return () => window.clearTimeout(fallbackTimer);
-  }, [hasHydrated, logout, router, user]);
+  }, [hasHydrated, logout, replace, user]);
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -87,7 +96,7 @@ export default function LoginForm() {
     showLoading("Mohon Tunggu", "Sedang masuk ke akun Anda...");
 
     try {
-      const response = await axios.post("/api/auth/login", {
+      const response = await axios.post("/api/v1/auth/login", {
         identifier,
         password,
       });
@@ -99,11 +108,13 @@ export default function LoginForm() {
       }
 
       setAuth(user);
-      void tryEnableDefaultPushNotifications(user, { requestPermission: false });
+      if (shouldPromptForLoginPushNotifications(user)) {
+        void promptForFirstLoginPushNotifications(user);
+      }
 
       showToast("Anda berhasil masuk.", "success");
       const callbackUrl = new URLSearchParams(window.location.search).get("callbackUrl");
-      router.push(getPostLoginPath(user, callbackUrl));
+      push(getPostLoginPath(user, callbackUrl));
     } catch (error) {
       closeAlert();
       if (isRateLimitError(error)) {
@@ -119,8 +130,8 @@ export default function LoginForm() {
 
   if (!hasHydrated || user) {
     return (
-      <div className="flex min-h-[400px] flex-col items-center justify-center space-y-4">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      <div className="flex min-h-[400px] flex-col items-center justify-center gap-y-4">
+        <div className="size-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
         <p className="font-body text-sm text-muted">Mohon Tunggu ...</p>
       </div>
     );

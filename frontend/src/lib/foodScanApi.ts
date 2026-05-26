@@ -1,20 +1,30 @@
 import api from "@/lib/axios";
 import { getApiErrorMessage } from "@/lib/apiErrors";
+import { getDateRangeParams } from "@/lib/dateRange";
 import type { FoodScanAnalysis } from "@/helpers/foodScans";
 import type { FoodScanRecord, FoodScanRisk } from "@/lib/mocks/foodScans";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
 
 const foodScansCacheTtl = 15_000;
-let foodScansCache: { data: FoodScanRecord[]; expiresAt: number } | null = null;
-let foodScansRequest: Promise<FoodScanRecord[]> | null = null;
+const foodScansCache = new Map<string, { data: FoodScanRecord[]; expiresAt: number }>();
+const foodScansRequests = new Map<string, Promise<FoodScanRecord[]>>();
 const foodScanDetailCache = new Map<string, { data: FoodScanAnalysis; expiresAt: number }>();
 const foodScanDetailRequests = new Map<string, Promise<FoodScanAnalysis>>();
 
 export const clearFoodScansCache = () => {
-  foodScansCache = null;
-  foodScansRequest = null;
+  foodScansCache.clear();
+  foodScansRequests.clear();
   foodScanDetailCache.clear();
   foodScanDetailRequests.clear();
+};
+
+const clearFoodScanRelatedCaches = async () => {
+  clearFoodScansCache();
+  await Promise.all([
+    import("./dashboardApi").then(({ clearDashboardCache }) => clearDashboardCache()).catch(() => undefined),
+    import("./patientApi").then(({ clearPatientsCache }) => clearPatientsCache()).catch(() => undefined),
+    import("./patientDashboardApi").then(({ clearPatientDashboardCache }) => clearPatientDashboardCache()).catch(() => undefined),
+  ]);
 };
 
 interface PatientResponse {
@@ -73,6 +83,13 @@ interface FoodRecommendationResponse {
   worst_category?: string | null;
 }
 
+interface RecommendationResponse {
+  patient_medications?: string[];
+  analyzed_medications_count?: number;
+  recommended_foods?: FoodRecommendationResponse[];
+  foods_to_avoid?: FoodRecommendationResponse[];
+}
+
 interface NutritionResponse {
   items: NutritionItemResponse[];
   total: {
@@ -122,6 +139,7 @@ interface FoodScanDetailResponse {
   analyzedMedicationCount?: number;
   recommendedFoods?: FoodRecommendationResponse[];
   foodsToAvoid?: FoodRecommendationResponse[];
+  disclaimer?: string | null;
 }
 
 interface FoodScanDetailApiResponse {
@@ -133,6 +151,11 @@ interface FoodScanListApiResponse {
   meta?: { page: number; limit: number; total: number };
 }
 
+export interface FoodScanListPage {
+  data: FoodScanRecord[];
+  meta: { page: number; limit: number; total: number };
+}
+
 const getInitials = (name?: string | null) => name?.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "PX";
 
 const getBackendOrigin = () => {
@@ -141,8 +164,8 @@ const getBackendOrigin = () => {
 };
 
 const getPatient = async () => {
-  const response = await api.get<{ data: PatientResponse[] }>("/patients", { params: { limit: 1 } });
-  const patient = response.data.data[0];
+  const response = await api.get<{ data: PatientResponse }>("/patients/me");
+  const patient = response.data.data;
 
   if (!patient?.id) {
     throw new Error("Data pasien tidak ditemukan untuk scan makanan.");
@@ -169,6 +192,41 @@ const mapRecommendation = (food: FoodRecommendationResponse) => ({
   riskLevel: food.risk_level,
   worstCategory: food.worst_category,
 });
+
+type FoodRecommendationRecord = ReturnType<typeof mapRecommendation>;
+
+const getRecommendationKey = (food: FoodRecommendationRecord) => food.foodName.trim().toLowerCase();
+
+const isSafeRecommendation = (food: FoodRecommendationRecord) => {
+  const risk = food.riskLevel.trim().toLowerCase();
+  if (["aman", "ringan", "rendah", "safe", "low", "low risk"].includes(risk)) return true;
+  if (["sedang", "menengah", "moderate", "medium", "tinggi", "high", "high risk", "kritis", "critical"].includes(risk)) return false;
+  return food.severityScore <= 1;
+};
+
+const splitRecommendationsByRisk = (recommendedFoods: FoodRecommendationResponse[] = [], foodsToAvoid: FoodRecommendationResponse[] = []) => {
+  const byName = new Map<string, FoodRecommendationRecord>();
+
+  for (const recommendation of [...recommendedFoods, ...foodsToAvoid]) {
+    const food = mapRecommendation(recommendation);
+    const key = getRecommendationKey(food);
+    const existing = byName.get(key);
+    if (!existing || food.severityScore > existing.severityScore) byName.set(key, food);
+  }
+
+  const safeRecommendations: FoodRecommendationRecord[] = [];
+  const avoidRecommendations: FoodRecommendationRecord[] = [];
+
+  byName.forEach((food) => {
+    if (isSafeRecommendation(food)) {
+      safeRecommendations.push(food);
+    } else {
+      avoidRecommendations.push(food);
+    }
+  });
+
+  return { safeRecommendations, avoidRecommendations };
+};
 
 const mapSafeFood = (item: { food_item: string; food_display: string; status: string }) => ({
   foodItem: item.food_item,
@@ -227,8 +285,9 @@ const mapScanDetail = (detail: FoodScanDetailResponse, patientName = "Pasien"): 
   }));
   const riskyFoodItems = new Set((detail.interactions || []).map((interaction) => interaction.foodItem));
   const safeFoods = (detail.detectedItems || [])
-    .filter((item) => !riskyFoodItems.has(item.label))
-    .map((item) => ({ foodItem: item.label, foodDisplay: item.labelDisplay, status: "aman" }));
+    .flatMap((item) => (riskyFoodItems.has(item.label) ? [] : [{ foodItem: item.label, foodDisplay: item.labelDisplay, status: "aman" }]));
+
+  const recommendationGroups = splitRecommendationsByRisk(detail.recommendedFoods || [], detail.foodsToAvoid || []);
 
   return {
     scan,
@@ -238,8 +297,9 @@ const mapScanDetail = (detail: FoodScanDetailResponse, patientName = "Pasien"): 
     schedules: interactions.map((interaction) => interaction.schedule),
     interactions,
     safeFoods,
-    recommendedFoods: (detail.recommendedFoods || []).map(mapRecommendation),
-    foodsToAvoid: (detail.foodsToAvoid || []).map(mapRecommendation),
+    recommendedFoods: recommendationGroups.safeRecommendations,
+    foodsToAvoid: recommendationGroups.avoidRecommendations,
+    disclaimer: detail.disclaimer || undefined,
     overallRisk: interactions.some((interaction) => interaction.risk === "High Risk") ? "High Risk" : risk,
   };
 };
@@ -272,9 +332,6 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
     headers: { "Content-Type": "multipart/form-data" },
   });
 
-  // Invalidate food scans cache after new scan
-  clearFoodScansCache();
-
   const upload = uploadResponse.data.data;
   const detectResponse = await api.post<{ data: DetectResponse }>(`/food-scans/${encodeURIComponent(upload.image_id)}/detections`, {
     patientId,
@@ -282,10 +339,15 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
   const detection = detectResponse.data.data;
   const detectedLabels = detection.detected_items.map((item) => item.label);
 
-  const [interactionResult, nutritionResult] = await Promise.allSettled([
+  const [interactionResult, recommendationResult, nutritionResult] = await Promise.allSettled([
     api.post<{ data: InteractionResponse }>(`/food-scans/${encodeURIComponent(upload.image_id)}/interactions`, {
       patientId,
       detectedItems: detectedLabels,
+      includeRecommendations: false,
+    }),
+    api.post<{ data: RecommendationResponse }>(`/food-scans/${encodeURIComponent(upload.image_id)}/recommendations`, {
+      patientId,
+      topN: 100,
     }),
     api.post<{ data: NutritionResponse }>("/nutrition-estimates", {
       detectedItems: detection.detected_items.map((item) => ({ label: item.label, confidence: item.confidence })),
@@ -297,6 +359,9 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
   }
 
   const interactionData = interactionResult.value.data.data;
+  const recommendationData = recommendationResult.status === "fulfilled"
+    ? recommendationResult.value.data.data
+    : null;
   const nutritionData = nutritionResult.status === "fulfilled"
     ? nutritionResult.value.data.data
     : null;
@@ -321,12 +386,26 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
     reasoning: interaction.interaction_description,
     recommendation: interaction.recommendation,
   }));
+  await clearFoodScanRelatedCaches();
+
+  const recommendationGroups = splitRecommendationsByRisk(
+    recommendationData?.recommended_foods || interactionData.recommended_foods || [],
+    recommendationData?.foods_to_avoid || interactionData.foods_to_avoid || [],
+  );
 
   return {
     scan,
     patientName: patient.fullName || "Pasien",
-    analyzedMedicationCount: interactionData.analyzed_medications_count ?? interactionData.patient_medications?.length ?? interactions.length,
-    analyzedMedications: interactionData.patient_medications ?? interactions.map((interaction) => interaction.schedule.medicineName),
+    analyzedMedicationCount:
+      recommendationData?.analyzed_medications_count
+      ?? interactionData.analyzed_medications_count
+      ?? recommendationData?.patient_medications?.length
+      ?? interactionData.patient_medications?.length
+      ?? interactions.length,
+    analyzedMedications:
+      recommendationData?.patient_medications
+      ?? interactionData.patient_medications
+      ?? interactions.map((interaction) => interaction.schedule.medicineName),
     schedules: interactions.map((interaction) => interaction.schedule),
     interactions,
     nutritionItems: nutritionData?.items.map(mapNutritionItem),
@@ -336,35 +415,54 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
         proteinG: nutritionData.total.protein_g,
         fatG: nutritionData.total.fat_g,
         carbsG: nutritionData.total.carbs_g,
-      }
-      : undefined,
+    }
+    : undefined,
     safeFoods: (interactionData.safe_items || []).map(mapSafeFood),
-    recommendedFoods: (interactionData.recommended_foods || []).map(mapRecommendation),
-    foodsToAvoid: (interactionData.foods_to_avoid || []).map(mapRecommendation),
+    recommendedFoods: recommendationGroups.safeRecommendations,
+    foodsToAvoid: recommendationGroups.avoidRecommendations,
+    disclaimer: interactionData.disclaimer,
     overallRisk: risk,
   };
 };
 
-export const getFoodScansFromApi = async (params: { page?: number; limit?: number; patientId?: string } = {}): Promise<FoodScanRecord[]> => {
+export const getFoodScansFromApi = async (params: { page?: number; limit?: number; patientId?: string; date?: string } = {}): Promise<FoodScanRecord[]> => {
   const now = Date.now();
-  if (foodScansCache && foodScansCache.expiresAt > now) return foodScansCache.data;
-  if (foodScansRequest) return foodScansRequest;
+  const cacheKey = `${params.page ?? ""}:${params.limit ?? ""}:${params.patientId ?? ""}:${params.date ?? ""}`;
+  const cached = foodScansCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) return cached.data;
+  const activeRequest = foodScansRequests.get(cacheKey);
+  if (activeRequest) return activeRequest;
 
-  foodScansRequest = api.get<FoodScanListApiResponse>("/food-scans", { params: { page: params.page, limit: params.limit, patient_id: params.patientId } })
+  const request = api.get<FoodScanListApiResponse>("/food-scans", { params: { page: params.page, limit: params.limit, patient_id: params.patientId, ...getDateRangeParams(params.date) } })
     .then((response) => {
       const scans = response.data.data.map((detail) => mapScanDetail(detail).scan);
-      foodScansCache = { data: scans, expiresAt: Date.now() + foodScansCacheTtl };
+      foodScansCache.set(cacheKey, { data: scans, expiresAt: Date.now() + foodScansCacheTtl });
       return scans;
     })
     .finally(() => {
-      foodScansRequest = null;
+      foodScansRequests.delete(cacheKey);
     });
 
-  return foodScansRequest;
+  foodScansRequests.set(cacheKey, request);
+  return request;
 };
 
-export const getFoodScansForPatientFromApi = async (patientId: string): Promise<FoodScanRecord[]> => {
-  const scans = await getFoodScansFromApi();
+export const getFoodScansPageFromApi = async (params: { page?: number; limit?: number; patientId?: string; date?: string } = {}): Promise<FoodScanListPage> => {
+  const response = await api.get<FoodScanListApiResponse>("/food-scans", { params: { page: params.page, limit: params.limit, patient_id: params.patientId, ...getDateRangeParams(params.date) } });
+  const scans = response.data.data.map((detail) => mapScanDetail(detail).scan);
+
+  return {
+    data: scans,
+    meta: response.data.meta ?? {
+      page: params.page ?? 1,
+      limit: params.limit ?? scans.length,
+      total: scans.length,
+    },
+  };
+};
+
+export const getFoodScansForPatientFromApi = async (patientId: string, limit = 100): Promise<FoodScanRecord[]> => {
+  const scans = await getFoodScansFromApi({ patientId, limit });
   return scans.filter((scan) => scan.patientId === patientId);
 };
 

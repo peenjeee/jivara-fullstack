@@ -44,7 +44,11 @@ export default function FoodScanDetailModal({ scanId, onClose }: FoodScanDetailM
   return (
     <Modal isOpen={Boolean(scanId)} title="Detail Scan Makanan" onClose={onClose}>
       {scanId && isLoading && <ActivityDataSkeleton rows={4} />}
-      {scanId && !isLoading && analysisState.data?.scan.id === scanId && <FoodScanAnalysisView scanId={analysisState.data.scan.id} imageSizes="(max-width: 768px) 100vw, 672px" analysisData={analysisState.data} />}
+      {scanId && !isLoading && analysisState.data?.scan.id === scanId && (
+        <div className="pb-6">
+          <FoodScanAnalysisView scanId={analysisState.data.scan.id} imageSizes="(max-width: 768px) 100vw, 672px" analysisData={analysisState.data} />
+        </div>
+      )}
     </Modal>
   );
 }

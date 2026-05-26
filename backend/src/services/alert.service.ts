@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, lt } from "drizzle-orm";
 import { db } from "../db";
 import { medicationReminderJobs, medicationSchedules, patients, users } from "../db/schema";
 import { AlertListQuery } from "../types/alert.types";
@@ -19,10 +19,26 @@ const mapSeverityToStatuses = (severity?: string) => {
   return ALERT_STATUSES;
 };
 
+const getDateRange = (query: AlertListQuery) => {
+  const startValue = query.startDate || query.start_date || query.date;
+  const endValue = query.endDate || query.end_date || startValue;
+  if (!startValue || !endValue) return null;
+
+  const start = new Date(`${startValue}T00:00:00.000Z`);
+  const end = new Date(`${endValue}T00:00:00.000Z`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+
+  const normalizedStart = start <= end ? start : end;
+  const normalizedEnd = start <= end ? end : start;
+  normalizedEnd.setUTCDate(normalizedEnd.getUTCDate() + 1);
+  return { start: normalizedStart, end: normalizedEnd };
+};
+
 export const listAlerts = async (query: AlertListQuery, user?: AccessUser) => {
   const { page, limit, offset } = parsePagination(query);
   const patientId = query.patientId || query.patient_id;
   const conditions = [];
+  const dateRange = getDateRange(query);
   const scopedFilter = await scopedPatientFilter(medicationReminderJobs.patientId, user, patientId);
 
   if (!scopedFilter.scope.allowed) {
@@ -38,6 +54,10 @@ export const listAlerts = async (query: AlertListQuery, user?: AccessUser) => {
     conditions.push(eq(medicationReminderJobs.status, query.status));
   } else {
     conditions.push(inArray(medicationReminderJobs.status, mapSeverityToStatuses(query.severity)));
+  }
+  if (dateRange) {
+    conditions.push(gte(medicationReminderJobs.updatedAt, dateRange.start));
+    conditions.push(lt(medicationReminderJobs.updatedAt, dateRange.end));
   }
 
   const where = and(...conditions);

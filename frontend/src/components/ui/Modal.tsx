@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { X } from "lucide-react";
 
 interface ModalProps {
@@ -16,6 +16,8 @@ interface ModalProps {
 export default function Modal({ isOpen, title, description, children, onClose }: ModalProps) {
   const modalRef = useRef<HTMLElement | null>(null);
   const previousActiveElementRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -27,7 +29,7 @@ export default function Modal({ isOpen, title, description, children, onClose }:
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -52,13 +54,13 @@ export default function Modal({ isOpen, title, description, children, onClose }:
       document.removeEventListener("keydown", handleKeyDown);
       previousActiveElementRef.current?.focus({ preventScroll: true });
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   return (
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-[50000] flex items-start justify-center overflow-x-hidden overflow-y-auto p-4 sm:items-center" data-lenis-prevent>
-          <motion.div
+          <m.div
             className="absolute inset-0 bg-dark/45 backdrop-blur-sm"
             onClick={onClose}
             initial={{ opacity: 0 }}
@@ -67,7 +69,7 @@ export default function Modal({ isOpen, title, description, children, onClose }:
             transition={{ duration: 0.25 }}
           />
 
-          <motion.section
+          <m.section
             role="dialog"
             aria-modal="true"
             aria-labelledby="modal-title"
@@ -90,7 +92,8 @@ export default function Modal({ isOpen, title, description, children, onClose }:
               </div>
 
               <button
-                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-muted transition-colors hover:text-text-main"
+                type="button"
+                className="inline-flex size-11 shrink-0 items-center justify-center rounded-2xl text-muted transition-colors hover:text-text-main"
                 onClick={onClose}
                 aria-label="Tutup modal"
               >
@@ -99,7 +102,7 @@ export default function Modal({ isOpen, title, description, children, onClose }:
             </div>
 
             {children}
-          </motion.section>
+          </m.section>
         </div>
       )}
     </AnimatePresence>

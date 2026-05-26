@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import Switch from "@/components/ui/Switch";
 
 interface ToggleRowProps {
@@ -13,7 +13,7 @@ interface ToggleRowProps {
 
 export default function ToggleRow({ id, title, description, checked, onChange }: ToggleRowProps) {
   return (
-    <motion.label
+    <m.label
       className="flex cursor-pointer items-center justify-between gap-5 rounded-3xl bg-surface p-5"
       whileHover={{ y: -2, backgroundColor: "rgba(20, 114, 69, 0.06)" }}
       whileTap={{ scale: 0.99 }}
@@ -24,6 +24,6 @@ export default function ToggleRow({ id, title, description, checked, onChange }:
         <span className="mt-1 block text-sm leading-6 text-muted">{description}</span>
       </span>
       <Switch id={id} checked={checked} onCheckedChange={onChange} ariaLabel={title} className="shrink-0" />
-    </motion.label>
+    </m.label>
   );
 }

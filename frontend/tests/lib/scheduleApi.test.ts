@@ -3,7 +3,7 @@ import api from "@/lib/axios";
 import { createSchedulesViaApi, deactivateScheduleViaApi, getSchedulesFromApi, setScheduleActiveViaApi, updateScheduleViaApi } from "@/lib/scheduleApi";
 import type { PatientRecord } from "@/lib/mocks/patients";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
-import type { ScheduleMedicineFormValues } from "@/components/schedule/ScheduleForm";
+import type { ScheduleMedicineFormValues } from "@/components/schedule/scheduleFormUtils";
 
 vi.mock("@/lib/axios", () => ({
   default: {

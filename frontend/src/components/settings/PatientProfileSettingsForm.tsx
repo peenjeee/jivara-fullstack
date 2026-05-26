@@ -14,7 +14,7 @@ const numericPhone = (value: string | null | undefined) => (value ?? "").replace
 export default function PatientProfileSettingsForm() {
   const { user, setAuth } = useAuthStore();
   const [fullName, setFullName] = useState(user?.fullName ?? "");
-  const [phone, setPhone] = useState(numericPhone(user?.phone));
+  const [phone, setPhone] = useState(() => numericPhone(user?.phone));
   const [address, setAddress] = useState(user?.address ?? "");
   const email = user?.email ?? "Belum tersedia";
   const age = user?.age ?? 0;

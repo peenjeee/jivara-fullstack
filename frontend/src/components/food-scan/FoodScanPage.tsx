@@ -16,22 +16,32 @@ import FoodScanCameraCard from "./FoodScanCameraCard";
 import FoodScanResultPanel from "./FoodScanResultPanel";
 import { useFoodScanCamera } from "./useFoodScanCamera";
 
+let foodScanViewCache: {
+  scanResult: FoodScanRecord | null;
+  scanAnalysis: FoodScanAnalysis | null;
+} | null = null;
+
 export default function FoodScanPage() {
-  const router = useRouter();
+  const { replace } = useRouter();
   const userRole = useAuthStore((state) => state.user?.role);
   const hasAuthHydrated = useAuthStore((state) => state.hasHydrated);
   const dashboardRole = getDashboardRole(userRole);
   const [isScanning, setIsScanning] = useState(false);
-  const [scanResult, setScanResult] = useState<FoodScanRecord | null>(null);
-  const [scanAnalysis, setScanAnalysis] = useState<FoodScanAnalysis | null>(null);
+  const [scanResult, setScanResult] = useState<FoodScanRecord | null>(() => foodScanViewCache?.scanResult ?? null);
+  const [scanAnalysis, setScanAnalysis] = useState<FoodScanAnalysis | null>(() => foodScanViewCache?.scanAnalysis ?? null);
   const setLastScan = usePatientDashboardStore((state) => state.setLastScan);
   const camera = useFoodScanCamera();
+  const { stopCameraStream } = camera;
+
+  useEffect(() => () => {
+    stopCameraStream();
+  }, [stopCameraStream]);
 
   useEffect(() => {
     const isBlockedRole = isOperationalAdminRole(dashboardRole) || dashboardRole === "super_admin";
     if (!hasAuthHydrated || !isBlockedRole) return;
-    router.replace("/dashboard");
-  }, [dashboardRole, hasAuthHydrated, router]);
+      replace("/dashboard");
+  }, [dashboardRole, hasAuthHydrated, replace]);
 
   if (!hasAuthHydrated || isOperationalAdminRole(dashboardRole) || dashboardRole === "super_admin") return null;
 
@@ -42,11 +52,13 @@ export default function FoodScanPage() {
       const analysis = await scanFoodImage(file);
       setScanAnalysis(analysis);
       setScanResult(analysis.scan);
+      foodScanViewCache = { scanAnalysis: analysis, scanResult: analysis.scan };
       setLastScan(analysis.scan);
       showToast(successMessage, "success");
     } catch (error) {
       setScanAnalysis(null);
       setScanResult(null);
+      foodScanViewCache = { scanAnalysis: null, scanResult: null };
       showToast(getApiErrorMessage(error, failureMessage), "error");
     } finally {
       setIsScanning(false);
@@ -90,9 +102,7 @@ export default function FoodScanPage() {
           cameraDevices={camera.cameraDevices}
           cameraError={camera.cameraError}
           cameraAspectRatio={camera.cameraAspectRatio}
-          isCameraEnabled={camera.isCameraEnabled}
-          isCameraReady={camera.isCameraReady}
-          isCameraStarting={camera.isCameraStarting}
+          cameraStatus={camera.cameraError ? "error" : camera.isCameraStarting ? "starting" : camera.isCameraEnabled && camera.isCameraReady ? "ready" : "disabled"}
           isScanning={isScanning}
           cameraKey={camera.cameraKey}
           selectedCameraId={camera.selectedCameraId}

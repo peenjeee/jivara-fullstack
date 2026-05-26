@@ -1,35 +1,24 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Line } from "react-chartjs-2";
-import {
-  CategoryScale,
-  Chart as ChartJS,
-  Filler,
-  Legend,
-  LineElement,
-  LinearScale,
-  PointElement,
-  Tooltip,
-  type ChartData,
-  type ChartOptions,
-  type ScriptableContext,
-} from "chart.js";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AdherenceRange, AdherenceTrendPoint } from "@/helpers/patientDetails";
 import api from "@/lib/axios";
 import type { PatientRecord } from "@/lib/mocks/patients";
 import PatientDetailSection from "./PatientDetailSection";
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, Legend);
+type ChartLineComponent = typeof import("react-chartjs-2").Line;
+type ChartTypeModule = typeof import("chart.js");
+const chartFontFamily = "Inter, system-ui, sans-serif";
+
+const patientAdherenceChartFontFamily = "Inter, system-ui, sans-serif";
 
 const ranges: readonly { label: string; value: AdherenceRange }[] = [
   { label: "7 Hari", value: 7 },
   { label: "14 Hari", value: 14 },
   { label: "30 Hari", value: 30 },
+  { label: "1 Tahun", value: "1y" },
+  { label: "Semua", value: "all" },
 ];
-
-const chartFontFamily = "Inter, system-ui, sans-serif";
-ChartJS.defaults.font.family = chartFontFamily;
 
 interface PatientAdherenceChartProps {
   readonly patient: PatientRecord;
@@ -45,17 +34,63 @@ interface AdherenceStatsResponse {
   readonly dailyBreakdown?: AdherenceDayResponse[];
 }
 
+const adherenceTrendCacheTtl = 15_000;
+const adherenceTrendCache = new Map<string, { data: AdherenceTrendPoint[]; expiresAt: number }>();
+const adherenceTrendRequests = new Map<string, Promise<AdherenceTrendPoint[]>>();
+
+const fetchAdherenceTrend = (patientId: string, range: AdherenceRange) => {
+  const cacheKey = `${patientId}:${range}`;
+  const now = Date.now();
+  const cached = adherenceTrendCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) return Promise.resolve(cached.data);
+  const activeRequest = adherenceTrendRequests.get(cacheKey);
+  if (activeRequest) return activeRequest;
+
+  const period = typeof range === "number" ? `${range}d` : range;
+  const request = api.get<{ data: AdherenceStatsResponse }>("/adherence", { params: { patient_id: patientId, period } })
+    .then((response) => {
+      const trend = mapDailyBreakdown(response.data.data.dailyBreakdown ?? []);
+      adherenceTrendCache.set(cacheKey, { data: trend, expiresAt: Date.now() + adherenceTrendCacheTtl });
+      return trend;
+    })
+    .finally(() => {
+      adherenceTrendRequests.delete(cacheKey);
+    });
+
+  adherenceTrendRequests.set(cacheKey, request);
+  return request;
+};
+
 export default function PatientAdherenceChart({ patient }: PatientAdherenceChartProps) {
   const [range, setRange] = useState<AdherenceRange>(7);
   const [trend, setTrend] = useState<AdherenceTrendPoint[]>([]);
+  const [ChartLine, setChartLine] = useState<ChartLineComponent | null>(null);
+  const chartInitializedRef = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function init() {
+      const [chartjs, reactChartjs2] = await Promise.all([
+        import("chart.js") as Promise<ChartTypeModule>,
+        import("react-chartjs-2") as Promise<typeof import("react-chartjs-2")>,
+      ]);
+      if (cancelled) return;
+      chartjs.Chart.register(chartjs.CategoryScale, chartjs.LinearScale, chartjs.PointElement, chartjs.LineElement, chartjs.Filler, chartjs.Tooltip, chartjs.Legend);
+      chartjs.Chart.defaults.font.family = patientAdherenceChartFontFamily;
+      setChartLine(() => reactChartjs2.Line);
+      chartInitializedRef.current = true;
+    }
+    void init();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
 
-    api.get<{ data: AdherenceStatsResponse }>("/adherence", { params: { patient_id: patient.id, period: `${range}d` } })
-      .then((response) => {
+    fetchAdherenceTrend(patient.id, range)
+      .then((nextTrend) => {
         if (!isMounted) return;
-        setTrend(mapDailyBreakdown(response.data.data.dailyBreakdown ?? []));
+        setTrend(nextTrend);
       })
       .catch(() => {
         if (isMounted) setTrend([]);
@@ -66,16 +101,15 @@ export default function PatientAdherenceChart({ patient }: PatientAdherenceChart
     };
   }, [patient.id, range]);
 
-  const data = useMemo<ChartData<"line">>(() => ({
+  const data = useMemo(() => ({
     labels: trend.map((point) => point.label),
     datasets: [
       {
         label: "Kepatuhan",
         data: trend.map((point) => point.value),
         borderColor: "#147245",
-        backgroundColor: (context: ScriptableContext<"line">) => {
-          const chart = context.chart;
-          const { ctx, chartArea } = chart;
+        backgroundColor: (context: { chart: { ctx: CanvasRenderingContext2D; chartArea?: { top: number; bottom: number } } }) => {
+          const { ctx, chartArea } = context.chart;
           if (!chartArea) return "rgba(20,114,69,0.08)";
           const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
           gradient.addColorStop(0, "rgba(20,114,69,0.12)");
@@ -86,7 +120,7 @@ export default function PatientAdherenceChart({ patient }: PatientAdherenceChart
         pointBorderColor: "#147245",
         pointBorderWidth: 3,
         pointHoverRadius: 6,
-        pointRadius: range === 30 ? 2 : 4,
+        pointRadius: range === 30 || range === "1y" || range === "all" ? 2 : 4,
         borderWidth: 3,
         fill: true,
         tension: 0.42,
@@ -94,7 +128,7 @@ export default function PatientAdherenceChart({ patient }: PatientAdherenceChart
     ],
   }), [range, trend]);
 
-  const options = useMemo<ChartOptions<"line">>(() => ({
+  const options = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
     interaction: { mode: "index", intersect: false },
@@ -107,7 +141,7 @@ export default function PatientAdherenceChart({ patient }: PatientAdherenceChart
         titleFont: { family: chartFontFamily, size: 13, weight: 700 },
         bodyFont: { family: chartFontFamily, size: 13, weight: 700 },
         callbacks: {
-          label: (context) => `${context.parsed.y}% Kepatuhan`,
+          label: (context: { parsed: { y: number } }) => `${context.parsed.y}% Kepatuhan`,
         },
       },
     },
@@ -121,11 +155,12 @@ export default function PatientAdherenceChart({ patient }: PatientAdherenceChart
         min: 0,
         max: 100,
         grid: { color: "rgba(15,23,42,0.08)" },
-        ticks: { color: "#64748b", font: { family: chartFontFamily, size: 12, weight: 600 }, callback: (value) => `${value}%` },
+        ticks: { color: "#64748b", font: { family: chartFontFamily, size: 12, weight: 600 }, callback: (value: number) => `${value}%` },
         border: { display: false },
       },
     },
-  }), []);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any), []);
 
   return (
     <PatientDetailSection
@@ -152,7 +187,7 @@ export default function PatientAdherenceChart({ patient }: PatientAdherenceChart
       delay={0.18}
     >
       <div className="h-[300px] sm:h-[340px]">
-        <Line data={data} options={options} />
+        {ChartLine && <ChartLine data={data} options={options} />}
       </div>
     </PatientDetailSection>
   );

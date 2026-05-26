@@ -68,8 +68,18 @@ export default function SelectField<TValue extends string>({ id, name, value, de
       </button>
 
       {isOpen && !disabled && (
-        <div className={`${inlineOptions ? "mt-2" : `absolute left-0 right-0 z-40 ${optionsPlacement === "top" ? "bottom-[calc(100%+8px)]" : "top-[calc(100%+8px)]"}`} overflow-hidden rounded-2xl border border-line bg-white p-1 shadow-[0_18px_45px_rgba(15,23,42,0.16)]`}>
-          <div role="listbox" aria-labelledby={`${id}-label`} className="max-h-64 overflow-y-auto py-1">
+        <div
+          data-lenis-prevent
+          data-lenis-prevent-wheel
+          data-lenis-prevent-touch
+          className={`${inlineOptions ? "mt-2" : `absolute left-0 right-0 z-40 ${optionsPlacement === "top" ? "bottom-[calc(100%+8px)]" : "top-[calc(100%+8px)]"}`} overflow-hidden rounded-2xl border border-line bg-white p-1 shadow-[0_18px_45px_rgba(15,23,42,0.16)]`}
+          onTouchMove={(event) => event.stopPropagation()}
+          onWheel={(event) => event.stopPropagation()}
+        >
+          <div
+            aria-labelledby={`${id}-label`}
+            className="max-h-64 overflow-y-auto py-1"
+          >
             {options.map((option) => {
               const isSelected = option.value === selectedValue;
 

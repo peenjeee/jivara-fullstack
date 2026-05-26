@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import { and, count, desc, eq, ilike, or } from "drizzle-orm";
 import { db } from "../db";
-import { nurses, organizations, patientNurseAssignments, userNotificationPreferences, users } from "../db/schema";
+import { nurses, organizations, patientNurseAssignments, patients, userNotificationPreferences, users } from "../db/schema";
 import { AUTH_CONSTANTS } from "../types/auth.types";
 import { NurseCreateDTO, NurseListQuery, NurseUpdateDTO } from "../types/nurse.types";
 import { AccessUser, ensureOrganizationIdForUser, getOrganizationIdForUser } from "./access-control.service";
@@ -9,7 +9,7 @@ import { deleteCachedByPrefix, getCached, setCached } from "./cache.service";
 import { writeAuditLogAsync } from "./audit-log.service";
 
 const NURSE_CACHE_TTL_MS = Number(process.env.NURSE_CACHE_TTL_MS || 20_000);
-const NURSE_CACHE_PREFIX = "nurse:";
+const NURSE_CACHE_PREFIX = "nurse:v3:";
 
 const getNurseListCacheKey = (query: NurseListQuery, user?: AccessUser) => {
   const normalizedQuery = Object.entries(query)
@@ -19,9 +19,9 @@ const getNurseListCacheKey = (query: NurseListQuery, user?: AccessUser) => {
   return `${NURSE_CACHE_PREFIX}list:${user?.id || "anon"}:${normalizedQuery}`;
 };
 
-const getNurseByIdCacheKey = (nurseId: string) => `${NURSE_CACHE_PREFIX}byId:${nurseId}`;
+const getNurseByIdCacheKey = (nurseId: string, user?: AccessUser) => `${NURSE_CACHE_PREFIX}byId:${user?.id || "anon"}:${user?.role || "anon"}:${nurseId}`;
 
-const invalidateNurseCache = () => deleteCachedByPrefix(NURSE_CACHE_PREFIX);
+export const invalidateNurseCache = () => deleteCachedByPrefix(NURSE_CACHE_PREFIX);
 
 type NurseListResult = {
   data: Array<{
@@ -38,6 +38,7 @@ type NurseListResult = {
     department: string | null;
     isActive: boolean | null;
     createdAt: Date | null;
+    lastLoginAt: Date | null;
     assignedPatients: number;
   }>;
   meta: { page: number; limit: number; total: number };
@@ -58,6 +59,7 @@ type NurseDetailResult = {
   isActive: boolean | null;
   userIsActive: boolean | null;
   createdAt: Date | null;
+  lastLoginAt: Date | null;
   assignedPatients: number;
 };
 
@@ -91,6 +93,7 @@ const getNurseByIdInternal = async (nurseId: string, user?: AccessUser) => {
       isActive: nurses.isActive,
       userIsActive: users.isActive,
       createdAt: nurses.createdAt,
+      lastLoginAt: users.lastLoginAt,
     })
     .from(nurses)
     .innerJoin(users, eq(nurses.userId, users.id))
@@ -155,6 +158,7 @@ export const listNurses = async (query: NurseListQuery, user?: AccessUser): Prom
         department: nurses.department,
         isActive: nurses.isActive,
         createdAt: nurses.createdAt,
+        lastLoginAt: users.lastLoginAt,
       })
       .from(nurses)
       .innerJoin(users, eq(nurses.userId, users.id))
@@ -169,21 +173,30 @@ export const listNurses = async (query: NurseListQuery, user?: AccessUser): Prom
       .where(where),
   ]);
 
+  const assignmentConditions = [
+    eq(patientNurseAssignments.isActive, true),
+    eq(patients.isActive, true),
+    or(...rows.map((row) => eq(patientNurseAssignments.nurseId, row.id))),
+  ];
+  if (organizationId) assignmentConditions.push(eq(patients.organizationId, organizationId));
+
   const assignments = rows.length > 0
     ? await db
-      .select({ nurseId: patientNurseAssignments.nurseId, total: count() })
+      .select({ nurseId: patientNurseAssignments.nurseId, patientId: patientNurseAssignments.patientId })
       .from(patientNurseAssignments)
-      .where(and(
-        eq(patientNurseAssignments.isActive, true),
-        or(...rows.map((row) => eq(patientNurseAssignments.nurseId, row.id))),
-      ))
-      .groupBy(patientNurseAssignments.nurseId)
+      .innerJoin(patients, eq(patientNurseAssignments.patientId, patients.id))
+      .where(and(...assignmentConditions))
     : [];
 
-  const assignmentMap = new Map(assignments.map((assignment) => [assignment.nurseId, assignment.total]));
+  const assignmentMap = new Map<string, Set<string>>();
+  assignments.forEach((assignment) => {
+    const patientIds = assignmentMap.get(assignment.nurseId) ?? new Set<string>();
+    patientIds.add(assignment.patientId);
+    assignmentMap.set(assignment.nurseId, patientIds);
+  });
 
   const result = {
-    data: rows.map((row) => ({ ...row, assignedPatients: assignmentMap.get(row.id) || 0 })),
+    data: rows.map((row) => ({ ...row, assignedPatients: assignmentMap.get(row.id)?.size || 0 })),
     meta: { page, limit, total: totalRows[0]?.total || 0 },
   };
 
@@ -192,20 +205,26 @@ export const listNurses = async (query: NurseListQuery, user?: AccessUser): Prom
 };
 
 export const getNurseById = async (nurseId: string, user?: AccessUser): Promise<NurseDetailResult> => {
-  const cacheKey = getNurseByIdCacheKey(nurseId);
+  const cacheKey = getNurseByIdCacheKey(nurseId, user);
   const cached = getCached<NurseDetailResult>(cacheKey);
   if (cached) return cached;
 
   const nurse = await getNurseByIdInternal(nurseId, user);
-  const assignedRows = await db
-    .select({ total: count() })
-    .from(patientNurseAssignments)
-    .where(and(
-      eq(patientNurseAssignments.nurseId, nurseId),
-      eq(patientNurseAssignments.isActive, true),
-    ));
+  const organizationId = user?.role === "admin" ? await getOrganizationIdForUser(user.id) : null;
+  const assignmentConditions = [
+    eq(patientNurseAssignments.nurseId, nurseId),
+    eq(patientNurseAssignments.isActive, true),
+    eq(patients.isActive, true),
+  ];
+  if (organizationId) assignmentConditions.push(eq(patients.organizationId, organizationId));
 
-  const result = { ...nurse, assignedPatients: assignedRows[0]?.total || 0 };
+  const assignedRows = await db
+    .select({ patientId: patientNurseAssignments.patientId })
+    .from(patientNurseAssignments)
+    .innerJoin(patients, eq(patientNurseAssignments.patientId, patients.id))
+    .where(and(...assignmentConditions));
+
+  const result = { ...nurse, assignedPatients: new Set(assignedRows.map((row) => row.patientId)).size };
   setCached(cacheKey, result, NURSE_CACHE_TTL_MS);
   return result;
 };

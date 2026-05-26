@@ -8,5 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function FoodScanLayout({ children }: { readonly children: ReactNode }) {
-  return children;
+  return <>{children}</>;
 }

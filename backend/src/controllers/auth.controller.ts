@@ -74,14 +74,14 @@ export const login = async (req: AuthRequest, res: Response) => {
   }
 };
 
-export const listAdminApprovals = async (_req: AuthRequest, res: Response) => {
+export const listAdminApprovals = async (req: AuthRequest, res: Response) => {
   try {
-    const [users, summary] = await Promise.all([
-      authService.listPendingAdminApprovals(),
+    const [approvalPage, summary] = await Promise.all([
+      authService.listPendingAdminApprovals(req.query),
       authService.getAdminApprovalSummary(),
     ]);
 
-    res.status(200).json({ status: "berhasil", data: { users, summary } });
+    res.status(200).json({ status: "berhasil", data: { users: approvalPage.users, summary }, meta: approvalPage.meta });
   } catch (error: unknown) {
     const err = error as { status?: number; message?: string; code?: string };
     const status = err.status || 500;

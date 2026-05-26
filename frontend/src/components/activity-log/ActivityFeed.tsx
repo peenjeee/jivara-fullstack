@@ -11,14 +11,16 @@ interface ActivityFeedProps {
   readonly onLoadMore: () => void;
   readonly onMarkRead: (activityId: string) => void;
   readonly onViewDetail: (activity: ActivityLogRecord) => void;
+  readonly hasMore?: boolean;
+  readonly isLoadingMore?: boolean;
   readonly processingActivityId?: string | null;
   readonly readOnly?: boolean;
 }
 
-export default function ActivityFeed({ activities, visibleCount, onLoadMore, onMarkRead, onViewDetail, processingActivityId = null, readOnly = false }: ActivityFeedProps) {
+export default function ActivityFeed({ activities, visibleCount, onLoadMore, onMarkRead, onViewDetail, hasMore: hasMoreOverride, isLoadingMore = false, processingActivityId = null, readOnly = false }: ActivityFeedProps) {
   const visibleActivities = activities.slice(0, visibleCount);
   const groups = groupActivityLogsByDate(visibleActivities);
-  const hasMore = visibleCount < activities.length;
+  const hasMore = hasMoreOverride ?? visibleCount < activities.length;
 
   if (activities.length === 0) {
     return (
@@ -33,7 +35,7 @@ export default function ActivityFeed({ activities, visibleCount, onLoadMore, onM
       {groups.map((group) => (
         <div key={group.dateKey} className="relative">
           <div className="mb-3 flex items-center gap-3">
-            <span className="h-3 w-3 rounded-full bg-primary" />
+            <span className="size-3 rounded-full bg-primary" />
             <h2 className="font-display text-xl font-extrabold tracking-[-0.04em] text-text-main">{group.label}</h2>
           </div>
           <div className="space-y-4 border-l-2 border-line pl-4 sm:pl-6">
@@ -45,7 +47,7 @@ export default function ActivityFeed({ activities, visibleCount, onLoadMore, onM
       ))}
 
       {hasMore && (
-        <LoadMoreButton onClick={onLoadMore} />
+        <LoadMoreButton onClick={onLoadMore} loading={isLoadingMore} />
       )}
     </section>
   );

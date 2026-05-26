@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "motion/react";
+import { m } from "motion/react";
 
 interface SecurityCardProps {
   title: string;
@@ -14,7 +14,7 @@ export default function SecurityCard({
   color,
 }: SecurityCardProps) {
   return (
-    <motion.article
+    <m.article
       className="pt-7 border-t border-line cursor-default"
       whileHover={{
         y: -6,
@@ -33,6 +33,6 @@ export default function SecurityCard({
         {title}
       </h3>
       <p className="mt-3 text-sm leading-6 text-muted">{description}</p>
-    </motion.article>
+    </m.article>
   );
 }

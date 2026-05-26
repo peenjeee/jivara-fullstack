@@ -22,6 +22,7 @@ import nurseRoutes from './routes/nurse.routes';
 import alertRoutes from './routes/alert.routes';
 import publicStatsRoutes from './routes/public-stats.routes';
 import activityReadRoutes from './routes/activity-read.routes';
+import adminDashboardRoutes from './routes/admin-dashboard.routes';
 
 const app = express();
 const publicDir = path.resolve(process.cwd(), 'public');
@@ -52,13 +53,18 @@ const limiter = rateLimit({
   max: 100, // Maksimal 100 request per IP per window
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => req.path === '/auth/login' || req.path === '/auth/register' || req.path === '/auth/status' || req.path.startsWith('/auth/admin-approvals'),
+  skip: (req) => process.env.NODE_ENV !== 'production'
+    || req.path === '/v1/auth/login'
+    || req.path === '/v1/auth/register'
+    || req.path === '/v1/auth/status'
+    || req.path.startsWith('/v1/auth/admin-approvals')
+    || req.path.startsWith('/v1/audit-logs'),
   message: {
     status: 'gagal',
     message: 'Terlalu banyak permintaan, silakan coba lagi nanti.',
   },
 });
-app.use('/api/', limiter);
+app.use('/api', limiter);
 
 // Body parser dengan limit untuk mencegah payload attack
 app.use(express.json({ limit: '1mb' }));
@@ -97,11 +103,11 @@ const mountApiRoutes = (basePath: string) => {
   app.use(`${basePath}/audit-logs`, auditLogRoutes);
   app.use(`${basePath}/alerts`, alertRoutes);
   app.use(`${basePath}/activity-reads`, activityReadRoutes);
+  app.use(`${basePath}/admin-dashboard`, adminDashboardRoutes);
   app.use(basePath, foodAiRoutes);
 };
 
 mountApiRoutes('/api/v1');
-mountApiRoutes('/api');
 
 // Pengecekan API
 app.get('/health', (req: Request, res: Response) => {

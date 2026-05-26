@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBackendApiUrl } from "@/app/api/auth/cookies";
+import { fetchWithTransientRetry } from "@/app/api/proxyRetry";
 
 interface ProxyRouteContext {
   readonly params: Promise<{
@@ -57,16 +58,21 @@ const getProxyTimeoutMs = (url: URL) => {
 const proxyRequest = async (request: NextRequest, context: ProxyRouteContext) => {
   const backendUrl = await buildBackendUrl(request, context);
   const hasBody = request.method !== "GET" && request.method !== "HEAD";
+  const canRetry = request.method === "GET" || request.method === "HEAD";
   let response: Response;
 
   try {
-    response = await fetch(backendUrl, {
+    const requestInit = {
       method: request.method,
       headers: buildHeaders(request),
       body: hasBody ? await request.arrayBuffer() : undefined,
       cache: "no-store",
       signal: AbortSignal.timeout(getProxyTimeoutMs(backendUrl)),
-    });
+    } satisfies RequestInit;
+
+    response = canRetry
+      ? await fetchWithTransientRetry(backendUrl, requestInit)
+      : await fetch(backendUrl, requestInit);
   } catch {
     return NextResponse.json(
       { status: "gagal", message: "Layanan sedang tidak merespons. Coba lagi beberapa saat." },

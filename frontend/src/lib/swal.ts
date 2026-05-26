@@ -33,10 +33,6 @@ const createToast = (swal: ReactSwal) => swal.mixin({
     title: 'text-sm font-extrabold text-text-main',
     timerProgressBar: 'bg-primary',
   },
-  didOpen: (toast) => {
-    toast.onmouseenter = swal.stopTimer;
-    toast.onmouseleave = swal.resumeTimer;
-  }
 });
 
 const createAlert = (swal: ReactSwal) => swal.mixin({

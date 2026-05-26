@@ -38,16 +38,18 @@ const fetchPublicStats = async () => {
   publicStatsRequest = (async () => {
     let lastError: unknown;
 
-    for (const url of getPublicStatsUrls()) {
-      try {
-        const response = await fetch(url, { cache: "no-store" });
-        if (!response.ok) throw new Error("PUBLIC_STATS_FAILED");
-        const data = (await response.json()) as PublicStatsResponse;
-        publicStatsCache = { data, expiresAt: Date.now() + publicStatsCacheTtl };
-        return data;
-      } catch (error) {
-        lastError = error;
+    const responses = await Promise.allSettled(getPublicStatsUrls().map(async (url) => {
+      const response = await fetch(url, { cache: "no-store" });
+      if (!response.ok) throw new Error("PUBLIC_STATS_FAILED");
+      return (await response.json()) as PublicStatsResponse;
+    }));
+
+    for (const response of responses) {
+      if (response.status === "fulfilled") {
+        publicStatsCache = { data: response.value, expiresAt: Date.now() + publicStatsCacheTtl };
+        return response.value;
       }
+      lastError = response.reason;
     }
 
     throw lastError;

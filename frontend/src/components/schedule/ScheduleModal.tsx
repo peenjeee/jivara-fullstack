@@ -2,7 +2,8 @@
 
 import Modal from "@/components/ui/Modal";
 import type { PatientRecord } from "@/lib/mocks/patients";
-import ScheduleForm, { type ScheduleFormValues } from "./ScheduleForm";
+import ScheduleForm from "./ScheduleForm";
+import type { ScheduleFormValues } from "./scheduleFormUtils";
 
 interface ScheduleModalProps {
   readonly isOpen: boolean;
@@ -16,7 +17,9 @@ interface ScheduleModalProps {
   readonly onSubmit: (values: ScheduleFormValues) => void | Promise<void>;
 }
 
-export default function ScheduleModal({ isOpen, patients, initialValues, mode = "add", patientLocked = false, medicineIndexOffset = 0, medicineIndexOffsetByPatient = {}, onClose, onSubmit }: ScheduleModalProps) {
+const EMPTY_MEDICINE_INDEX_OFFSET_BY_PATIENT: Readonly<Record<string, number>> = {};
+
+export default function ScheduleModal({ isOpen, patients, initialValues, mode = "add", patientLocked = false, medicineIndexOffset = 0, medicineIndexOffsetByPatient = EMPTY_MEDICINE_INDEX_OFFSET_BY_PATIENT, onClose, onSubmit }: ScheduleModalProps) {
   return (
     <Modal
       isOpen={isOpen}

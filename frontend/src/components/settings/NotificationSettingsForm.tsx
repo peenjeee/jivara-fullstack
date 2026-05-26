@@ -5,14 +5,17 @@ import { Save } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { FormDataSkeleton } from "@/components/ui/PageSkeletons";
 import { getUserNotificationPreferenceFromApi, updateUserNotificationPreferenceViaApi } from "@/lib/notificationSettingsApi";
-import { enableUserPushNotifications, supportsBrowserPushNotifications } from "@/lib/pushNotifications";
-import { showToast } from "@/lib/swal";
+import { enableUserPushNotifications, getBlockedNotificationPermissionMessage, isBrowserPushPermissionDenied, supportsBrowserPushNotifications } from "@/lib/pushNotifications";
+import { showToast, showWarning } from "@/lib/swal";
 import ToggleRow from "./ToggleRow";
+
+let notificationSettingsCache: { criticalAlert: boolean } | null = null;
 
 export default function NotificationSettingsForm() {
   const supportsPush = supportsBrowserPushNotifications();
-  const [criticalAlert, setCriticalAlert] = useState(true);
-  const [isLoading, setIsLoading] = useState(true);
+  const [criticalAlert, setCriticalAlert] = useState(() => notificationSettingsCache?.criticalAlert ?? true);
+  const [isLoading, setIsLoading] = useState(!notificationSettingsCache);
+  const [hasLoadedSettings, setHasLoadedSettings] = useState(Boolean(notificationSettingsCache));
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -20,13 +23,22 @@ export default function NotificationSettingsForm() {
 
     getUserNotificationPreferenceFromApi("nurse_critical_alert")
       .then((preference) => {
-        if (isMounted) setCriticalAlert(preference.enabled);
+        const enabled = preference.enabled && !isBrowserPushPermissionDenied();
+        if (isMounted) setCriticalAlert(enabled);
+        notificationSettingsCache = { criticalAlert: enabled };
+        if (preference.enabled && isBrowserPushPermissionDenied()) {
+          void updateUserNotificationPreferenceViaApi("nurse_critical_alert", false);
+        }
       })
       .catch(() => {
-        if (isMounted) setCriticalAlert(true);
+        const enabled = !isBrowserPushPermissionDenied();
+        if (isMounted) setCriticalAlert(enabled);
+        notificationSettingsCache = { criticalAlert: enabled };
       })
       .finally(() => {
-        if (isMounted) setIsLoading(false);
+        if (!isMounted) return;
+        setHasLoadedSettings(true);
+        setIsLoading(false);
       });
 
     return () => {
@@ -37,6 +49,14 @@ export default function NotificationSettingsForm() {
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!supportsPush) return;
+
+    if (criticalAlert && isBrowserPushPermissionDenied()) {
+      setCriticalAlert(false);
+      await updateUserNotificationPreferenceViaApi("nurse_critical_alert", false).catch(() => undefined);
+      await showWarning(getBlockedNotificationPermissionMessage(), "Izin Notifikasi Diblokir");
+      return;
+    }
+
     setIsSaving(true);
 
     try {
@@ -44,16 +64,24 @@ export default function NotificationSettingsForm() {
       await updateUserNotificationPreferenceViaApi("nurse_critical_alert", criticalAlert);
       showToast("Preferensi notifikasi berhasil disimpan.");
     } catch {
-      showToast("Preferensi notifikasi gagal disimpan.", "error");
+      showToast("Preferensi notifikasi gagal disimpan. Pastikan Browser sudah izin dan mendukung notifikasi.", "error");
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleToggle = async (enabled: boolean) => {
-    setCriticalAlert(enabled);
     if (!supportsPush) return;
 
+    if (enabled && isBrowserPushPermissionDenied()) {
+      setCriticalAlert(false);
+      await updateUserNotificationPreferenceViaApi("nurse_critical_alert", false).catch(() => undefined);
+      await showWarning(getBlockedNotificationPermissionMessage(), "Izin Notifikasi Diblokir");
+      return;
+    }
+
+    setCriticalAlert(enabled);
+    notificationSettingsCache = { criticalAlert: enabled };
     setIsSaving(true);
     try {
       if (enabled) await enableUserPushNotifications();
@@ -61,14 +89,15 @@ export default function NotificationSettingsForm() {
       showToast(enabled ? "Notifikasi berhasil diaktifkan." : "Notifikasi berhasil dinonaktifkan.");
     } catch {
       setCriticalAlert(false);
+      notificationSettingsCache = { criticalAlert: false };
       await updateUserNotificationPreferenceViaApi("nurse_critical_alert", false).catch(() => undefined);
-      showToast("Preferensi notifikasi gagal disimpan.", "error");
+      showToast("Preferensi notifikasi gagal disimpan. Pastikan Browser sudah izin dan mendukung notifikasi.", "error");
     } finally {
       setIsSaving(false);
     }
   };
 
-  return isLoading ? <FormDataSkeleton /> : (
+  return isLoading && !hasLoadedSettings ? <FormDataSkeleton /> : (
     <form onSubmit={handleSubmit} className="space-y-4" noValidate>
       <ToggleRow id="criticalAlert" title="Peringatan Obat" description="Notifikasi saat pasien memiliki risiko interaksi makanan dan obat tinggi." checked={criticalAlert} onChange={(enabled) => { void handleToggle(enabled); }} />
       {!supportsPush && (

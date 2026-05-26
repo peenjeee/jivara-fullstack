@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import AdminApprovalsPage from "@/components/admin/AdminApprovalsPage";
+import { clearApprovalsCache } from "@/components/admin/useAdminApprovals";
 import { clearAuditLogCache } from "@/lib/auditLogApi";
 import api from "@/lib/axios";
 import { showConfirm, showError, showToast } from "@/lib/swal";
@@ -53,6 +54,7 @@ describe("admin approvals feature", () => {
     vi.mocked(clearAuditLogCache).mockReset();
     vi.mocked(showError).mockClear();
     vi.mocked(showToast).mockClear();
+    clearApprovalsCache();
     useAuthStore.setState({
       user: { id: "super-1", fullName: "Super Admin", email: "super@test.local", role: "super_admin", accountStatus: "active", age: 35 },
       isAuthenticated: true,
@@ -60,14 +62,18 @@ describe("admin approvals feature", () => {
     });
   });
 
-  it("loads pending admins and approves one after confirmation", async () => {
-    mockedGet.mockResolvedValueOnce({ data: { data: { users: [pendingAdmin], summary: { pending: 1, active: 0, rejected: 0, suspended: 0 } } } });
+  it("loads pending admins once and approves one after confirmation", async () => {
+    mockedGet
+      .mockResolvedValueOnce({ data: { data: { users: [pendingAdmin], summary: { pending: 1, active: 0, rejected: 0, suspended: 0 } }, meta: { page: 1, limit: 10, total: 1 } } })
+      .mockResolvedValueOnce({ data: { data: { users: [], summary: { pending: 0, active: 1, rejected: 0, suspended: 0 } }, meta: { page: 1, limit: 10, total: 0 } } });
     mockedPost.mockResolvedValueOnce({ data: { data: {} } });
     vi.mocked(showConfirm).mockResolvedValueOnce({ isConfirmed: true, isDenied: false, isDismissed: false });
 
     render(<AdminApprovalsPage />);
 
     expect(await screen.findAllByText("Admin Baru")).not.toHaveLength(0);
+    await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(1));
+    expect(mockedGet).toHaveBeenCalledWith("/auth/admin-approvals", { params: { page: 1, limit: 10, status: "pending" } });
     fireEvent.click(screen.getAllByRole("button", { name: "Setujui Admin Baru" })[0]);
 
     await waitFor(() => expect(mockedPost).toHaveBeenCalledWith("/auth/admin-approvals/admin-1/approve"));

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { CalendarClock, ScanLine, UserRound } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import DetailItem from "@/components/ui/DetailItem";
@@ -19,8 +19,8 @@ interface ActivityDetailModalProps {
 }
 
 export default function ActivityDetailModal({ activity, onClose, onViewFoodScan, onViewSchedule, useScheduleQuery = true }: ActivityDetailModalProps) {
-  const scheduleHref = useScheduleQuery && activity?.patientName
-    ? `/schedule?patientName=${encodeURIComponent(activity.patientName)}${activity.medicineName ? `&medicineName=${encodeURIComponent(activity.medicineName)}` : ""}`
+  const scheduleHref = useScheduleQuery && activity?.patientId
+    ? `/schedule?patientId=${encodeURIComponent(activity.patientId)}${activity.medicineName ? `&medicineName=${encodeURIComponent(activity.medicineName)}` : ""}`
     : "/schedule";
   const patientHref = activity?.patientId && activity.category === "Kepatuhan" ? `/patients/${encodeURIComponent(activity.patientId)}` : null;
   const shouldShowScheduleLink = Boolean(activity?.category === "Reminder");
@@ -31,7 +31,7 @@ export default function ActivityDetailModal({ activity, onClose, onViewFoodScan,
     <Modal isOpen={Boolean(activity)} title="Detail Aktivitas" onClose={onClose}>
       {activity && (
         <div className="space-y-5">
-          <motion.div
+          <m.div
             className="rounded-3xl bg-surface p-5"
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
@@ -51,7 +51,7 @@ export default function ActivityDetailModal({ activity, onClose, onViewFoodScan,
                 <p className="mt-2 text-sm font-semibold leading-6 text-muted">{activity.description}</p>
               </div>
             </div>
-          </motion.div>
+          </m.div>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <DetailItem label="Waktu" value={`${getActivityDateLabel(activity.timestamp)}, ${formatActivityTime(activity.timestamp)}`} />

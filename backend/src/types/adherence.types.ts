@@ -3,5 +3,5 @@ export interface AdherenceQuery {
   patientId?: string;
   nurse_id?: string;
   nurseId?: string;
-  period?: "7d" | "30d" | "90d" | "1y";
+  period?: "7d" | "14d" | "30d" | "90d" | "1y" | "all";
 }

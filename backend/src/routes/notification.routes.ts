@@ -73,9 +73,53 @@ router.use(authenticateToken);
  *           type: string
  *           format: uuid
  *       - in: query
+ *         name: nurse_id
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Filter notifikasi berdasarkan pasien aktif yang ditangani perawat.
+ *       - in: query
  *         name: type
  *         schema:
  *           type: string
+ *       - in: query
+ *         name: activity_category
+ *         schema:
+ *           type: string
+ *           enum: [reminder, adherence, food_scan, administration]
+ *         description: Filter kategori aktivitas UI untuk riwayat notifikasi.
+ *       - in: query
+ *         name: severity
+ *         schema:
+ *           type: string
+ *           enum: [success, warning, critical]
+ *         description: Filter level notifikasi. Nilai success mencakup notifikasi non-warning/non-critical.
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Cari berdasarkan judul, isi, tipe, atau ID pasien.
+ *       - in: query
+ *         name: date
+ *         schema:
+ *           type: string
+ *           format: date
+ *       - in: query
+ *         name: start_date
+ *         schema:
+ *           type: string
+ *           format: date
+ *       - in: query
+ *         name: end_date
+ *         schema:
+ *           type: string
+ *           format: date
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [pending, delivered, failed, skipped]
+ *         description: Filter status pengiriman notifikasi.
  *       - in: query
  *         name: page
  *         schema:
@@ -126,10 +170,11 @@ router.get("/analytics", authorizeRoles("patient", "nurse", "admin"), notificati
  *     parameters:
  *       - in: query
  *         name: patient_id
- *         required: true
+ *         required: false
  *         schema:
  *           type: string
  *           format: uuid
+ *         description: Opsional untuk role patient; jika kosong, API memakai pasien dari token login.
  *     responses:
  *       200:
  *         description: Preferensi notifikasi berhasil diambil
@@ -154,12 +199,12 @@ router.patch("/user-preferences", authorizeRoles("admin", "super_admin", "nurse"
  *           schema:
  *             type: object
  *             required:
- *               - patientId
  *               - subscription
  *             properties:
  *               patientId:
  *                 type: string
  *                 format: uuid
+ *                 description: Opsional untuk role patient; jika kosong, API memakai pasien dari token login.
  *               subscription:
  *                 type: object
  *                 required:
@@ -206,12 +251,12 @@ router.post("/user-subscribe", authorizeRoles("admin", "super_admin", "nurse"), 
  *           schema:
  *             type: object
  *             required:
- *               - patientId
  *               - enabled
  *             properties:
  *               patientId:
  *                 type: string
  *                 format: uuid
+ *                 description: Opsional untuk role patient; jika kosong, API memakai pasien dari token login.
  *               enabled:
  *                 type: boolean
  *     responses:

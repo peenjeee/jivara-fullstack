@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { Lock, Save } from "lucide-react";
 import { getApiErrorMessage } from "@/lib/apiErrors";
 import api from "@/lib/axios";
@@ -56,7 +56,7 @@ export default function ForcePasswordChangeModal() {
 
   return (
     <div className="fixed inset-0 z-[60000] flex items-start justify-center overflow-y-auto bg-dark/50 p-4 backdrop-blur-sm sm:items-center" data-lenis-prevent>
-      <motion.section
+      <m.section
         role="dialog"
         aria-modal="true"
         aria-labelledby="force-password-title"
@@ -110,7 +110,7 @@ export default function ForcePasswordChangeModal() {
             Simpan Kata Sandi
           </Button>
         </form>
-      </motion.section>
+      </m.section>
     </div>
   );
 }

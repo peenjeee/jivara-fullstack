@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { useIsStandalonePwa, useLockBodyScroll } from "@/hooks";
 import { useAuthStore } from "@/store/auth";
 import DashboardSidebar from "./DashboardSidebar";
@@ -62,8 +62,9 @@ export default function DashboardNavbar({ onLogout }: DashboardNavbarProps) {
         <div className="flex h-[76px] items-center justify-between px-4">
           <Image src="/images/logo/notext.png" alt="Jivara" width={132} height={42} sizes="118px" priority className="h-auto w-[118px]" />
           <button
+            type="button"
             ref={menuButtonRef}
-            className={`flex lg:hidden flex-col gap-[5px] w-11 h-11 justify-center items-center rounded-xl cursor-pointer transition-all duration-300 shrink-0 z-[40000]`}
+            className={`flex size-11 flex-col items-center justify-center gap-[5px] rounded-xl cursor-pointer transition-all duration-300 shrink-0 z-[40000] lg:hidden`}
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             aria-label={isMenuOpen ? "Tutup menu" : "Buka menu"}
           >
@@ -89,7 +90,7 @@ export default function DashboardNavbar({ onLogout }: DashboardNavbarProps) {
       <AnimatePresence>
         {isMenuOpen && !isStandalonePwa && hasAuthHydrated && (
           <div className="fixed inset-0 z-[35000] lg:hidden">
-            <motion.div
+            <m.div
               className="absolute inset-0 bg-black/25 backdrop-blur-[6px]"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -97,7 +98,7 @@ export default function DashboardNavbar({ onLogout }: DashboardNavbarProps) {
               transition={{ duration: 0.3 }}
               onClick={() => setIsMenuOpen(false)}
             />
-            <motion.aside
+            <m.aside
               ref={drawerRef}
               role="dialog"
               aria-modal="true"
@@ -118,7 +119,7 @@ export default function DashboardNavbar({ onLogout }: DashboardNavbarProps) {
                 onNavigate={() => setIsMenuOpen(false)}
                 onLogout={onLogout}
               />
-            </motion.aside>
+            </m.aside>
           </div>
         )}
       </AnimatePresence>

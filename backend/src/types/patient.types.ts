@@ -28,5 +28,6 @@ export interface PatientListQuery {
   limit?: string;
   search?: string;
   status?: string;
+  adherenceStatus?: string;
   nurseId?: string;
 }

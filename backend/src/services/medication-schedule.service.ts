@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, gt, inArray, lte } from "drizzle-orm";
 import { db } from "../db";
 import { medicationSchedules, patients, prescriptions } from "../db/schema";
 import {
@@ -9,6 +9,7 @@ import {
 import { AccessUser, assertCanAccessPatient, scopedPatientFilter } from "./access-control.service";
 import { diffChanges, writeAuditLogAsync } from "./audit-log.service";
 import { deleteCachedByPrefix, getCached, setCached } from "./cache.service";
+import { listPatients } from "./patient.service";
 
 const CACHE_PREFIX = "medication-schedules:";
 const CACHE_TTL_MS = Number(process.env.MEDICATION_SCHEDULE_CACHE_TTL_MS || 30_000);
@@ -49,12 +50,55 @@ const getDetailCacheKey = (id: string, user?: AccessUser) => `${CACHE_PREFIX}det
 
 export const invalidateMedicationScheduleCache = () => deleteCachedByPrefix(CACHE_PREFIX);
 
+export const getMedicationScheduleSummaryForPatients = async (patientIds: readonly string[]) => {
+  if (patientIds.length === 0) return { active: 0, completed: 0, reminders: 0 };
+
+  const [activeRows, completedRows, reminderRows] = await Promise.all([
+    db
+      .select({ total: count() })
+      .from(medicationSchedules)
+      .where(and(
+              inArray(medicationSchedules.patientId, [...patientIds]),
+              eq(medicationSchedules.isActive, true),
+              gt(medicationSchedules.stock, 0),
+            )),
+    db
+      .select({ total: count() })
+      .from(medicationSchedules)
+      .where(and(
+        inArray(medicationSchedules.patientId, [...patientIds]),
+        lte(medicationSchedules.stock, 0),
+      )),
+    db
+      .select({ total: count() })
+      .from(medicationSchedules)
+      .where(and(
+        inArray(medicationSchedules.patientId, [...patientIds]),
+        eq(medicationSchedules.reminderEnabled, true),
+      )),
+  ]);
+
+  return {
+    active: activeRows[0]?.total || 0,
+    completed: completedRows[0]?.total || 0,
+    reminders: reminderRows[0]?.total || 0,
+  };
+};
+
 export const listMedicationSchedules = async (query: MedicationScheduleListQuery, user?: AccessUser) => {
   const cacheKey = getListCacheKey(query, user);
   const cached = getCached<Array<typeof medicationSchedules.$inferSelect>>(cacheKey);
   if (cached) return cached;
 
   const patientId = query.patientId || query.patient_id;
+  const patientIds = (query.patientIds || query.patient_ids || "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+  const parsedLimit = Number(query.limit);
+  const limit = query.limit && Number.isFinite(parsedLimit)
+    ? Math.min(Math.max(Math.trunc(parsedLimit), 1), 100)
+    : undefined;
   const activeFilter = getBooleanFilter(query.isActive || query.is_active);
   const conditions = [];
   const scopedFilter = await scopedPatientFilter(medicationSchedules.patientId, user, patientId);
@@ -63,15 +107,50 @@ export const listMedicationSchedules = async (query: MedicationScheduleListQuery
   if (scopedFilter.condition) conditions.push(scopedFilter.condition);
 
   if (activeFilter !== undefined) conditions.push(eq(medicationSchedules.isActive, activeFilter));
+  if (!patientId && patientIds.length > 0) conditions.push(inArray(medicationSchedules.patientId, patientIds));
 
-  const rows = await db
+  const baseQuery = db
     .select()
     .from(medicationSchedules)
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(medicationSchedules.createdAt));
+  const rows = limit ? await baseQuery.limit(limit) : await baseQuery;
 
   setCached(cacheKey, rows, CACHE_TTL_MS);
   return rows;
+};
+
+export const listMedicationSchedulePatientGroups = async (query: MedicationScheduleListQuery, user?: AccessUser) => {
+  const limit = String(Math.min(Math.max(Number(query.limit || 10), 1), 10));
+  const patientPage = await listPatients({
+    page: query.page,
+    limit,
+    search: query.search,
+    status: query.status || "active",
+    adherenceStatus: query.adherenceStatus,
+  }, user);
+
+  const patientIds = patientPage.data.map((patient) => patient.id);
+  const schedules = patientIds.length > 0
+    ? await listMedicationSchedules({ patient_ids: patientIds.join(",") }, user)
+    : [];
+  const summaryPatientPage = patientPage.meta.total > patientPage.data.length
+    ? await listPatients({
+      page: "1",
+      limit: String(Math.max(patientPage.meta.total, 1)),
+      search: query.search,
+      status: query.status || "active",
+      adherenceStatus: query.adherenceStatus,
+    }, user)
+    : patientPage;
+  const summaryPatientIds = summaryPatientPage.data.map((patient) => patient.id);
+  const summary = await getMedicationScheduleSummaryForPatients(summaryPatientIds);
+
+  return {
+    patients: patientPage.data,
+    schedules,
+    meta: { ...patientPage.meta, summary },
+  };
 };
 
 export const getMedicationScheduleById = async (id: string, user?: AccessUser) => {
@@ -96,6 +175,7 @@ export const createMedicationSchedule = async (dto: MedicationScheduleCreateDTO,
   if (user) await assertCanAccessPatient(user, dto.patientId);
   if (dto.prescriptionId) await ensurePrescriptionExists(dto.prescriptionId);
 
+  const stock = dto.stock ?? 0;
   const [schedule] = await db
     .insert(medicationSchedules)
     .values({
@@ -103,12 +183,13 @@ export const createMedicationSchedule = async (dto: MedicationScheduleCreateDTO,
       prescriptionId: dto.prescriptionId || null,
       drugName: dto.drugName,
       dosage: dto.dosage,
-      stock: dto.stock ?? 0,
+      stock,
       frequency: dto.frequency,
       scheduledTimes: dto.scheduledTimes,
       instructions: dto.instructions || null,
       reminderEnabled: dto.reminderEnabled ?? true,
       isActive: dto.isActive ?? true,
+      completedAt: stock <= 0 ? new Date() : null,
       createdBy: createdBy || null,
     })
     .returning();
@@ -149,13 +230,21 @@ export const updateMedicationSchedule = async (id: string, dto: MedicationSchedu
   if (dto.reminderEnabled !== undefined) updates.reminderEnabled = dto.reminderEnabled;
   if (dto.isActive !== undefined) updates.isActive = dto.isActive;
 
+  const nextStock = dto.stock ?? existing.stock ?? 0;
+  const nextIsActive = dto.isActive ?? existing.isActive ?? true;
+  if (nextStock > 0 && nextIsActive) {
+    updates.completedAt = null;
+  } else if (nextStock <= 0 && !existing.completedAt) {
+    updates.completedAt = new Date();
+  }
+
   const [schedule] = await db
     .update(medicationSchedules)
     .set(updates)
     .where(eq(medicationSchedules.id, id))
     .returning();
 
-  const changes = diffChanges(existing, schedule, ["prescriptionId", "drugName", "dosage", "stock", "frequency", "scheduledTimes", "instructions", "reminderEnabled", "isActive"]);
+  const changes = diffChanges(existing, schedule, ["prescriptionId", "drugName", "dosage", "stock", "frequency", "scheduledTimes", "instructions", "reminderEnabled", "isActive", "completedAt"]);
   if (Object.keys(changes).length > 0) {
     writeAuditLogAsync({
       userId: user?.id || null,

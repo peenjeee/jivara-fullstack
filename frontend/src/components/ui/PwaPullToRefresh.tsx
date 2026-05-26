@@ -1,9 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef } from "react";
 import { useIsStandalonePwa } from "@/hooks";
 
 const threshold = 82;
@@ -12,23 +12,32 @@ const finishDelay = 720;
 
 type RefreshStatus = "idle" | "pulling" | "ready" | "refreshing";
 
+type PullState = {
+  readonly pullDistance: number;
+  readonly status: RefreshStatus;
+};
+
+const idlePullState: PullState = { pullDistance: 0, status: "idle" };
+
+const pullStateReducer = (_state: PullState, nextState: PullState) => nextState;
+
 export default function PwaPullToRefresh() {
-  const router = useRouter();
+  const { refresh } = useRouter();
   const isStandalonePwa = useIsStandalonePwa();
   const startYRef = useRef(0);
   const isTrackingRef = useRef(false);
   const pullDistanceRef = useRef(0);
   const statusRef = useRef<RefreshStatus>("idle");
-  const [pullDistance, setPullDistance] = useState(0);
-  const [status, setStatus] = useState<RefreshStatus>("idle");
+  const [pullState, dispatchPullState] = useReducer(pullStateReducer, idlePullState);
+  const { pullDistance, status } = pullState;
   const progress = Math.min(pullDistance / threshold, 1);
   const isVisible = status !== "idle";
 
-  const resetPullState = useCallback(() => {
-    isTrackingRef.current = false;
-    setStatus("idle");
-    setPullDistance(0);
-  }, []);
+  // Sync state → refs so touch handlers always read latest in event-callback closures
+  useEffect(() => {
+    pullDistanceRef.current = pullDistance;
+    statusRef.current = status;
+  }, [pullDistance, status]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("pwa-standalone", isStandalonePwa);
@@ -41,15 +50,14 @@ export default function PwaPullToRefresh() {
   }, [isStandalonePwa]);
 
   useEffect(() => {
-    pullDistanceRef.current = pullDistance;
-  }, [pullDistance]);
-
-  useEffect(() => {
-    statusRef.current = status;
-  }, [status]);
-
-  useEffect(() => {
     if (!isStandalonePwa) return;
+
+    const reset = () => {
+      isTrackingRef.current = false;
+      statusRef.current = "idle";
+      pullDistanceRef.current = 0;
+      dispatchPullState(idlePullState);
+    };
 
     const handleTouchStart = (event: TouchEvent) => {
       if (window.scrollY > 0 || shouldIgnoreTarget(event.target)) return;
@@ -65,14 +73,12 @@ export default function PwaPullToRefresh() {
       const distance = currentY - startYRef.current;
 
       if (distance <= 0 || window.scrollY > 0) {
-        resetPullState();
+        reset();
         return;
       }
 
-      event.preventDefault();
       const nextDistance = Math.min(distance * 0.58, maxPull);
-      setPullDistance(nextDistance);
-      setStatus(nextDistance >= threshold ? "ready" : "pulling");
+      dispatchPullState({ pullDistance: nextDistance, status: nextDistance >= threshold ? "ready" : "pulling" });
     };
 
     const handleTouchEnd = () => {
@@ -81,24 +87,22 @@ export default function PwaPullToRefresh() {
       isTrackingRef.current = false;
 
       if (pullDistanceRef.current >= threshold) {
-        setStatus("refreshing");
-        setPullDistance(threshold);
-        router.refresh();
+        dispatchPullState({ pullDistance: threshold, status: "refreshing" });
+        refresh();
 
         window.setTimeout(() => {
-          setStatus("idle");
-          setPullDistance(0);
+          dispatchPullState(idlePullState);
         }, finishDelay);
         return;
       }
 
-      resetPullState();
+      reset();
     };
 
     window.addEventListener("touchstart", handleTouchStart, { passive: true });
-    window.addEventListener("touchmove", handleTouchMove, { passive: false });
-    window.addEventListener("touchend", handleTouchEnd);
-    window.addEventListener("touchcancel", handleTouchEnd);
+    window.addEventListener("touchmove", handleTouchMove, { passive: true });
+    window.addEventListener("touchend", handleTouchEnd, { passive: true });
+    window.addEventListener("touchcancel", handleTouchEnd, { passive: true });
 
     return () => {
       window.removeEventListener("touchstart", handleTouchStart);
@@ -106,14 +110,14 @@ export default function PwaPullToRefresh() {
       window.removeEventListener("touchend", handleTouchEnd);
       window.removeEventListener("touchcancel", handleTouchEnd);
     };
-  }, [isStandalonePwa, resetPullState, router]);
+  }, [isStandalonePwa, refresh]);
 
   const label = status === "refreshing" ? "Memperbarui ..." : status === "ready" ? "Lepas untuk refresh" : "Tarik untuk refresh";
 
   return (
     <AnimatePresence>
       {isStandalonePwa && isVisible && (
-        <motion.div
+        <m.div
           className="pointer-events-none fixed inset-x-0 top-[calc(76px+env(safe-area-inset-top))] z-[40000] flex justify-center px-4 lg:hidden"
           initial={{ opacity: 0, y: -16, scale: 0.96 }}
           animate={{ opacity: 1, y: Math.min(pullDistance * 0.18, 18), scale: 1 }}
@@ -121,16 +125,16 @@ export default function PwaPullToRefresh() {
           transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
         >
           <div className="flex items-center gap-3 rounded-full border border-line bg-white/95 px-4 py-2 text-sm font-extrabold text-text-main shadow-[0_14px_34px_rgba(15,23,42,0.14)] backdrop-blur-xl">
-            <motion.span
-              className="grid h-8 w-8 place-items-center rounded-full bg-primary/10 text-primary"
+            <m.span
+              className="grid size-8 place-items-center rounded-full bg-primary/10 text-primary"
               animate={status === "refreshing" ? { rotate: 360 } : { rotate: progress * 180 }}
               transition={status === "refreshing" ? { repeat: Infinity, duration: 0.7, ease: "linear" } : { duration: 0.12 }}
             >
               <RefreshCw size={17} strokeWidth={2.5} />
-            </motion.span>
+            </m.span>
             <span>{label}</span>
           </div>
-        </motion.div>
+        </m.div>
       )}
     </AnimatePresence>
   );

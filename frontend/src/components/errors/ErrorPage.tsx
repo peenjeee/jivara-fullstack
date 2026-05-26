@@ -1,6 +1,7 @@
 "use client";
 
 import { SimpleFooter } from "@/components/landing/Footer";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
@@ -142,7 +143,7 @@ interface ErrorPageProps {
 }
 
 export default function ErrorPage({ variant, reset, children }: ErrorPageProps) {
-  const router = useRouter();
+  const { refresh } = useRouter();
   const content = ERROR_CONTENT[variant];
   const backHref = variant === "401" ? "/login" : "/";
   const backLabel = variant === "401" ? "Masuk" : variant === "offline" ? "Coba Lagi" : "Kembali";
@@ -155,7 +156,7 @@ export default function ErrorPage({ variant, reset, children }: ErrorPageProps) 
 
     if (variant === "offline") {
       event.preventDefault();
-      router.refresh();
+      refresh();
     }
   };
 
@@ -165,13 +166,13 @@ export default function ErrorPage({ variant, reset, children }: ErrorPageProps) 
         <section className="flex w-full max-w-md flex-col items-center">
           {variant === "offline" ? (
             <Link href="/" aria-label="Jivara beranda" className="flex w-full justify-center overflow-hidden">
-              {/* eslint-disable-next-line @next/next/no-img-element -- Offline fallback must avoid Next image optimizer requests. */}
-              <img
+              <Image
                 src="/images/logo/text.png"
                 alt="Jivara"
                 width={260}
                 height={260}
                 className="mb-[-42px] h-auto w-[210px] translate-x-[-6px] sm:w-[260px]"
+                unoptimized
               />
             </Link>
           ) : (

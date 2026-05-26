@@ -1,9 +1,9 @@
 import webpush from "web-push";
-import { and, count, desc, eq, inArray } from "drizzle-orm";
+import { and, count, desc, eq, gte, ilike, inArray, lt, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { notifications, nurses, patientNurseAssignments, patients, pushSubscriptions, userNotificationPreferences, userPushSubscriptions, users } from "../db/schema";
 import { NotificationPreferenceDTO, PushSubscriptionDTO, SendNotificationDTO, UserNotificationPreferenceDTO, UserPushSubscriptionDTO } from "../types/notification.types";
-import { AccessUser, assertCanAccessPatient, scopedPatientFilter } from "./access-control.service";
+import { AccessUser, assertCanAccessPatient, getAssignedPatientIdsForNurse, getPatientIdForUser, scopedPatientFilter } from "./access-control.service";
 import { deleteCachedByPrefix, getCached, setCached } from "./cache.service";
 import { writeAuditLogAsync } from "./audit-log.service";
 
@@ -32,7 +32,7 @@ const invalidateNotifCache = () => deleteCachedByPrefix(NOTIF_CACHE_PREFIX);
 
 type NotifListResult = {
   data: unknown[];
-  meta: { page: number; limit: number; total: number };
+  meta: { page: number; limit: number; total: number; summary?: { warningCritical: number; today: number } };
 };
 
 type NotifPrefResult = {
@@ -73,6 +73,64 @@ const parsePagination = (query: Record<string, unknown>) => {
   const page = Math.max(Number(query.page || 1), 1);
   const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100);
   return { page, limit, offset: (page - 1) * limit };
+};
+
+const appTimezoneOffset = "+07:00";
+const appTimezone = "Asia/Jakarta";
+
+const getDateRange = (query: Record<string, unknown>) => {
+  const startValue = typeof query.startDate === "string"
+    ? query.startDate
+    : typeof query.start_date === "string"
+      ? query.start_date
+      : typeof query.date === "string"
+        ? query.date
+        : undefined;
+  const endValue = typeof query.endDate === "string"
+    ? query.endDate
+    : typeof query.end_date === "string"
+      ? query.end_date
+      : startValue;
+  if (!startValue || !endValue) return null;
+
+  const start = new Date(`${startValue}T00:00:00.000${appTimezoneOffset}`);
+  const end = new Date(`${endValue}T00:00:00.000${appTimezoneOffset}`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+
+  const normalizedStart = start <= end ? start : end;
+  const normalizedEnd = start <= end ? end : start;
+  normalizedEnd.setDate(normalizedEnd.getDate() + 1);
+  return { start: normalizedStart, end: normalizedEnd };
+};
+
+const getNotificationCategoryCondition = (category?: string) => {
+  if (category === "food_scan") return ilike(notifications.type, "%food%");
+  if (category === "adherence") {
+    return or(
+      ilike(notifications.type, "%adherence%"),
+      ilike(notifications.type, "%escalation%"),
+      ilike(notifications.type, "%missed%"),
+      ilike(notifications.type, "%critical%"),
+    );
+  }
+  if (category === "administration") {
+    return or(
+      ilike(notifications.type, "%admin%"),
+      ilike(notifications.type, "%approval%"),
+      ilike(notifications.type, "%system%"),
+    );
+  }
+  if (category === "reminder") {
+    return sql`not (${notifications.type} ilike any(array['%food%', '%adherence%', '%escalation%', '%missed%', '%critical%', '%admin%', '%approval%', '%system%']))`;
+  }
+  return undefined;
+};
+
+const getNotificationSeverityCondition = (severity?: string) => {
+  if (severity === "critical") return eq(notifications.urgency, "critical");
+  if (severity === "warning") return inArray(notifications.urgency, ["urgent", "high"]);
+  if (severity === "success") return sql`${notifications.urgency} not in ('urgent', 'high', 'critical')`;
+  return undefined;
 };
 
 const getPayloadSize = (value: unknown) => Buffer.byteLength(JSON.stringify(value), "utf8");
@@ -166,6 +224,28 @@ const resolveCareTeamTargets = async (patientId: string) => {
   };
 };
 
+const resolvePatientIdForCurrentUser = async (user: AccessUser | undefined, patientId?: string) => {
+  if (patientId) {
+    await assertCanAccessPatient(user, patientId);
+    return patientId;
+  }
+
+  if (!user) {
+    throw { status: 401, message: "Autentikasi diperlukan", code: "MISSING_TOKEN" };
+  }
+
+  if (user.role !== "patient") {
+    throw { status: 400, message: "patientId wajib diisi", code: "VALIDATION_ERROR" };
+  }
+
+  const resolvedPatientId = await getPatientIdForUser(user.id);
+  if (!resolvedPatientId) {
+    throw { status: 404, message: "Data pasien tidak ditemukan", code: "PATIENT_NOT_FOUND" };
+  }
+
+  return resolvedPatientId;
+};
+
 const filterUsersByPreference = async (userIds: string[], preferenceKey: string) => {
   if (userIds.length === 0) return [];
 
@@ -192,7 +272,7 @@ export const getVapidPublicKey = () => {
 };
 
 export const subscribeDevice = async (dto: PushSubscriptionDTO, user: AccessUser | undefined) => {
-  await assertCanAccessPatient(user, dto.patientId);
+  const patientId = await resolvePatientIdForCurrentUser(user, dto.patientId);
 
   const existing = await db
     .select({ id: pushSubscriptions.id })
@@ -204,7 +284,7 @@ export const subscribeDevice = async (dto: PushSubscriptionDTO, user: AccessUser
     const [subscription] = await db
       .update(pushSubscriptions)
       .set({
-        patientId: dto.patientId,
+        patientId,
         userId: user!.id,
         p256dh: dto.keys.p256dh,
         auth: dto.keys.auth,
@@ -222,7 +302,7 @@ export const subscribeDevice = async (dto: PushSubscriptionDTO, user: AccessUser
     action: "push_subscription.updated",
       resourceType: "push_subscription",
       resourceId: subscription.id,
-      changes: { patientId: dto.patientId, enabled: true },
+      changes: { patientId, enabled: true },
     });
 
     return subscription;
@@ -231,7 +311,7 @@ export const subscribeDevice = async (dto: PushSubscriptionDTO, user: AccessUser
   const [subscription] = await db
     .insert(pushSubscriptions)
     .values({
-      patientId: dto.patientId,
+      patientId,
       userId: user!.id,
       endpoint: dto.endpoint,
       p256dh: dto.keys.p256dh,
@@ -248,7 +328,7 @@ export const subscribeDevice = async (dto: PushSubscriptionDTO, user: AccessUser
     action: "push_subscription.created",
     resourceType: "push_subscription",
     resourceId: subscription.id,
-    changes: { patientId: dto.patientId, enabled: true },
+    changes: { patientId, enabled: true },
   });
 
   return subscription;
@@ -318,13 +398,13 @@ export const subscribeUserDevice = async (dto: UserPushSubscriptionDTO, user: Ac
 };
 
 export const setNotificationPreference = async (dto: NotificationPreferenceDTO, user: AccessUser | undefined) => {
-  await assertCanAccessPatient(user, dto.patientId);
+  const patientId = await resolvePatientIdForCurrentUser(user, dto.patientId);
 
   const rows = await db
     .update(pushSubscriptions)
     .set({ isEnabled: dto.enabled, updatedAt: new Date() })
     .where(and(
-      eq(pushSubscriptions.patientId, dto.patientId),
+      eq(pushSubscriptions.patientId, patientId),
       eq(pushSubscriptions.userId, user!.id),
     ))
     .returning();
@@ -335,19 +415,23 @@ export const setNotificationPreference = async (dto: NotificationPreferenceDTO, 
     userId: user?.id || null,
     action: "notification.preference.updated",
     resourceType: "patient",
-    resourceId: dto.patientId,
+    resourceId: patientId,
     changes: { enabled: dto.enabled, updatedSubscriptions: rows.length },
   });
 
-  return { enabled: dto.enabled, updatedSubscriptions: rows.length };
+  return {
+    patientId,
+    enabled: dto.enabled,
+    subscriptionCount: rows.length,
+    activeSubscriptions: rows.filter((subscription) => subscription.isEnabled).length,
+  };
 };
 
-export const getNotificationPreference = async (patientId: string, user: AccessUser | undefined): Promise<NotifPrefResult> => {
+export const getNotificationPreference = async (patientId: string | undefined, user: AccessUser | undefined): Promise<NotifPrefResult> => {
+  patientId = await resolvePatientIdForCurrentUser(user, patientId);
   const cacheKey = getNotifPrefCacheKey(patientId);
   const cached = getCached<NotifPrefResult>(cacheKey);
   if (cached) return cached;
-
-  await assertCanAccessPatient(user, patientId);
 
   const subscriptions = await db
     .select({ isEnabled: pushSubscriptions.isEnabled })
@@ -449,7 +533,13 @@ export const listNotifications = async (query: Record<string, unknown>, user: Ac
   if (cached) return cached;
 
   const patientId = typeof query.patient_id === "string" ? query.patient_id : typeof query.patientId === "string" ? query.patientId : undefined;
+  const nurseId = typeof query.nurse_id === "string" ? query.nurse_id : typeof query.nurseId === "string" ? query.nurseId : undefined;
   const type = typeof query.type === "string" ? query.type : undefined;
+  const status = typeof query.status === "string" ? query.status : undefined;
+  const activityCategory = typeof query.activity_category === "string" ? query.activity_category : typeof query.activityCategory === "string" ? query.activityCategory : undefined;
+  const severity = typeof query.severity === "string" ? query.severity : undefined;
+  const search = typeof query.search === "string" ? query.search.trim() : "";
+  const dateRange = getDateRange(query);
   const conditions = [];
   const { page, limit, offset } = parsePagination(query);
   const scopedFilter = await scopedPatientFilter(notifications.patientId, user, patientId);
@@ -460,11 +550,41 @@ export const listNotifications = async (query: Record<string, unknown>, user: Ac
     return emptyResult;
   }
   if (scopedFilter.condition) conditions.push(scopedFilter.condition);
+  if (nurseId) {
+    const assignedPatientIds = await getAssignedPatientIdsForNurse(nurseId);
+    if (assignedPatientIds.length === 0) {
+      const emptyResult = {
+        data: [],
+        meta: { page, limit, total: 0, summary: { warningCritical: 0, today: 0 } },
+      };
+      setCached(cacheKey, emptyResult, NOTIF_CACHE_TTL_MS);
+      return emptyResult;
+    }
+    conditions.push(inArray(notifications.patientId, assignedPatientIds));
+  }
   if (type) conditions.push(eq(notifications.type, type));
+  if (status) conditions.push(eq(notifications.status, status));
+  const categoryCondition = getNotificationCategoryCondition(activityCategory);
+  if (categoryCondition) conditions.push(categoryCondition);
+  const severityCondition = getNotificationSeverityCondition(severity);
+  if (severityCondition) conditions.push(severityCondition);
+  if (search) {
+    const searchPattern = `%${search}%`;
+    conditions.push(or(
+      ilike(notifications.title, searchPattern),
+      ilike(notifications.body, searchPattern),
+      ilike(notifications.type, searchPattern),
+      ilike(sql`${notifications.patientId}::text`, searchPattern),
+    ));
+  }
+  if (dateRange) {
+    conditions.push(gte(notifications.createdAt, dateRange.start));
+    conditions.push(lt(notifications.createdAt, dateRange.end));
+  }
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
-  const [rows, totalRows] = await Promise.all([
+  const [rows, totalRows, summaryRows, todayRows] = await Promise.all([
     db
       .select()
       .from(notifications)
@@ -476,9 +596,30 @@ export const listNotifications = async (query: Record<string, unknown>, user: Ac
       .select({ total: count() })
       .from(notifications)
       .where(where),
+    db
+      .select({ total: count() })
+      .from(notifications)
+      .where(conditions.length > 0 ? and(...conditions, inArray(notifications.urgency, ["high", "urgent", "critical"])) : inArray(notifications.urgency, ["high", "urgent", "critical"])),
+    db
+      .select({ count: sql<number>`COUNT(*)::int` })
+      .from(notifications)
+      .where(conditions.length > 0
+        ? and(...conditions, sql`(${notifications.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${appTimezone})::date = (CURRENT_TIMESTAMP AT TIME ZONE ${appTimezone})::date`)
+        : sql`(${notifications.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${appTimezone})::date = (CURRENT_TIMESTAMP AT TIME ZONE ${appTimezone})::date`),
   ]);
 
-  const result = { data: rows, meta: { page, limit, total: totalRows[0]?.total || 0 } };
+  const result = {
+    data: rows,
+    meta: {
+      page,
+      limit,
+      total: totalRows[0]?.total || 0,
+      summary: {
+        warningCritical: summaryRows[0]?.total || 0,
+        today: Number(todayRows[0]?.count ?? 0),
+      },
+    },
+  };
   setCached(cacheKey, result, NOTIF_CACHE_TTL_MS);
   return result;
 };

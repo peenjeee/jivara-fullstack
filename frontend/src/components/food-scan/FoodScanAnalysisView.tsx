@@ -1,11 +1,12 @@
 "use client";
 
 import Image from "next/image";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { useState, type ReactNode } from "react";
-import { Apple, BrainCircuit, Clock, Pill, ShieldAlert, Utensils } from "lucide-react";
+import { Apple, BrainCircuit, Pill, ShieldAlert, Utensils } from "lucide-react";
 import DetailItem from "@/components/ui/DetailItem";
 import type { FoodScanAnalysis } from "@/helpers/foodScans";
+import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
 import type { FoodScanRisk } from "@/lib/mocks/foodScans";
 
 interface FoodScanAnalysisViewProps {
@@ -20,6 +21,7 @@ const riskTextClass: Record<FoodScanRisk, string> = {
 };
 
 export default function FoodScanAnalysisView({ scanId, imageSizes = "(max-width: 1280px) 100vw, 620px", analysisData }: FoodScanAnalysisViewProps) {
+  const shouldAnimate = useDashboardEntranceMotion();
   const analysis = analysisData?.scan.id === scanId ? analysisData : null;
 
   if (!analysis) return null;
@@ -28,34 +30,32 @@ export default function FoodScanAnalysisView({ scanId, imageSizes = "(max-width:
 
   return (
     <div className="space-y-5">
-      <FoodScanHero scan={analysis.scan} risk={analysis.overallRisk} imageSizes={imageSizes} />
+      <FoodScanHero scan={analysis.scan} risk={analysis.overallRisk} imageSizes={imageSizes} shouldAnimate={shouldAnimate} />
 
-      <motion.div className="grid gap-3 sm:grid-cols-3" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1], delay: 0.06 }}>
+      <m.div className="grid gap-3 sm:grid-cols-3" {...getDashboardEntranceMotion(shouldAnimate, 0.06, 16)}>
         <DetailItem label="Pasien" value={analysis.patientName ?? "Tidak diketahui"} />
         <DetailItem label="Waktu Scan" value={formatScanTime(analysis.scan.scannedAt)} />
         <DetailItem label="Obat Dianalisis" value={`${analyzedMedicationCount} obat`} />
-      </motion.div>
+      </m.div>
 
-      <FoodInsightCard icon={<BrainCircuit size={20} />} title="AI Detection & Reasoning" text={analysis.scan.aiReasoning} risk={analysis.overallRisk} delay={0.12} />
+      <FoodInsightCard icon={<BrainCircuit size={20} />} title="AI Detection & Reasoning" text={analysis.scan.aiReasoning} risk={analysis.overallRisk} delay={0.12} shouldAnimate={shouldAnimate} />
 
-      <InteractionAnalysisCard interactions={analysis.interactions} analyzedMedications={analysis.analyzedMedications ?? []} safeFoods={analysis.safeFoods ?? []} />
+      <InteractionAnalysisCard interactions={analysis.interactions} analyzedMedications={analysis.analyzedMedications ?? []} safeFoods={analysis.safeFoods ?? []} disclaimer={analysis.disclaimer} shouldAnimate={shouldAnimate} />
 
-      <NutritionCard items={analysis.nutritionItems ?? []} total={analysis.nutritionTotal} />
+      <NutritionCard items={analysis.nutritionItems ?? []} total={analysis.nutritionTotal} shouldAnimate={shouldAnimate} />
 
-      <RecommendationCard recommendedFoods={analysis.recommendedFoods ?? []} foodsToAvoid={analysis.foodsToAvoid ?? []} safeFoods={analysis.safeFoods ?? []} />
-
-      <FoodInsightCard icon={<Clock size={20} />} title="Rekomendasi Umum" text={analysis.scan.recommendation} risk={analysis.overallRisk} delay={0.24} />
+      <RecommendationCard recommendedFoods={analysis.recommendedFoods ?? []} foodsToAvoid={analysis.foodsToAvoid ?? []} safeFoods={analysis.safeFoods ?? []} shouldAnimate={shouldAnimate} />
     </div>
   );
 }
 
-function FoodScanHero({ scan, risk, imageSizes }: { readonly scan: FoodScanAnalysis["scan"]; readonly risk: FoodScanRisk; readonly imageSizes: string }) {
+function FoodScanHero({ scan, risk, imageSizes, shouldAnimate }: { readonly scan: FoodScanAnalysis["scan"]; readonly risk: FoodScanRisk; readonly imageSizes: string; readonly shouldAnimate: boolean }) {
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
   const imageWidth = imageDimensions?.width ?? 1280;
   const imageHeight = imageDimensions?.height ?? 1280;
 
   return (
-    <motion.section className="overflow-hidden rounded-3xl bg-surface" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}>
+    <m.section className="overflow-hidden rounded-3xl bg-surface" {...getDashboardEntranceMotion(shouldAnimate, 0, 16)}>
       <div data-food-scan-result-image-frame className="mx-auto w-full max-w-[520px] overflow-hidden rounded-3xl bg-black/5">
         <Image
           src={scan.image}
@@ -88,11 +88,11 @@ function FoodScanHero({ scan, risk, imageSizes }: { readonly scan: FoodScanAnaly
           </div>
         </div>
       </div>
-    </motion.section>
+    </m.section>
   );
 }
 
-function NutritionCard({ items, total }: { readonly items: NonNullable<FoodScanAnalysis["nutritionItems"]>; readonly total?: FoodScanAnalysis["nutritionTotal"] }) {
+function NutritionCard({ items, total, shouldAnimate }: { readonly items: NonNullable<FoodScanAnalysis["nutritionItems"]>; readonly total?: FoodScanAnalysis["nutritionTotal"]; readonly shouldAnimate: boolean }) {
   if (items.length === 0 && !total) return null;
 
   const metrics = total ? [
@@ -103,7 +103,7 @@ function NutritionCard({ items, total }: { readonly items: NonNullable<FoodScanA
   ] : [];
 
   return (
-    <motion.section className="rounded-3xl bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)]" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.42, ease: [0.16, 1, 0.3, 1], delay: 0.22 }}>
+    <m.section className="space-y-5" {...getDashboardEntranceMotion(shouldAnimate, 0.22, 18)}>
       <div className="mb-5 flex items-center gap-3">
         <Utensils size={20} className="text-primary" />
         <h3 className="font-display text-2xl font-extrabold tracking-[-0.04em] text-text-main">Estimasi Nutrisi</h3>
@@ -127,44 +127,102 @@ function NutritionCard({ items, total }: { readonly items: NonNullable<FoodScanA
           ))}
         </div>
       )}
-    </motion.section>
+    </m.section>
   );
 }
 
-function RecommendationCard({ recommendedFoods, foodsToAvoid, safeFoods }: { readonly recommendedFoods: NonNullable<FoodScanAnalysis["recommendedFoods"]>; readonly foodsToAvoid: NonNullable<FoodScanAnalysis["foodsToAvoid"]>; readonly safeFoods: NonNullable<FoodScanAnalysis["safeFoods"]> }) {
-  if (recommendedFoods.length === 0 && foodsToAvoid.length === 0 && safeFoods.length === 0) return null;
+type FoodRecommendationItem = NonNullable<FoodScanAnalysis["recommendedFoods"]>[number];
+
+function RecommendationCard({ recommendedFoods, foodsToAvoid, safeFoods, shouldAnimate }: { readonly recommendedFoods: NonNullable<FoodScanAnalysis["recommendedFoods"]>; readonly foodsToAvoid: NonNullable<FoodScanAnalysis["foodsToAvoid"]>; readonly safeFoods: NonNullable<FoodScanAnalysis["safeFoods"]>; readonly shouldAnimate: boolean }) {
+  const { safeRecommendations, avoidRecommendations } = splitRecommendationsByRisk(recommendedFoods, foodsToAvoid);
+
+  if (safeRecommendations.length === 0 && avoidRecommendations.length === 0 && safeFoods.length === 0) return null;
 
   return (
-    <motion.section className="rounded-3xl bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)]" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.42, ease: [0.16, 1, 0.3, 1], delay: 0.26 }}>
-      <div className="mb-5 flex items-center gap-3">
+    <m.section className="space-y-5" {...getDashboardEntranceMotion(shouldAnimate, 0.26, 18)}>
+      <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
         <Apple size={20} className="text-primary" />
         <h3 className="font-display text-2xl font-extrabold tracking-[-0.04em] text-text-main">Rekomendasi AI</h3>
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {recommendedFoods.length > 0 && <FoodScoreList title="Makanan Aman" items={recommendedFoods} tone="safe" />}
-        {foodsToAvoid.length > 0 && <FoodScoreList title="Perlu Dibatasi" items={foodsToAvoid.slice(0, 5)} tone="avoid" />}
-        {recommendedFoods.length === 0 && safeFoods.length > 0 && <SafeFoodList items={safeFoods} />}
+        {safeRecommendations.length > 0 && <FoodScoreList title="Makanan Aman" items={safeRecommendations} tone="safe" />}
+        {avoidRecommendations.length > 0 && <FoodScoreList title="Perlu Dibatasi" items={avoidRecommendations} tone="avoid" />}
+        {safeRecommendations.length === 0 && safeFoods.length > 0 && <SafeFoodList items={safeFoods} />}
       </div>
-    </motion.section>
+    </m.section>
   );
 }
 
-function FoodScoreList({ title, items, tone }: { readonly title: string; readonly items: NonNullable<FoodScanAnalysis["recommendedFoods"]>; readonly tone: "safe" | "avoid" }) {
-  const toneClass = tone === "safe" ? "bg-leaf/10 text-leaf" : "bg-danger/10 text-danger";
+function FoodScoreList({ title, items, tone }: { readonly title: string; readonly items: readonly FoodRecommendationItem[]; readonly tone: "safe" | "avoid" }) {
+  const countClass = tone === "safe" ? "bg-leaf/10 text-leaf" : "bg-danger/10 text-danger";
+  const rowClass = tone === "safe" ? "bg-leaf/10 text-leaf" : "bg-danger/10 text-danger";
 
   return (
-    <div className="rounded-3xl bg-surface p-4">
-      <h4 className="font-display text-xl font-extrabold tracking-[-0.04em] text-text-main">{title}</h4>
-      <div className="mt-3 flex flex-wrap gap-2">
+    <div className="min-h-0 rounded-3xl bg-surface p-4">
+      <div className="flex items-center justify-between gap-3">
+        <h4 className="font-display text-xl font-extrabold tracking-[-0.04em] text-text-main">{title}</h4>
+        <span className={`rounded-full px-3 py-1 text-xs font-extrabold uppercase tracking-[0.08em] ${countClass}`}>{items.length}</span>
+      </div>
+      <div
+        className="mt-3 h-72 min-h-0 space-y-2 overflow-y-scroll overscroll-contain pr-1 sm:h-80"
+        data-lenis-prevent
+        data-lenis-prevent-wheel
+        data-lenis-prevent-touch
+      >
         {items.map((item) => (
-          <span key={`${title}-${item.foodName}`} className={`rounded-full px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] ${toneClass}`}>
-            {item.foodName.replace(/-/g, " ")} • {item.riskLevel}
-          </span>
+          <div key={`${title}-${item.foodName}`} className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2 ${rowClass}`}>
+            <span className="min-w-0 break-words text-sm font-extrabold leading-5">{formatFoodName(item.foodName)}</span>
+            <span className="shrink-0 rounded-full bg-white/70 px-2 py-1 text-center text-[10px] font-extrabold uppercase tracking-[0.06em]">{formatRiskLabel(item.riskLevel)}</span>
+          </div>
         ))}
       </div>
     </div>
   );
+}
+
+function splitRecommendationsByRisk(recommendedFoods: readonly FoodRecommendationItem[], foodsToAvoid: readonly FoodRecommendationItem[]) {
+  const byName = new Map<string, FoodRecommendationItem>();
+
+  [...recommendedFoods, ...foodsToAvoid].forEach((item) => {
+    const key = getRecommendationKey(item);
+    const existing = byName.get(key);
+    if (!existing || item.severityScore > existing.severityScore) byName.set(key, item);
+  });
+
+  const safeRecommendations: FoodRecommendationItem[] = [];
+  const avoidRecommendations: FoodRecommendationItem[] = [];
+
+  byName.forEach((item) => {
+    if (isSafeRecommendation(item)) {
+      safeRecommendations.push(item);
+    } else {
+      avoidRecommendations.push(item);
+    }
+  });
+
+  return { safeRecommendations, avoidRecommendations };
+}
+
+function getRecommendationKey(item: FoodRecommendationItem) {
+  return item.foodName.trim().toLowerCase();
+}
+
+function isSafeRecommendation(item: FoodRecommendationItem) {
+  const risk = item.riskLevel.trim().toLowerCase();
+  if (["aman", "ringan", "rendah", "safe", "low", "low risk"].includes(risk)) return true;
+  if (["sedang", "menengah", "moderate", "medium", "tinggi", "high", "high risk", "kritis", "critical"].includes(risk)) return false;
+  return item.severityScore <= 1;
+}
+
+function formatFoodName(value: string) {
+  return value.replace(/-/g, " ");
+}
+
+function formatRiskLabel(value: string) {
+  return value.replace(/_/g, " ").replace(/-/g, " ");
 }
 
 function SafeFoodList({ items }: { readonly items: NonNullable<FoodScanAnalysis["safeFoods"]> }) {
@@ -182,9 +240,9 @@ function SafeFoodList({ items }: { readonly items: NonNullable<FoodScanAnalysis[
   );
 }
 
-function InteractionAnalysisCard({ interactions, analyzedMedications, safeFoods }: { readonly interactions: FoodScanAnalysis["interactions"]; readonly analyzedMedications: NonNullable<FoodScanAnalysis["analyzedMedications"]>; readonly safeFoods: NonNullable<FoodScanAnalysis["safeFoods"]> }) {
+function InteractionAnalysisCard({ interactions, analyzedMedications, safeFoods, disclaimer, shouldAnimate }: { readonly interactions: FoodScanAnalysis["interactions"]; readonly analyzedMedications: NonNullable<FoodScanAnalysis["analyzedMedications"]>; readonly safeFoods: NonNullable<FoodScanAnalysis["safeFoods"]>; readonly disclaimer?: string; readonly shouldAnimate: boolean }) {
   return (
-    <motion.section className="rounded-3xl bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)]" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.42, ease: [0.16, 1, 0.3, 1], delay: 0.18 }}>
+    <m.section className="space-y-5" {...getDashboardEntranceMotion(shouldAnimate, 0.18, 18)}>
       <div className="mb-5 flex items-center gap-3">
         <Pill size={20} className="text-primary" />
         <h3 className="font-display text-2xl font-extrabold tracking-[-0.04em] text-text-main">Analisis Interaksi Obat</h3>
@@ -207,8 +265,8 @@ function InteractionAnalysisCard({ interactions, analyzedMedications, safeFoods 
         </article>
       ) : (
         <div className="space-y-3">
-          {interactions.map((interaction, index) => (
-            <article key={`food-interaction-${interaction.schedule.id}-${index}`} className="rounded-3xl bg-surface p-4">
+          {interactions.map((interaction) => (
+            <article key={`food-interaction-${interaction.schedule.id}`} className="rounded-3xl bg-surface p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -226,19 +284,25 @@ function InteractionAnalysisCard({ interactions, analyzedMedications, safeFoods 
           ))}
         </div>
       )}
-    </motion.section>
+
+      {disclaimer && (
+        <p className="mt-4 rounded-3xl bg-surface px-4 py-3 text-sm font-semibold leading-6 text-muted">
+          {disclaimer}
+        </p>
+      )}
+    </m.section>
   );
 }
 
-function FoodInsightCard({ icon, title, text, risk, delay }: { readonly icon: ReactNode; readonly title: string; readonly text: string; readonly risk: FoodScanRisk; readonly delay: number }) {
+function FoodInsightCard({ icon, title, text, risk, delay, shouldAnimate }: { readonly icon: ReactNode; readonly title: string; readonly text: string; readonly risk: FoodScanRisk; readonly delay: number; readonly shouldAnimate: boolean }) {
   return (
-    <motion.section className={`rounded-3xl bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)] ${risk === "High Risk" ? "border-l-4 border-danger" : "border-l-4 border-leaf"}`} initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.42, ease: [0.16, 1, 0.3, 1], delay }}>
+    <m.section className="rounded-3xl border-0 bg-surface p-5 shadow-none !border-l-0" {...getDashboardEntranceMotion(shouldAnimate, delay, 18)}>
       <div className="mb-3 flex items-center gap-3">
         <span className={riskTextClass[risk]}>{icon}</span>
         <h3 className="font-display text-xl font-extrabold tracking-[-0.04em] text-text-main">{title}</h3>
       </div>
       <p className="text-sm font-semibold leading-6 text-muted">{text}</p>
-    </motion.section>
+    </m.section>
   );
 }
 

@@ -6,8 +6,8 @@ import NurseDashboardPage from "@/components/dashboard/NurseDashboardPage";
 import NurseSettingsPage from "@/components/settings/NurseSettingsPage";
 import PatientDashboardPage from "@/components/patient-dashboard/PatientDashboardPage";
 import PatientSettingsPage from "@/components/settings/PatientSettingsPage";
-import { getAdminDashboardStats, getNurseDashboardData } from "@/lib/dashboardApi";
-import { getPatientDashboardData } from "@/lib/patientDashboardApi";
+import { getAdminDashboardData, getAdminDashboardStats, getNurseDashboardData } from "@/lib/dashboardApi";
+import { getPatientDashboardData, getPatientDashboardOverviewData } from "@/lib/patientDashboardApi";
 import { getAlertActivitiesFromApi } from "@/lib/alertsApi";
 import { getAuditActivitiesFromApi } from "@/lib/auditLogApi";
 import { getNursesFromApi } from "@/lib/nurseApi";
@@ -31,17 +31,16 @@ vi.mock("@/components/ui/AppSplashScreen", () => ({
   useSplashScreen: () => ({ isSplashFinished: true }),
 }));
 
-vi.mock("@/lib/dashboardApi", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/dashboardApi")>("@/lib/dashboardApi");
-  return {
-    ...actual,
-    getAdminDashboardStats: vi.fn(),
-    getNurseDashboardData: vi.fn(),
-  };
-});
+vi.mock("@/lib/dashboardApi", () => ({
+  emptyNurseDashboardData: { stats: [], patients: [] },
+  getAdminDashboardData: vi.fn(),
+  getAdminDashboardStats: vi.fn(),
+  getNurseDashboardData: vi.fn(),
+}));
 
 vi.mock("@/lib/patientDashboardApi", () => ({
   getPatientDashboardData: vi.fn(),
+  getPatientDashboardOverviewData: vi.fn(),
 }));
 
 vi.mock("@/lib/scheduleApi", () => ({
@@ -103,9 +102,11 @@ const schedule: MedicationScheduleRecord = {
 describe("role dashboard and settings features", () => {
   beforeEach(() => {
     push.mockClear();
+    vi.mocked(getAdminDashboardData).mockReset();
     vi.mocked(getAdminDashboardStats).mockReset();
     vi.mocked(getNurseDashboardData).mockReset();
     vi.mocked(getPatientDashboardData).mockReset();
+    vi.mocked(getPatientDashboardOverviewData).mockReset();
     vi.mocked(getSchedulesFromApi).mockReset();
     vi.mocked(getAlertActivitiesFromApi).mockReset();
     vi.mocked(getAuditActivitiesFromApi).mockReset();
@@ -117,12 +118,15 @@ describe("role dashboard and settings features", () => {
   });
 
   it("renders admin dashboard stats and admin settings sections", async () => {
-    vi.mocked(getAdminDashboardStats).mockResolvedValueOnce({
+    vi.mocked(getAdminDashboardData).mockResolvedValueOnce({
       stats: [
         { label: "Total Perawat", value: "-", tone: "neutral", color: "pine", icon: UserRound },
         { label: "Total Pasien", value: "12", tone: "safe", color: "leaf", icon: UserRound },
         { label: "Jadwal Aktif", value: "3", tone: "neutral", color: "lime", icon: UserRound },
       ],
+      nurseFollowUps: [],
+      riskyPatients: [],
+      priorityActivities: [],
     });
     vi.mocked(getSchedulesFromApi).mockResolvedValueOnce([schedule]);
     vi.mocked(getNursesFromApi).mockResolvedValueOnce([]);
@@ -162,6 +166,11 @@ describe("role dashboard and settings features", () => {
   });
 
   it("renders patient dashboard summary and patient settings", async () => {
+    vi.mocked(getPatientDashboardOverviewData).mockResolvedValueOnce({
+      patient: { ...patient, name: "Pasien Budi", adherence: 82, status: "On Ideal Schedule" },
+      schedules: [schedule],
+      adherenceStats: { adherenceRate: 82, totalScheduled: 1, dailyBreakdown: [{ date: "2026-05-15", scheduled: 1, confirmed: 1 }] },
+    });
     vi.mocked(getPatientDashboardData).mockResolvedValueOnce({
       patient: { ...patient, name: "Pasien Budi", adherence: 82, status: "On Ideal Schedule" },
       schedules: [schedule],

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import NurseListPage from "@/components/admin/NurseListPage";
-import { getNursesFromApi, updateNurseViaApi } from "@/lib/nurseApi";
+import { getNursesFromApi, getNursesPageFromApi, updateNurseViaApi } from "@/lib/nurseApi";
 import { showConfirm, showToast, showWarning } from "@/lib/swal";
 import { useAuthStore } from "@/store/auth";
 import { useNurseStore } from "@/store/nurses";
@@ -19,6 +19,7 @@ vi.mock("@/lib/nurseApi", () => ({
   createNurseViaApi: vi.fn(),
   deactivateNurseViaApi: vi.fn(),
   getNursesFromApi: vi.fn(),
+  getNursesPageFromApi: vi.fn(),
   updateNurseViaApi: vi.fn(),
 }));
 
@@ -45,6 +46,7 @@ describe("nurse management feature", () => {
     push.mockClear();
     replace.mockClear();
     vi.mocked(getNursesFromApi).mockReset();
+    vi.mocked(getNursesPageFromApi).mockReset();
     vi.mocked(updateNurseViaApi).mockReset();
     vi.mocked(showConfirm).mockReset();
     vi.mocked(showToast).mockClear();
@@ -55,6 +57,7 @@ describe("nurse management feature", () => {
 
   it("loads nurses, searches, and opens detail", async () => {
     vi.mocked(getNursesFromApi).mockResolvedValue([nurse]);
+    vi.mocked(getNursesPageFromApi).mockResolvedValue({ nurses: [nurse], meta: { page: 1, limit: 10, total: 1 } });
 
     render(<NurseListPage />);
 
@@ -68,6 +71,7 @@ describe("nurse management feature", () => {
 
   it("toggles nurse status after confirmation", async () => {
     vi.mocked(getNursesFromApi).mockResolvedValue([nurse]);
+    vi.mocked(getNursesPageFromApi).mockResolvedValue({ nurses: [nurse], meta: { page: 1, limit: 10, total: 1 } });
     vi.mocked(showConfirm).mockResolvedValueOnce({ isConfirmed: true, isDenied: false, isDismissed: false });
     vi.mocked(updateNurseViaApi).mockResolvedValueOnce({ ...nurse, status: "Nonaktif" });
 

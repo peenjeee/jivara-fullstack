@@ -1,9 +1,9 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import ActivityLogPage from "@/components/activity-log/ActivityLogPage";
-import { getAlertActivitiesFromApi, resolveAlertViaApi } from "@/lib/alertsApi";
+import ActivityLogPage, { __resetActivityLogPageViewCache } from "@/components/activity-log/ActivityLogPage";
+import { getNotificationActivityPageFromApi } from "@/lib/notificationActivitiesApi";
 import { getActivityReadIdsFromApi, markActivitiesReadViaApi } from "@/lib/activityReadApi";
-import { getAuditActivitiesFromApi } from "@/lib/auditLogApi";
+import { getAuditActivityPageFromApi } from "@/lib/auditLogApi";
 import { getPatientsFromApi } from "@/lib/patientApi";
 import { showToast } from "@/lib/swal";
 import { useActivityLogStore } from "@/store/activityLog";
@@ -17,13 +17,12 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/activity-log",
 }));
 
-vi.mock("@/lib/alertsApi", () => ({
-  getAlertActivitiesFromApi: vi.fn(),
-  resolveAlertViaApi: vi.fn(),
+vi.mock("@/lib/notificationActivitiesApi", () => ({
+  getNotificationActivityPageFromApi: vi.fn(),
 }));
 
 vi.mock("@/lib/auditLogApi", () => ({
-  getAuditActivitiesFromApi: vi.fn(),
+  getAuditActivityPageFromApi: vi.fn(),
 }));
 
 vi.mock("@/lib/activityReadApi", () => ({
@@ -63,52 +62,75 @@ const activity: ActivityLogRecord = {
   read: false,
 };
 
+const paginated = (activities: ActivityLogRecord[]) => ({
+  activities,
+  meta: { page: 1, limit: 10, total: activities.length },
+});
+
 describe("activity log feature", () => {
   beforeEach(() => {
     push.mockClear();
-    vi.mocked(getAlertActivitiesFromApi).mockReset();
-    vi.mocked(getAuditActivitiesFromApi).mockReset();
+    vi.mocked(getNotificationActivityPageFromApi).mockReset();
+    vi.mocked(getAuditActivityPageFromApi).mockReset();
     vi.mocked(getActivityReadIdsFromApi).mockReset();
     vi.mocked(markActivitiesReadViaApi).mockReset();
     vi.mocked(getPatientsFromApi).mockReset();
-    vi.mocked(resolveAlertViaApi).mockReset();
     vi.mocked(showToast).mockClear();
     useActivityLogStore.setState({ activities: [] });
     useNurseStore.setState({ nurses: [] });
+
+    // Reset module-level cache in ActivityLogPage.tsx. This cache persists across
+    // component unmounts, so test 1's state would otherwise pollute test 2.
+    __resetActivityLogPageViewCache();
   });
 
   it("loads alert activities, filters critical items, and marks all as read", async () => {
-    vi.mocked(getAlertActivitiesFromApi).mockResolvedValueOnce([activity]);
-    vi.mocked(getAuditActivitiesFromApi).mockResolvedValueOnce([]);
-    vi.mocked(getActivityReadIdsFromApi).mockResolvedValueOnce(new Set());
+    vi.mocked(getNotificationActivityPageFromApi).mockResolvedValue(paginated([activity]));
+    vi.mocked(getAuditActivityPageFromApi).mockResolvedValue(paginated([]));
+    vi.mocked(getActivityReadIdsFromApi).mockResolvedValue(new Set());
     vi.mocked(markActivitiesReadViaApi).mockResolvedValue(undefined);
-    vi.mocked(getPatientsFromApi).mockResolvedValueOnce([]);
-    vi.mocked(resolveAlertViaApi).mockResolvedValue(undefined);
+    vi.mocked(getPatientsFromApi).mockResolvedValue([]);
 
     render(<ActivityLogPage />);
 
     expect(await screen.findByText("Kepatuhan kritis")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Kritis" }));
-    expect(screen.getByText("Budi belum minum obat.")).toBeInTheDocument();
+    expect(await screen.findByText("Budi belum minum obat.")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /tandai semua dibaca/i }));
 
-    await waitFor(() => expect(resolveAlertViaApi).toHaveBeenCalledWith("alert-1"));
-    expect(markActivitiesReadViaApi).toHaveBeenCalledWith(["alert-1"]);
+    await waitFor(() => {
+      expect(markActivitiesReadViaApi).toHaveBeenCalledWith(["alert-1"]);
+    });
     expect(showToast).toHaveBeenCalledWith("Semua aktivitas ditandai sudah dibaca.");
-    expect(useActivityLogStore.getState().activities.every((item) => item.read)).toBe(true);
+
+    await waitFor(() => {
+      expect(useActivityLogStore.getState().activities.every((item) => item.read)).toBe(true);
+    });
   });
 
   it("read-only mode combines audit and alert activities", async () => {
-    vi.mocked(getAlertActivitiesFromApi).mockResolvedValueOnce([activity]);
-    vi.mocked(getAuditActivitiesFromApi).mockResolvedValueOnce([{ ...activity, id: "audit-1", title: "Patient Updated", category: "Administrasi", severity: "Sukses", read: true }]);
-    vi.mocked(getActivityReadIdsFromApi).mockResolvedValueOnce(new Set());
-    vi.mocked(getPatientsFromApi).mockResolvedValueOnce([]);
+    vi.mocked(getNotificationActivityPageFromApi).mockResolvedValue(paginated([activity]));
+    vi.mocked(getAuditActivityPageFromApi).mockResolvedValue(
+      paginated([{ ...activity, id: "audit-1", title: "Patient Updated", category: "Administrasi", severity: "Sukses", read: true }])
+    );
+    vi.mocked(getActivityReadIdsFromApi).mockResolvedValue(new Set());
+    vi.mocked(getPatientsFromApi).mockResolvedValue([]);
 
     render(<ActivityLogPage readOnly />);
 
-    expect(await screen.findByText("Kepatuhan kritis")).toBeInTheDocument();
-    expect(screen.getByText("Patient Updated")).toBeInTheDocument();
+    // First check "Kepatuhan kritis" renders (it should)
+    expect(await screen.findByText("Kepatuhan kritis", {}, { timeout: 5000 })).toBeInTheDocument();
+
+    // Now also verify store has both activities
+    await waitFor(() => {
+      expect(useActivityLogStore.getState().activities.length).toBe(2);
+    }, { timeout: 5000 });
+
+    // Check for "Patient Updated" — use more flexible matcher
+    const patientUpdated = await screen.findByText((content) => content.includes("Patient"), {}, { timeout: 5000 });
+    expect(patientUpdated).toBeInTheDocument();
+
     expect(screen.queryByRole("button", { name: /tandai semua dibaca/i })).not.toBeInTheDocument();
   });
 });

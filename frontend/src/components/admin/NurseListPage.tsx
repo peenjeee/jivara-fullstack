@@ -1,11 +1,12 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { Edit3, Eye, Power, Plus, Trash2 } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
+import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
 import Button from "@/components/ui/Button";
 import FilterPills from "@/components/ui/FilterPills";
 import IconActionButton from "@/components/ui/IconActionButton";
@@ -17,8 +18,9 @@ import { getNurseInitials } from "@/helpers/nurses";
 import { getDashboardRole, isOperationalAdminRole } from "@/components/dashboard/navigation";
 import { getApiErrorMessage } from "@/lib/apiErrors";
 import type { NurseRecord, NurseStatus } from "@/lib/mocks/nurses";
-import { createNurseViaApi, deactivateNurseViaApi, getNursesFromApi, updateNurseViaApi } from "@/lib/nurseApi";
+import { createNurseViaApi, deactivateNurseViaApi, getNursesPageFromApi, updateNurseViaApi } from "@/lib/nurseApi";
 import { showConfirm, showError, showToast, showWarning } from "@/lib/swal";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { useNurseStore, type NurseFormValues } from "@/store/nurses";
 import { useAuthStore } from "@/store/auth";
 import NurseModal from "./NurseModal";
@@ -33,72 +35,125 @@ const filters: { readonly label: string; readonly value: NurseFilter }[] = [
 ];
 
 const pageSize = 10;
+let nurseListViewCache: {
+  pageNurses: NurseRecord[];
+  totalNurses: number;
+  search: string;
+  filter: NurseFilter;
+  currentPage: number;
+} | null = null;
+
+const getNurseStatusQuery = (filter: NurseFilter) => {
+  if (filter === "Aktif") return "active";
+  if (filter === "Nonaktif") return "inactive";
+  return undefined;
+};
+
+interface NurseListState {
+  readonly pageNurses: NurseRecord[];
+  readonly totalNurses: number;
+  readonly search: string;
+  readonly filter: NurseFilter;
+  readonly currentPage: number;
+  readonly isModalOpen: boolean;
+  readonly editingNurse: NurseRecord | null;
+  readonly isLoading: boolean;
+  readonly hasLoadedNurses: boolean;
+  readonly processingAction: string | null;
+}
+
+type NurseListAction = { readonly type: "patch"; readonly payload: Partial<NurseListState> };
+
+function nurseListReducer(state: NurseListState, action: NurseListAction): NurseListState {
+  return action.type === "patch" ? { ...state, ...action.payload } : state;
+}
 
 export default function NurseListPage() {
-  const router = useRouter();
+  const shouldAnimate = useDashboardEntranceMotion();
+  const { push, replace } = useRouter();
   const userRole = useAuthStore((state) => state.user?.role);
   const hasAuthHydrated = useAuthStore((state) => state.hasHydrated);
   const dashboardRole = getDashboardRole(userRole);
   const nurses = useNurseStore((state) => state.nurses);
   const setNurses = useNurseStore((state) => state.setNurses);
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<NurseFilter>("all");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingNurse, setEditingNurse] = useState<NurseRecord | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [processingAction, setProcessingAction] = useState<string | null>(null);
-  const deferredSearch = useDeferredValue(search);
+  const [state, dispatch] = useReducer(nurseListReducer, {
+    pageNurses: nurseListViewCache?.pageNurses ?? [],
+    totalNurses: nurseListViewCache?.totalNurses ?? 0,
+    search: nurseListViewCache?.search ?? "",
+    filter: nurseListViewCache?.filter ?? "all",
+    currentPage: nurseListViewCache?.currentPage ?? 1,
+    isModalOpen: false,
+    editingNurse: null,
+    isLoading: !nurseListViewCache,
+    hasLoadedNurses: Boolean(nurseListViewCache),
+    processingAction: null,
+  });
+  const { pageNurses, totalNurses, search, filter, currentPage, isModalOpen, editingNurse, isLoading, hasLoadedNurses, processingAction } = state;
+  const stateRef = useRef(state);
+  const debouncedSearch = useDebouncedValue(search);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   useEffect(() => {
     if (!hasAuthHydrated || isOperationalAdminRole(dashboardRole) || dashboardRole === "nurse") return;
-    router.replace("/dashboard");
-  }, [dashboardRole, hasAuthHydrated, router]);
+    replace("/dashboard");
+  }, [dashboardRole, hasAuthHydrated, replace]);
+
+  const loadNursePage = useCallback(async (page: number, forceRefresh = false) => {
+    if (!hasAuthHydrated || (dashboardRole !== "admin" && dashboardRole !== "nurse")) return;
+    const currentState = stateRef.current;
+
+    const canUseVisibleCache = !forceRefresh
+      && nurseListViewCache?.currentPage === page
+      && nurseListViewCache.search === debouncedSearch
+      && nurseListViewCache.filter === currentState.filter;
+    dispatch({ type: "patch", payload: { isLoading: !canUseVisibleCache } });
+    try {
+      const result = await getNursesPageFromApi({
+        page,
+        limit: pageSize,
+        search: debouncedSearch,
+        status: getNurseStatusQuery(currentState.filter),
+        forceRefresh,
+      });
+      dispatch({ type: "patch", payload: { pageNurses: result.nurses, totalNurses: result.meta.total } });
+      setNurses(result.nurses);
+      nurseListViewCache = {
+        pageNurses: result.nurses,
+        totalNurses: result.meta.total,
+        search: debouncedSearch,
+        filter: currentState.filter,
+        currentPage: page,
+      };
+    } catch {
+      dispatch({ type: "patch", payload: { pageNurses: [], totalNurses: 0 } });
+      setNurses([]);
+    } finally {
+      dispatch({ type: "patch", payload: { hasLoadedNurses: true, isLoading: false } });
+    }
+  }, [dashboardRole, debouncedSearch, hasAuthHydrated, setNurses]);
 
   useEffect(() => {
-    if (!hasAuthHydrated || (dashboardRole !== "admin" && dashboardRole !== "nurse")) return;
+    void loadNursePage(currentPage);
+  }, [currentPage, loadNursePage]);
 
-    let isMounted = true;
-
-    getNursesFromApi()
-      .then((apiNurses) => {
-        if (isMounted) setNurses(apiNurses);
-      })
-      .catch(() => {
-        if (isMounted) setNurses([]);
-      })
-      .finally(() => {
-        if (isMounted) setIsLoading(false);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [dashboardRole, hasAuthHydrated, nurses.length, setNurses]);
-
-  const filteredNurses = useMemo(() => {
-    const query = deferredSearch.trim().toLowerCase();
-    return nurses.filter((nurse) => {
-      const matchesSearch = !query || [nurse.fullName, nurse.email, nurse.phone, nurse.id].some((value) => value.toLowerCase().includes(query));
-      const matchesFilter = filter === "all" || nurse.status === filter;
-      return matchesSearch && matchesFilter;
-    });
-  }, [deferredSearch, filter, nurses]);
-  const totalPages = Math.max(1, Math.ceil(filteredNurses.length / pageSize));
-  const paginatedNurses = filteredNurses.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const totalPages = Math.max(1, Math.ceil(totalNurses / pageSize));
+  const paginatedNurses = pageNurses;
 
   if (!hasAuthHydrated || (dashboardRole !== "nurse" && !isOperationalAdminRole(dashboardRole))) return null;
 
   const handleAddNurse = async (values: NurseFormValues) => {
     try {
-      const createdNurse = await createNurseViaApi(values);
-      setNurses([createdNurse, ...nurses]);
+      await createNurseViaApi(values);
     } catch (error) {
       showError(getApiErrorMessage(error, "Gagal menambahkan perawat dari API."));
       return;
     }
 
-    setIsModalOpen(false);
+    dispatch({ type: "patch", payload: { isModalOpen: false, currentPage: 1 } });
+    await loadNursePage(1, true);
     showToast("Perawat berhasil ditambahkan.", "success");
   };
 
@@ -106,14 +161,14 @@ export default function NurseListPage() {
     if (!editingNurse) return;
 
     try {
-      const updatedNurse = await updateNurseViaApi(editingNurse.id, values);
-      setNurses(nurses.map((nurse) => nurse.id === editingNurse.id ? { ...updatedNurse, temporaryPassword: values.password ? true : nurse.temporaryPassword } : nurse));
+      await updateNurseViaApi(editingNurse.id, values);
+      await loadNursePage(currentPage, true);
     } catch (error) {
       showError(getApiErrorMessage(error, "Gagal memperbarui perawat dari API."));
       return;
     }
 
-    setEditingNurse(null);
+    dispatch({ type: "patch", payload: { editingNurse: null } });
     showToast("Data perawat berhasil diperbarui.");
   };
 
@@ -124,7 +179,7 @@ export default function NurseListPage() {
     const result = await showConfirm(`${nextStatus}kan perawat?`, `${nurse.fullName} akan berubah status menjadi ${nextStatus}.`, `Ya, ${nextStatus}kan`);
     if (!result.isConfirmed) return;
 
-    setProcessingAction(actionKey);
+    dispatch({ type: "patch", payload: { processingAction: actionKey } });
     try {
       const updatedNurse = await updateNurseViaApi(nurse.id, {
         fullName: nurse.fullName,
@@ -134,12 +189,14 @@ export default function NurseListPage() {
         status: nextStatus,
         password: "",
       });
+      dispatch({ type: "patch", payload: { pageNurses: stateRef.current.pageNurses.map((item) => item.id === nurse.id ? { ...updatedNurse, temporaryPassword: item.temporaryPassword } : item) } });
       setNurses(nurses.map((item) => item.id === nurse.id ? { ...updatedNurse, temporaryPassword: item.temporaryPassword } : item));
+      await loadNursePage(currentPage, true);
     } catch (error) {
       showError(getApiErrorMessage(error, "Gagal mengubah status perawat dari API."));
       return;
     } finally {
-      setProcessingAction(null);
+      dispatch({ type: "patch", payload: { processingAction: null } });
     }
 
     showToast(`Status perawat menjadi ${nextStatus}.`);
@@ -157,44 +214,44 @@ export default function NurseListPage() {
     const result = await showConfirm("Hapus perawat?", `Data ${nurse.fullName} akan dihapus dari daftar perawat.`, "Ya, Hapus");
     if (!result.isConfirmed) return;
 
-    setProcessingAction(actionKey);
+    dispatch({ type: "patch", payload: { processingAction: actionKey } });
     try {
       await deactivateNurseViaApi(nurse.id);
+      dispatch({ type: "patch", payload: { pageNurses: stateRef.current.pageNurses.map((item) => item.id === nurse.id ? { ...item, status: "Nonaktif" } : item) } });
       setNurses(nurses.map((item) => item.id === nurse.id ? { ...item, status: "Nonaktif" } : item));
+      await loadNursePage(currentPage, true);
     } catch (error) {
       showError(getApiErrorMessage(error, "Gagal menonaktifkan perawat dari API."));
       return;
     } finally {
-      setProcessingAction(null);
+      dispatch({ type: "patch", payload: { processingAction: null } });
     }
 
     showToast("Perawat berhasil dihapus.");
   };
 
   const resetFilters = () => {
-    setSearch("");
-    setFilter("all");
-    setCurrentPage(1);
+    dispatch({ type: "patch", payload: { search: "", filter: "all", currentPage: 1 } });
   };
 
   return (
     <DashboardPageShell>
       <DashboardPageHeader
         title="Daftar Perawat"
-        action={<Button size="sm" icon={<Plus size={16} />} onClick={() => setIsModalOpen(true)}>Tambah Perawat</Button>}
+        action={<Button size="sm" icon={<Plus size={16} />} onClick={() => dispatch({ type: "patch", payload: { isModalOpen: true } })}>Tambah Perawat</Button>}
       />
 
-      <motion.div className="mt-6" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}>
-        {isLoading ? <ToolbarSkeleton /> : <ToolbarCard>
+      <m.div className="mt-6" {...getDashboardEntranceMotion(shouldAnimate, 0.1, 20)}>
+        {isLoading && !hasLoadedNurses ? <ToolbarSkeleton /> : <ToolbarCard>
           <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
-            <SearchField id="nurseSearch" value={search} placeholder="Cari perawat ..." onChange={(value) => { setSearch(value); setCurrentPage(1); }} />
+            <SearchField id="nurseSearch" value={search} placeholder="Cari perawat ..." onChange={(value) => dispatch({ type: "patch", payload: { search: value, currentPage: 1 } })} />
             {(search || filter !== "all") && <Button type="button" size="sm" variant="outline" onClick={resetFilters}>Reset</Button>}
           </div>
-          <FilterPills options={filters} activeValue={filter} onChange={(value) => { setFilter(value); setCurrentPage(1); }} className="mt-4" />
+          <FilterPills options={filters} activeValue={filter} onChange={(value) => dispatch({ type: "patch", payload: { filter: value, currentPage: 1 } })} className="mt-4" />
         </ToolbarCard>}
-      </motion.div>
+      </m.div>
 
-      <motion.section className="mt-6 overflow-hidden rounded-3xl bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)]" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.18 }}>
+      <m.section className="mt-6 overflow-hidden rounded-3xl bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)]" {...getDashboardEntranceMotion(shouldAnimate, 0.18, 24)}>
         {isLoading ? <TableDataSkeleton /> : <>
         <div className="hidden overflow-x-auto sm:block" data-lenis-prevent>
           <table className="w-full text-left">
@@ -217,8 +274,8 @@ export default function NurseListPage() {
                     <td className="px-5 py-4 text-sm font-bold text-muted"><span className="block text-text-main">{nurse.email}</span>{nurse.phone}</td>
                     <td className="px-5 py-4 text-sm font-bold text-muted">{nurse.gender}</td>
                     <td className="px-5 py-4 text-sm font-extrabold text-text-main">{assignedCount}</td>
-                    <td className="px-5 py-4"><NurseStatusBadge status={nurse.status} /></td>
-                    <td className="px-5 py-4"><NurseActions nurse={nurse} processingAction={processingAction} onView={() => router.push(`/nurses/${encodeURIComponent(nurse.id)}`)} onEdit={() => setEditingNurse(nurse)} onToggle={() => handleToggleStatus(nurse)} onDelete={() => handleDelete(nurse)} /></td>
+                     <td className="px-5 py-4"><NurseStatusBadge status={nurse.status} /></td>
+                     <td className="px-5 py-4"><NurseActions nurse={nurse} processingAction={processingAction} onView={() => push(`/nurses/${encodeURIComponent(nurse.id)}`)} onEdit={() => dispatch({ type: "patch", payload: { editingNurse: nurse } })} onToggle={() => handleToggleStatus(nurse)} onDelete={() => handleDelete(nurse)} /></td>
                   </tr>
                 );
               })}
@@ -240,7 +297,7 @@ export default function NurseListPage() {
               <article key={`nurse-card-${nurse.id}-${index}`} className="p-5">
                 <div className="flex items-start justify-between gap-4">
                   <NurseIdentity nurse={nurse} />
-                  <NurseActions nurse={nurse} processingAction={processingAction} onView={() => router.push(`/nurses/${encodeURIComponent(nurse.id)}`)} onEdit={() => setEditingNurse(nurse)} onToggle={() => handleToggleStatus(nurse)} onDelete={() => handleDelete(nurse)} />
+                  <NurseActions nurse={nurse} processingAction={processingAction} onView={() => push(`/nurses/${encodeURIComponent(nurse.id)}`)} onEdit={() => dispatch({ type: "patch", payload: { editingNurse: nurse } })} onToggle={() => handleToggleStatus(nurse)} onDelete={() => handleDelete(nurse)} />
                 </div>
                 <div className="mt-4 flex flex-wrap items-center gap-2 text-xs font-extrabold text-muted">
                   <NurseStatusBadge status={nurse.status} />
@@ -259,16 +316,16 @@ export default function NurseListPage() {
         <PatientPagination
           currentPage={currentPage}
           totalPages={totalPages}
-          totalItems={filteredNurses.length}
+          totalItems={totalNurses}
           pageSize={pageSize}
           itemLabel="perawat"
-          onPageChange={(page) => setCurrentPage(Math.min(Math.max(page, 1), totalPages))}
+          onPageChange={(page) => dispatch({ type: "patch", payload: { currentPage: Math.min(Math.max(page, 1), totalPages) } })}
         />
         </>}
-      </motion.section>
+      </m.section>
 
-      <NurseModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSubmit={handleAddNurse} />
-      <NurseModal isOpen={Boolean(editingNurse)} mode="edit" nurse={editingNurse} onClose={() => setEditingNurse(null)} onSubmit={handleEditNurse} />
+      <NurseModal isOpen={isModalOpen} onClose={() => dispatch({ type: "patch", payload: { isModalOpen: false } })} onSubmit={handleAddNurse} />
+      <NurseModal isOpen={Boolean(editingNurse)} mode="edit" nurse={editingNurse} onClose={() => dispatch({ type: "patch", payload: { editingNurse: null } })} onSubmit={handleEditNurse} />
     </DashboardPageShell>
   );
 }
@@ -276,7 +333,7 @@ export default function NurseListPage() {
 function NurseIdentity({ nurse }: { readonly nurse: NurseRecord }) {
   return (
     <div className="flex items-center gap-4">
-      <span className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-extrabold text-primary">{getNurseInitials(nurse.fullName)}</span>
+      <span className="flex size-[42px] shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-extrabold text-primary">{getNurseInitials(nurse.fullName)}</span>
       <div className="min-w-0">
         <p className="break-words font-extrabold leading-tight text-text-main">{nurse.fullName}</p>
         <p className="mt-0.5 text-sm font-semibold text-muted">Bergabung {nurse.joinedAt}</p>

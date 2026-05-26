@@ -17,7 +17,7 @@ const riskClass: Record<FoodScanRisk, string> = {
 };
 
 export default function PatientFoodScanPanel({ scans, patientName }: PatientFoodScanPanelProps) {
-  const latestScans = scans.slice(0, 3);
+  const latestScans = scans.slice(0, 5);
   const scanLogHref = `/activity-log?patientName=${encodeURIComponent(patientName)}&category=${encodeURIComponent("Scan Makanan")}`;
 
   return (

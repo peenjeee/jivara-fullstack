@@ -3,12 +3,13 @@ import AppSplashScreen from "@/components/ui/AppSplashScreen";
 import BackToTopButton from "@/components/ui/BackToTopButton";
 import PwaPullToRefresh from "@/components/ui/PwaPullToRefresh";
 import AuthNavigationProvider from "@/providers/AuthNavigationProvider";
+import MotionProvider from "@/providers/MotionProvider";
 import PwaInstallPromptProvider from "@/providers/PwaInstallPromptProvider";
 import ScrollProvider from "@/providers/ScrollProvider";
 import { JSON_LD_SCRIPT, SITE_URL } from "@/config/seo";
 import type { Metadata, Viewport } from "next";
 import { Archivo, Inter } from "next/font/google";
-import { headers } from "next/headers";
+import Script from "next/script";
 import type { ReactNode } from "react";
 
 const archivo = Archivo({
@@ -135,30 +136,31 @@ interface RootLayoutProps {
   readonly children: ReactNode;
 }
 
-export default async function RootLayout({ children }: RootLayoutProps) {
-  const nonce = (await headers()).get("x-nonce") ?? undefined;
-
+export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="id" className={`${archivo.variable} ${inter.variable} relative`} suppressHydrationWarning>
       <head>
-        <script
-          nonce={nonce}
+        <Script
+          id="jivara-json-ld"
           type="application/ld+json"
-          suppressHydrationWarning
-          dangerouslySetInnerHTML={{ __html: JSON_LD_SCRIPT }}
-        />
+          strategy="beforeInteractive"
+        >
+          {JSON_LD_SCRIPT}
+        </Script>
       </head>
       <body className="font-body relative overflow-x-hidden">
-        <ScrollProvider>
-          <AuthNavigationProvider>
-            <PwaInstallPromptProvider>
-              {children}
-              <AppSplashScreen />
-              <PwaPullToRefresh />
-              <BackToTopButton />
-            </PwaInstallPromptProvider>
-          </AuthNavigationProvider>
-        </ScrollProvider>
+        <MotionProvider>
+          <ScrollProvider>
+            <AuthNavigationProvider>
+              <PwaInstallPromptProvider>
+                {children}
+                <AppSplashScreen />
+                <PwaPullToRefresh />
+                <BackToTopButton />
+              </PwaInstallPromptProvider>
+            </AuthNavigationProvider>
+          </ScrollProvider>
+        </MotionProvider>
       </body>
     </html>
   );

@@ -82,7 +82,7 @@ describe("auth login feature", () => {
     fireEvent.click(screen.getByRole("button", { name: /masuk/i }));
 
     await waitFor(() => expect(push).toHaveBeenCalledWith("/patients"));
-    expect(axiosPost).toHaveBeenCalledWith("/api/auth/login", { identifier: "nurse@test.local", password: "secret123" });
+    expect(axiosPost).toHaveBeenCalledWith("/api/v1/auth/login", { identifier: "nurse@test.local", password: "secret123" });
     expect(showLoading).toHaveBeenCalledWith("Mohon Tunggu", "Sedang masuk ke akun Anda...");
     expect(showToast).toHaveBeenCalledWith("Anda berhasil masuk.", "success");
     expect(useAuthStore.getState()).toMatchObject({ isAuthenticated: true });

@@ -7,30 +7,11 @@ import FormField from "@/components/ui/FormField";
 import FormStickyActions from "@/components/ui/FormStickyActions";
 import SelectField from "@/components/ui/SelectField";
 import type { PatientRecord } from "@/lib/mocks/patients";
-import type { MealRule, MedicationScheduleRecord, MedicationScheduleStatus, MedicineForm } from "@/lib/mocks/schedules";
+import type { MealRule, MedicationScheduleStatus, MedicineForm } from "@/lib/mocks/schedules";
 import { showWarning } from "@/lib/swal";
 import ScheduleMedicineBlock from "./ScheduleMedicineBlock";
+import { emptyMedicine, emptyScheduleFormValues, type ScheduleFormValues } from "./scheduleFormUtils";
 import { SCHEDULE_INPUT_CLASS } from "./ScheduleTimeFields";
-
-export interface ScheduleMedicineFormValues {
-  readonly medicineName: string;
-  readonly dose: string;
-  readonly medicineForm: MedicineForm | "";
-  readonly stock: number;
-  readonly frequency: string;
-  readonly times: readonly string[];
-  readonly mealRule: MealRule | "";
-  readonly startDate: string;
-  readonly endDate?: string;
-  readonly reminderEnabled: boolean;
-  readonly instructions?: string;
-  readonly status: MedicationScheduleStatus | "";
-}
-
-export interface ScheduleFormValues {
-  readonly patientId: string;
-  readonly medicines: readonly ScheduleMedicineFormValues[];
-}
 
 interface ScheduleFormProps {
   readonly patients: readonly PatientRecord[];
@@ -43,102 +24,10 @@ interface ScheduleFormProps {
   readonly onCancel: () => void;
 }
 
-const emptyMedicine: ScheduleMedicineFormValues = {
-  medicineName: "",
-  dose: "",
-  medicineForm: "",
-  stock: 1,
-  frequency: "",
-  times: ["08:00"],
-  mealRule: "",
-  startDate: new Date().toISOString().slice(0, 10),
-  endDate: "",
-  reminderEnabled: true,
-  instructions: "",
-  status: "",
-};
+const EMPTY_MEDICINE_INDEX_OFFSET_BY_PATIENT: Readonly<Record<string, number>> = {};
 
-const emptyValues: ScheduleFormValues = {
-  patientId: "",
-  medicines: [emptyMedicine],
-};
-
-export function getEmptyScheduleFormValues(patientId = ""): ScheduleFormValues {
-  return {
-    patientId,
-    medicines: [emptyMedicine],
-  };
-}
-
-export function getScheduleFormValues(schedule: MedicationScheduleRecord): ScheduleFormValues {
-  return {
-    patientId: schedule.patientId,
-    medicines: [{
-      medicineName: schedule.medicineName,
-      dose: schedule.dose,
-      medicineForm: schedule.medicineForm,
-      stock: schedule.stock,
-      frequency: schedule.frequency,
-      times: schedule.times,
-      mealRule: schedule.mealRule,
-      startDate: schedule.startDate,
-      endDate: schedule.endDate ?? "",
-      reminderEnabled: schedule.reminderEnabled,
-      instructions: schedule.instructions ?? "",
-      status: schedule.status,
-    }],
-  };
-}
-
-export function createScheduleRecord(patientId: string, values: ScheduleMedicineFormValues, patients: readonly PatientRecord[], nextOrder: number): MedicationScheduleRecord {
-  const patient = patients.find((currentPatient) => currentPatient.id === patientId);
-
-  return {
-    id: `SCH-${String(nextOrder).padStart(3, "0")}`,
-    patientId,
-    patientName: patient?.name ?? "Pasien tidak diketahui",
-    patientAvatar: patient?.avatar ?? "??",
-    medicineName: values.medicineName,
-    dose: values.dose,
-    medicineForm: values.medicineForm as MedicineForm,
-    stock: values.stock,
-    frequency: values.frequency,
-    times: values.times,
-    mealRule: values.mealRule as MealRule,
-    startDate: values.startDate,
-    endDate: values.endDate || undefined,
-    reminderEnabled: values.reminderEnabled,
-    instructions: values.instructions || undefined,
-    status: values.status as MedicationScheduleStatus,
-  };
-}
-
-export function updateScheduleRecord(schedule: MedicationScheduleRecord, values: ScheduleMedicineFormValues, patients: readonly PatientRecord[], patientId = schedule.patientId): MedicationScheduleRecord {
-  const patient = patients.find((currentPatient) => currentPatient.id === patientId);
-
-  return {
-    ...schedule,
-    patientId,
-    patientName: patient?.name ?? schedule.patientName,
-    patientAvatar: patient?.avatar ?? schedule.patientAvatar,
-    medicineName: values.medicineName,
-    dose: values.dose,
-    medicineForm: values.medicineForm as MedicineForm,
-    stock: values.stock,
-    frequency: values.frequency,
-    times: values.times,
-    mealRule: values.mealRule as MealRule,
-    startDate: values.startDate,
-    endDate: values.endDate || undefined,
-    reminderEnabled: values.reminderEnabled,
-    instructions: values.instructions || undefined,
-    status: values.status as MedicationScheduleStatus,
-    previousStatus: values.status === "Nonaktif" ? schedule.previousStatus : undefined,
-  };
-}
-
-export default function ScheduleForm({ patients, initialValues, mode = "add", patientLocked = false, medicineIndexOffset = 0, medicineIndexOffsetByPatient = {}, onSubmit }: ScheduleFormProps) {
-  const values = initialValues ?? emptyValues;
+export default function ScheduleForm({ patients, initialValues, mode = "add", patientLocked = false, medicineIndexOffset = 0, medicineIndexOffsetByPatient = EMPTY_MEDICINE_INDEX_OFFSET_BY_PATIENT, onSubmit }: ScheduleFormProps) {
+  const values = initialValues ?? emptyScheduleFormValues;
   const [medicineKeys, setMedicineKeys] = useState(() => values.medicines.map((_, index) => index));
   const [selectedPatientId, setSelectedPatientId] = useState(values.patientId);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -155,7 +44,10 @@ export default function ScheduleForm({ patients, initialValues, mode = "add", pa
       medicineForm: String(formData.get(`medicineForm-${key}`) ?? "") as MedicineForm | "",
       stock: Number(formData.get(`stock-${key}`) ?? 0),
       frequency: String(formData.get(`frequency-${key}`) ?? "").trim(),
-      times: formData.getAll(`times-${key}`).map((time) => String(time).trim()).filter(Boolean),
+      times: formData.getAll(`times-${key}`).flatMap((time) => {
+        const trimmedTime = String(time).trim();
+        return trimmedTime ? [trimmedTime] : [];
+      }),
       mealRule: String(formData.get(`mealRule-${key}`) ?? "") as MealRule | "",
       startDate: String(formData.get(`startDate-${key}`) ?? ""),
       endDate: String(formData.get(`endDate-${key}`) ?? ""),

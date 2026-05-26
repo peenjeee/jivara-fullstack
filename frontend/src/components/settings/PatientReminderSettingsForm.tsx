@@ -4,14 +4,17 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Save } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { FormDataSkeleton } from "@/components/ui/PageSkeletons";
-import { enableMedicationPushNotifications, getMedicationPushPreference, setMedicationPushPreference, supportsBrowserPushNotifications } from "@/lib/pushNotifications";
-import { showToast } from "@/lib/swal";
+import { enableMedicationPushNotifications, getBlockedNotificationPermissionMessage, getMedicationPushPreference, isBrowserPushPermissionDenied, setMedicationPushPreference, supportsBrowserPushNotifications } from "@/lib/pushNotifications";
+import { showToast, showWarning } from "@/lib/swal";
 import ToggleRow from "./ToggleRow";
+
+let patientReminderSettingsCache: { medicineReminder: boolean } | null = null;
 
 export default function PatientReminderSettingsForm() {
   const supportsPush = supportsBrowserPushNotifications();
-  const [medicineReminder, setMedicineReminder] = useState(true);
-  const [isLoading, setIsLoading] = useState(true);
+  const [medicineReminder, setMedicineReminder] = useState(() => patientReminderSettingsCache?.medicineReminder ?? true);
+  const [isLoading, setIsLoading] = useState(!patientReminderSettingsCache);
+  const [hasLoadedSettings, setHasLoadedSettings] = useState(Boolean(patientReminderSettingsCache));
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -19,13 +22,22 @@ export default function PatientReminderSettingsForm() {
 
     getMedicationPushPreference()
       .then((preference) => {
-        if (isMounted) setMedicineReminder(preference.enabled);
+        const enabled = preference.enabled && !isBrowserPushPermissionDenied();
+        if (isMounted) setMedicineReminder(enabled);
+        patientReminderSettingsCache = { medicineReminder: enabled };
+        if (preference.enabled && isBrowserPushPermissionDenied()) {
+          void setMedicationPushPreference(false);
+        }
       })
       .catch(() => {
-        if (isMounted) setMedicineReminder(true);
+        const enabled = !isBrowserPushPermissionDenied();
+        if (isMounted) setMedicineReminder(enabled);
+        patientReminderSettingsCache = { medicineReminder: enabled };
       })
       .finally(() => {
-        if (isMounted) setIsLoading(false);
+        if (!isMounted) return;
+        setHasLoadedSettings(true);
+        setIsLoading(false);
       });
 
     return () => {
@@ -36,6 +48,14 @@ export default function PatientReminderSettingsForm() {
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!supportsPush) return;
+
+    if (medicineReminder && isBrowserPushPermissionDenied()) {
+      setMedicineReminder(false);
+      await setMedicationPushPreference(false).catch(() => undefined);
+      await showWarning(getBlockedNotificationPermissionMessage(), "Izin Notifikasi Diblokir");
+      return;
+    }
+
     setIsSaving(true);
 
     try {
@@ -60,9 +80,17 @@ export default function PatientReminderSettingsForm() {
   };
 
   const handleToggle = async (enabled: boolean) => {
-    setMedicineReminder(enabled);
     if (!supportsPush) return;
 
+    if (enabled && isBrowserPushPermissionDenied()) {
+      setMedicineReminder(false);
+      await setMedicationPushPreference(false).catch(() => undefined);
+      await showWarning(getBlockedNotificationPermissionMessage(), "Izin Notifikasi Diblokir");
+      return;
+    }
+
+    setMedicineReminder(enabled);
+    patientReminderSettingsCache = { medicineReminder: enabled };
     setIsSaving(true);
     try {
       if (enabled) {
@@ -74,6 +102,7 @@ export default function PatientReminderSettingsForm() {
       showToast(enabled ? "Reminder obat berhasil diaktifkan." : "Reminder obat berhasil dinonaktifkan.");
     } catch (error) {
       setMedicineReminder(false);
+      patientReminderSettingsCache = { medicineReminder: false };
       await setMedicationPushPreference(false).catch(() => undefined);
       const message = error instanceof Error ? error.message : "Preferensi reminder gagal disimpan.";
       showToast(message, "error");
@@ -82,7 +111,7 @@ export default function PatientReminderSettingsForm() {
     }
   };
 
-  return isLoading ? <FormDataSkeleton /> : (
+  return isLoading && !hasLoadedSettings ? <FormDataSkeleton /> : (
     <form onSubmit={handleSubmit} className="space-y-4" noValidate>
       <ToggleRow
         id="medicineReminder"

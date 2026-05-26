@@ -90,6 +90,14 @@ const getApiImageRemotePattern = () => {
 const nextConfig: NextConfig = {
   compress: true,
   poweredByHeader: false,
+  async rewrites() {
+    return [
+      {
+        source: "/api/v1/auth/:path*",
+        destination: "/api/auth/:path*",
+      },
+    ];
+  },
   turbopack: {
     root: path.resolve(__dirname)
   },
@@ -98,6 +106,10 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "images.unsplash.com",
+      },
+      {
+        protocol: "https",
+        hostname: "www.jivara.web.id",
       },
       getApiImageRemotePattern(),
       {

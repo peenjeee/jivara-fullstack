@@ -39,7 +39,7 @@ describe("alertsApi", () => {
     const activities = await getAlertActivitiesFromApi();
 
     expect(mockedGet).toHaveBeenCalledWith("/alerts", { params: { page: 1, limit: 100 } });
-    expect(activities[0]).toMatchObject({ title: "Kepatuhan kritis", category: "Kepatuhan", severity: "Kritis", read: false, medicineName: "Metformin 500 mg" });
+    expect(activities[0]).toMatchObject({ title: "Dosis obat terlewat", category: "Kepatuhan", severity: "Kritis", read: false, medicineName: "Metformin 500 mg" });
   });
 
   it("resolves alert with encoded id", async () => {

@@ -40,11 +40,30 @@ export const validateFoodDetect = (req: Request, res: Response, next: NextFuncti
   next();
 };
 
+const normalizeBoolean = (value: unknown) => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    if (value.toLowerCase() === "true") return true;
+    if (value.toLowerCase() === "false") return false;
+  }
+  return undefined;
+};
+
 export const validateInteractionCheck = (req: Request, res: Response, next: NextFunction) => {
-  const { patientId, patient_id: patientIdSnake, scanId, scan_id: scanIdSnake, detectedItems, detected_items: detectedItemsSnake } = req.body;
+  const {
+    patientId,
+    patient_id: patientIdSnake,
+    scanId,
+    scan_id: scanIdSnake,
+    detectedItems,
+    detected_items: detectedItemsSnake,
+    includeRecommendations,
+    include_recommendations: includeRecommendationsSnake,
+  } = req.body;
   const resolvedPatientId = patientId || patientIdSnake;
   const resolvedScanId = scanId || scanIdSnake;
   const resolvedDetectedItems = detectedItems || detectedItemsSnake;
+  const resolvedIncludeRecommendations = normalizeBoolean(includeRecommendations ?? includeRecommendationsSnake);
 
   if (isMissing(resolvedPatientId) || !isValidUuid(resolvedPatientId)) {
     return res.status(400).json({ status: "gagal", message: "patientId wajib berupa UUID valid", error_code: "VALIDATION_ERROR" });
@@ -61,6 +80,33 @@ export const validateInteractionCheck = (req: Request, res: Response, next: Next
   req.body.patientId = resolvedPatientId;
   req.body.scanId = resolvedScanId;
   req.body.detectedItems = resolvedDetectedItems;
+  if (resolvedIncludeRecommendations !== undefined) {
+    req.body.includeRecommendations = resolvedIncludeRecommendations;
+  }
+  next();
+};
+
+export const validateFoodRecommendations = (req: Request, res: Response, next: NextFunction) => {
+  const { patientId, patient_id: patientIdSnake, scanId, scan_id: scanIdSnake, topN, top_n: topNSnake } = req.body;
+  const resolvedPatientId = patientId || patientIdSnake;
+  const resolvedScanId = scanId || scanIdSnake;
+  const resolvedTopN = topN ?? topNSnake;
+
+  if (isMissing(resolvedPatientId) || !isValidUuid(resolvedPatientId)) {
+    return res.status(400).json({ status: "gagal", message: "patientId wajib berupa UUID valid", error_code: "VALIDATION_ERROR" });
+  }
+
+  if (isMissing(resolvedScanId) || !isValidUuid(resolvedScanId)) {
+    return res.status(400).json({ status: "gagal", message: "scanId wajib berupa UUID valid", error_code: "VALIDATION_ERROR" });
+  }
+
+  if (resolvedTopN !== undefined && (!Number.isFinite(Number(resolvedTopN)) || Number(resolvedTopN) < 1)) {
+    return res.status(400).json({ status: "gagal", message: "topN wajib berupa angka positif", error_code: "VALIDATION_ERROR" });
+  }
+
+  req.body.patientId = resolvedPatientId;
+  req.body.scanId = resolvedScanId;
+  if (resolvedTopN !== undefined) req.body.topN = Number(resolvedTopN);
   next();
 };
 

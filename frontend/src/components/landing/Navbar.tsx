@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { LogIn } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 import { useIsStandalonePwa, useScrollThreshold, useLockBodyScroll } from "@/hooks";
 import Button from "@/components/ui/Button";
 import Image from "next/image";
@@ -84,7 +84,7 @@ export default function Navbar() {
           <div className="flex items-center gap-6">
             <div className="hidden lg:flex items-center gap-8 xl:gap-10">
               {NAV_LINKS.map((link) => (
-                <motion.div
+                <m.div
                   key={link.name}
                   whileHover={{ y: -2 }}
                   transition={{ type: "spring", stiffness: 400, damping: 20 }}
@@ -97,7 +97,7 @@ export default function Navbar() {
                     {link.name}
                     <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary transition-all duration-300 group-hover:w-full"></span>
                   </Link>
-                </motion.div>
+                </m.div>
               ))}
             </div>
 
@@ -108,8 +108,9 @@ export default function Navbar() {
             </Link>
 
             <button
+              type="button"
               ref={menuButtonRef}
-              className={`flex lg:hidden flex-col gap-[5px] w-11 h-11 justify-center items-center z-[40000] rounded-xl cursor-pointer transition-all duration-300 shrink-0`}
+              className={`flex size-11 flex-col items-center justify-center gap-[5px] z-[40000] rounded-xl cursor-pointer transition-all duration-300 shrink-0 lg:hidden`}
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               aria-label={isMenuOpen ? "Tutup menu" : "Buka menu"}
             >
@@ -132,7 +133,7 @@ export default function Navbar() {
         {isMenuOpen && !isStandalonePwa && (
           <div className="fixed inset-0 z-[35000] lg:hidden">
             {/* Backdrop */}
-            <motion.div
+            <m.div
               className="absolute inset-0 bg-black/40 backdrop-blur-[8px]"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -142,7 +143,7 @@ export default function Navbar() {
             />
 
             {/* Drawer Panel */}
-            <motion.div
+            <m.div
               ref={drawerRef}
               role="dialog"
               aria-modal="true"
@@ -170,7 +171,7 @@ export default function Navbar() {
 
               <div className="flex flex-col gap-7">
                 {NAV_LINKS.map((link) => (
-                  <motion.div
+                  <m.div
                     key={link.name}
                     initial={{ opacity: 0, x: 30 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -181,7 +182,7 @@ export default function Navbar() {
                       damping: 25,
                     }}
                   >
-                    <motion.div
+                    <m.div
                       whileHover={{ x: 8, scale: 1.05 }}
                       transition={{ type: "spring", stiffness: 400, damping: 20 }}
                     >
@@ -194,12 +195,12 @@ export default function Navbar() {
                         {link.name}
                         <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary transition-all duration-300 group-hover:w-full"></span>
                       </Link>
-                    </motion.div>
-                  </motion.div>
+                    </m.div>
+                  </m.div>
                 ))}
               </div>
 
-              <motion.div
+              <m.div
                 className="mt-auto"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -210,8 +211,8 @@ export default function Navbar() {
                     Masuk
                   </Button>
                 </Link>
-              </motion.div>
-            </motion.div>
+              </m.div>
+            </m.div>
           </div>
         )}
       </AnimatePresence>

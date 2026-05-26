@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "motion/react";
+import { m } from "motion/react";
 
 interface WorkflowCardProps {
   number: number;
@@ -18,7 +18,7 @@ export default function WorkflowCard({
   label,
 }: WorkflowCardProps) {
   return (
-    <motion.article
+    <m.article
       className={`relative min-h-[280px] md:min-h-[320px] flex flex-col lg:flex-row items-start lg:items-end overflow-hidden rounded-[36px] bg-primary text-white border border-white/10 isolate transform-gpu col-span-1 md:col-span-1 ${span} p-10 lg:p-0 cursor-default`}
       whileHover={{
         y: -12,
@@ -37,7 +37,7 @@ export default function WorkflowCard({
           {label}
         </span>
       )}
-      <motion.span
+      <m.span
         className="relative lg:absolute lg:top-8 lg:right-8 w-12 lg:w-[58px] h-12 lg:h-[58px] grid place-items-center rounded-full bg-white text-primary text-lg lg:text-[22px] font-black mb-5 lg:mb-0"
         whileHover={{
           scale: 1.15,
@@ -46,7 +46,7 @@ export default function WorkflowCard({
         transition={{ type: "spring", stiffness: 400, damping: 15 }}
       >
         {number}
-      </motion.span>
+      </m.span>
       <div className="w-full lg:w-[min(520px,calc(100%-96px))] lg:p-[42px]">
         <h3 className="mb-3 font-display text-[22px] md:text-[26px] font-black text-white">
           {title}
@@ -55,6 +55,6 @@ export default function WorkflowCard({
           {description}
         </p>
       </div>
-    </motion.article>
+    </m.article>
   );
 }

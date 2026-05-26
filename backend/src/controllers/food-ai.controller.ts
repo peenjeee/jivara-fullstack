@@ -70,6 +70,15 @@ export const checkInteraction = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const recommendFoods = async (req: AuthRequest, res: Response) => {
+  try {
+    const data = await foodAiService.recommendFoods(req.body, req.user);
+    res.status(200).json({ status: "berhasil", data });
+  } catch (error) {
+    sendError(res, error);
+  }
+};
+
 export const estimateNutrition = async (req: AuthRequest, res: Response) => {
   try {
     const data = await foodAiService.estimateNutrition(req.body);

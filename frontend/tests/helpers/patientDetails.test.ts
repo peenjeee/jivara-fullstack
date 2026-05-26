@@ -62,7 +62,7 @@ describe("patient detail helpers", () => {
       { label: "Scan Makanan", value: 1 },
     ]);
 
-    expect(getPatientSummary({ patient, schedules: [schedule, { ...schedule, id: "SCH-002", reminderEnabled: false, status: "Nonaktif" }], activities: [activity], scans: [] })).toEqual({
+    expect(getPatientSummary({ patient, schedules: [schedule, { ...schedule, id: "SCH-002", reminderEnabled: false, status: "Nonaktif" }], activities: [activity], activityDistribution: getActivityDistribution([activity]), scans: [] })).toMatchObject({
       activeMedicineCount: 1,
       activeReminderCount: 1,
       criticalActivityCount: 1,

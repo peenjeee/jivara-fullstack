@@ -14,11 +14,12 @@ export default function Pagination({ currentPage, totalPages, totalItems, pageSi
   const end = Math.min(currentPage * pageSize, totalItems);
 
   return (
-    <div className="flex flex-col gap-4 rounded-b-3xl bg-white px-5 py-5 text-sm font-semibold text-muted sm:flex-row sm:items-center sm:justify-between sm:px-7">
+    <div className="flex flex-col gap-4 rounded-b-3xl bg-white p-5 text-sm font-semibold text-muted sm:flex-row sm:items-center sm:justify-between sm:px-7">
       <p>Menampilkan {start} hingga {end} dari {totalItems} {itemLabel}</p>
       <div className="flex items-center gap-2">
         <button
-          className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-line transition-colors hover:bg-surface hover:text-text-main disabled:opacity-40"
+          type="button"
+          className="inline-flex size-9 items-center justify-center rounded-xl border border-line transition-colors hover:bg-surface hover:text-text-main disabled:opacity-40"
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
           aria-label="Halaman sebelumnya"
@@ -27,8 +28,9 @@ export default function Pagination({ currentPage, totalPages, totalItems, pageSi
         </button>
         {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
           <button
+            type="button"
             key={page}
-            className={`h-9 w-9 rounded-xl border text-sm font-bold transition-colors ${
+            className={`size-9 rounded-xl border text-sm font-bold transition-colors ${
               currentPage === page ? "border-primary bg-primary text-white" : "border-line text-muted hover:bg-surface hover:text-text-main"
             }`}
             onClick={() => onPageChange(page)}
@@ -37,7 +39,8 @@ export default function Pagination({ currentPage, totalPages, totalItems, pageSi
           </button>
         ))}
         <button
-          className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-line transition-colors hover:bg-surface hover:text-text-main disabled:opacity-40"
+          type="button"
+          className="inline-flex size-9 items-center justify-center rounded-xl border border-line transition-colors hover:bg-surface hover:text-text-main disabled:opacity-40"
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
           aria-label="Halaman berikutnya"

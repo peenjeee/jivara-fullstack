@@ -1,7 +1,8 @@
 "use client";
 
 import Modal from "@/components/ui/Modal";
-import AddPatientForm, { type AddPatientValues } from "./AddPatientForm";
+import AddPatientForm from "./AddPatientForm";
+import type { AddPatientValues } from "./addPatientFormUtils";
 
 interface AddPatientModalProps {
   readonly isOpen: boolean;

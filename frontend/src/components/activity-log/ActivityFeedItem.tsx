@@ -1,9 +1,10 @@
 "use client";
 
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { CheckCheck, Eye, LoaderCircle } from "lucide-react";
 import type { ActivityLogRecord } from "@/lib/mocks/activityLogs";
 import { formatActivityTime } from "@/helpers/activityLogs";
+import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
 import { ActivityCategoryBadge, ActivityCategoryIcon, ActivitySeverityBadge } from "./ActivityBadges";
 
 interface ActivityFeedItemProps {
@@ -16,15 +17,15 @@ interface ActivityFeedItemProps {
 }
 
 export default function ActivityFeedItem({ activity, index, readOnly = false, isProcessing = false, onMarkRead, onViewDetail }: ActivityFeedItemProps) {
+  const shouldAnimate = useDashboardEntranceMotion();
+
   return (
-    <motion.article
+    <m.article
       className={`relative rounded-3xl border bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.06)] transition-colors sm:p-5 border-transparent`}
-      initial={{ opacity: 0, y: 18 }}
-      animate={{ opacity: 1, y: 0 }}
+      {...getDashboardEntranceMotion(shouldAnimate, index * 0.035, 18)}
       whileHover={{ y: -2 }}
-      transition={{ duration: 0.38, ease: [0.16, 1, 0.3, 1], delay: index * 0.035 }}
     >
-      {!readOnly && !activity.read && <span className="absolute right-5 top-5 h-2.5 w-2.5 rounded-full bg-primary" aria-label="Belum dibaca" />}
+      {!readOnly && !activity.read && <span className="absolute right-5 top-5 size-2.5 rounded-full bg-primary" aria-label="Belum dibaca" />}
 
       <div className="flex gap-4">
         <ActivityCategoryIcon category={activity.category} />
@@ -59,6 +60,6 @@ export default function ActivityFeedItem({ activity, index, readOnly = false, is
           </div>
         </div>
       </div>
-    </motion.article>
+    </m.article>
   );
 }

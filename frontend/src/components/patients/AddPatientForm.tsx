@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useReducer, type FormEvent } from "react";
 import { UserPlus } from "lucide-react";
 import Button from "@/components/ui/Button";
 import FormField from "@/components/ui/FormField";
@@ -9,17 +9,7 @@ import FormStickyActions from "@/components/ui/FormStickyActions";
 import NumberStepper from "@/components/ui/NumberStepper";
 import { FORM_INPUT_CLASS } from "@/components/ui/formStyles";
 import { showWarning } from "@/lib/swal";
-import type { PatientRecord } from "@/lib/mocks/patients";
-
-export interface AddPatientValues {
-  readonly fullName: string;
-  readonly age: number;
-  readonly gender: "Pria" | "Wanita";
-  readonly phone: string;
-  readonly email: string;
-  readonly password: string;
-  readonly address: string;
-}
+import type { AddPatientValues } from "./addPatientFormUtils";
 
 interface AddPatientFormProps {
   readonly initialValues?: Partial<AddPatientValues>;
@@ -32,45 +22,43 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PATIENT_INPUT_CLASS = FORM_INPUT_CLASS;
 const numericPhone = (value: string | undefined) => (value ?? "").replace(/\D/g, "");
 
-export function createPatientRecord(values: AddPatientValues, order: number): PatientRecord {
-  const initials = values.fullName
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((name) => name[0]?.toUpperCase())
-    .join("");
+type AddPatientFormState = {
+  readonly fullName: string;
+  readonly age: string;
+  readonly gender: "Pria" | "Wanita" | "";
+  readonly phone: string;
+  readonly email: string;
+  readonly password: string;
+  readonly address: string;
+  readonly isSubmitting: boolean;
+};
 
-  return {
-    id: `JVR-${String(order).padStart(2, "0")}`,
-    name: values.fullName,
-    age: values.age,
-    gender: values.gender,
-    phone: values.phone,
-    email: values.email,
-    address: values.address,
-    status: "On Ideal Schedule",
-    lastVisit: new Date().toLocaleDateString("id-ID", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    }),
-    adherence: 100,
-    avatar: initials || "P",
-  };
+type AddPatientFormAction =
+  | { readonly type: "field"; readonly field: keyof Omit<AddPatientFormState, "isSubmitting">; readonly value: string }
+  | { readonly type: "submitting"; readonly value: boolean };
+
+function addPatientFormReducer(state: AddPatientFormState, action: AddPatientFormAction): AddPatientFormState {
+  if (action.type === "submitting") return { ...state, isSubmitting: action.value };
+  return { ...state, [action.field]: action.value };
 }
 
 export default function AddPatientForm({ initialValues, mode = "add", onSubmit }: AddPatientFormProps) {
-  const [fullName, setFullName] = useState(initialValues?.fullName ?? "");
-  const [age, setAge] = useState(initialValues?.age ? String(initialValues.age) : "");
-  const [gender, setGender] = useState<"Pria" | "Wanita" | "">(initialValues?.gender ?? "");
-  const [phone, setPhone] = useState(numericPhone(initialValues?.phone));
-  const [email, setEmail] = useState(initialValues?.email ?? "");
-  const [password, setPassword] = useState(initialValues?.password ?? "");
-  const [address, setAddress] = useState(initialValues?.address ?? "");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [state, dispatch] = useReducer(addPatientFormReducer, initialValues, (values): AddPatientFormState => ({
+    fullName: values?.fullName ?? "",
+    age: values?.age ? String(values.age) : "",
+    gender: values?.gender ?? "",
+    phone: numericPhone(values?.phone),
+    email: values?.email ?? "",
+    password: values?.password ?? "",
+    address: values?.address ?? "",
+    isSubmitting: false,
+  }));
+  const { fullName, age, gender, phone, email, password, address, isSubmitting } = state;
+
+  const updateField = (field: keyof Omit<AddPatientFormState, "isSubmitting">, value: string) => dispatch({ type: "field", field, value });
 
   const updatePhone = (value: string) => {
-    setPhone(value.replace(/\D/g, ""));
+    updateField("phone", value.replace(/\D/g, ""));
   };
 
   const handleSubmit = async (event: FormEvent) => {
@@ -110,11 +98,11 @@ export default function AddPatientForm({ initialValues, mode = "add", onSubmit }
       return;
     }
 
-    setIsSubmitting(true);
+    dispatch({ type: "submitting", value: true });
     try {
       await onSubmit({ fullName: trimmedFullName, age: numericAge, gender, phone: trimmedPhone, email: trimmedEmail, password: trimmedPassword, address: trimmedAddress });
     } finally {
-      setIsSubmitting(false);
+      dispatch({ type: "submitting", value: false });
     }
   };
 
@@ -122,11 +110,11 @@ export default function AddPatientForm({ initialValues, mode = "add", onSubmit }
     <form onSubmit={handleSubmit} className="space-y-5" noValidate>
       <FormSection>
         <div className="grid gap-5 sm:grid-cols-2">
-          <FormField label="Nama Lengkap" required>
-            <input id="patientName" name="patientName" type="text" placeholder="Nama pasien" value={fullName} onChange={(event) => setFullName(event.target.value)} className={PATIENT_INPUT_CLASS} />
+          <FormField label="Nama Lengkap" htmlFor="patientName" required>
+            <input id="patientName" name="patientName" type="text" placeholder="Nama pasien" value={fullName} onChange={(event) => updateField("fullName", event.target.value)} className={PATIENT_INPUT_CLASS} aria-label="Nama Lengkap" />
           </FormField>
           <FormField label="Umur" required>
-            <NumberStepper id="patientAge" name="patientAge" value={age} min={1} required ariaLabel="Umur pasien" onChange={setAge} />
+            <NumberStepper id="patientAge" name="patientAge" value={age} min={1} required ariaLabel="Umur pasien" onChange={(value) => updateField("age", value)} />
           </FormField>
         </div>
 
@@ -146,30 +134,31 @@ export default function AddPatientForm({ initialValues, mode = "add", onSubmit }
                     name="patientGender"
                     value={option}
                     checked={gender === option}
-                    onChange={() => setGender(option)}
-                    className="h-5 w-5 appearance-none rounded-full border-2 border-muted bg-white bg-clip-content p-[3px] transition-all checked:border-primary checked:bg-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    onChange={() => updateField("gender", option)}
+                    className="size-5 appearance-none rounded-full border-2 border-muted bg-white bg-clip-content p-[3px] transition-all checked:border-primary checked:bg-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    aria-label={`Kelamin ${option}`}
                   />
                   <span className={gender === option ? "text-text-main" : "text-muted"}>{option}</span>
                 </label>
               ))}
             </div>
           </fieldset>
-          <FormField label="Nomor Telepon" required>
-            <input id="patientPhone" name="patientPhone" type="tel" inputMode="numeric" pattern="[0-9]*" placeholder="628..." value={phone} onChange={(event) => updatePhone(event.target.value)} className={PATIENT_INPUT_CLASS} autoComplete="tel" />
+          <FormField label="Nomor Telepon" htmlFor="patientPhone" required>
+            <input id="patientPhone" name="patientPhone" type="tel" inputMode="numeric" pattern="[0-9]*" placeholder="628..." value={phone} onChange={(event) => updatePhone(event.target.value)} className={PATIENT_INPUT_CLASS} autoComplete="tel" aria-label="Nomor Telepon" />
           </FormField>
         </div>
 
         <div className="grid gap-5 sm:grid-cols-2">
-          <FormField label="Email" required>
-            <input id="patientEmail" name="patientEmail" type="email" placeholder="pasien@email.com" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} className={PATIENT_INPUT_CLASS} />
+          <FormField label="Email" htmlFor="patientEmail" required>
+            <input id="patientEmail" name="patientEmail" type="email" placeholder="pasien@email.com" autoComplete="username" value={email} onChange={(event) => updateField("email", event.target.value)} className={PATIENT_INPUT_CLASS} aria-label="Email" />
           </FormField>
-          <FormField label="Password" required>
-            <input id="patientPassword" name="patientPassword" type="password" placeholder="********" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} className={PATIENT_INPUT_CLASS} />
+          <FormField label="Password" htmlFor="patientPassword" required>
+            <input id="patientPassword" name="patientPassword" type="password" placeholder="********" autoComplete="new-password" value={password} onChange={(event) => updateField("password", event.target.value)} className={PATIENT_INPUT_CLASS} aria-label="Password" />
           </FormField>
         </div>
 
-        <FormField label="Alamat" required>
-          <input id="patientAddress" name="patientAddress" type="text" placeholder="Alamat pasien" value={address} onChange={(event) => setAddress(event.target.value)} className={PATIENT_INPUT_CLASS} />
+        <FormField label="Alamat" htmlFor="patientAddress" required>
+          <input id="patientAddress" name="patientAddress" type="text" placeholder="Alamat pasien" value={address} onChange={(event) => updateField("address", event.target.value)} className={PATIENT_INPUT_CLASS} aria-label="Alamat" />
         </FormField>
       </FormSection>
 

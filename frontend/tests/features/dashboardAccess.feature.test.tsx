@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import DashboardRoleGate from "@/components/dashboard/DashboardRoleGate";
 import { useAuthStore } from "@/store/auth";
@@ -6,9 +6,18 @@ import type { User } from "@/types/auth";
 
 const replace = vi.fn();
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ replace }),
-}));
+vi.mock("next/navigation", () => {
+  const mockRedirect = vi.fn((url: string) => {
+    replace(url);
+    const error: Error & { digest?: string } = new Error("NEXT_REDIRECT");
+    error.digest = `NEXT_REDIRECT${url}`;
+    throw error;
+  });
+  return {
+    redirect: mockRedirect,
+    useRouter: () => ({ replace }),
+  };
+});
 
 const nurseUser: User = {
   id: "user-1",
@@ -34,32 +43,29 @@ describe("dashboard access feature", () => {
     expect(replace).not.toHaveBeenCalled();
   });
 
-  it("redirects unauthenticated users to login", async () => {
+  it("redirects unauthenticated users to login", () => {
     useAuthStore.setState({ user: null, hasHydrated: true, isAuthenticated: false });
 
-    render(<DashboardRoleGate allowedRoles={["nurse"]}>Konten perawat</DashboardRoleGate>);
-
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/login"));
+    try { render(<DashboardRoleGate allowedRoles={["nurse"]}>Konten perawat</DashboardRoleGate>); } catch {}
+    expect(replace).toHaveBeenCalledWith("/login");
   });
 
-  it("redirects disallowed roles to their fallback dashboard", async () => {
+  it("redirects disallowed roles to their fallback dashboard", () => {
     useAuthStore.setState({ user: nurseUser, hasHydrated: true, isAuthenticated: true });
 
-    render(<DashboardRoleGate allowedRoles={["admin"]}>Konten admin</DashboardRoleGate>);
-
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/dashboard"));
+    try { render(<DashboardRoleGate allowedRoles={["admin"]}>Konten admin</DashboardRoleGate>); } catch {}
+    expect(replace).toHaveBeenCalledWith("/dashboard");
     expect(screen.queryByText("Konten admin")).not.toBeInTheDocument();
   });
 
-  it("redirects super admin to admin approvals fallback", async () => {
+  it("redirects super admin to admin approvals fallback", () => {
     useAuthStore.setState({
       user: { id: "super-1", fullName: "Super Admin", email: "super@test.local", role: "super_admin", accountStatus: "active", age: 35 },
       hasHydrated: true,
       isAuthenticated: true,
     });
 
-    render(<DashboardRoleGate allowedRoles={["admin"]}>Konten admin</DashboardRoleGate>);
-
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/admin-approvals"));
+    try { render(<DashboardRoleGate allowedRoles={["admin"]}>Konten admin</DashboardRoleGate>); } catch {}
+    expect(replace).toHaveBeenCalledWith("/admin-approvals");
   });
 });

@@ -33,14 +33,154 @@ router.use(authenticateToken);
  *         schema:
  *           type: string
  *       - in: query
+ *         name: patient_ids
+ *         schema:
+ *           type: string
+ *         description: Daftar ID pasien dipisahkan koma untuk mengambil jadwal beberapa pasien dalam satu halaman.
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *         description: Batas jumlah jadwal yang dikembalikan. Jika tidak dikirim, semua jadwal sesuai filter dikembalikan.
+ *       - in: query
  *         name: is_active
  *         schema:
  *           type: boolean
  *     responses:
  *       200:
  *         description: Daftar jadwal obat berhasil diambil
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: berhasil
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                         format: uuid
+ *                       patientId:
+ *                         type: string
+ *                         format: uuid
+ *                       drugName:
+ *                         type: string
+ *                       dosage:
+ *                         type: string
+ *                       stock:
+ *                         type: integer
+ *                       frequency:
+ *                         type: integer
+ *                       scheduledTimes:
+ *                         type: array
+ *                         items:
+ *                           type: string
+ *                       reminderEnabled:
+ *                         type: boolean
+ *                       isActive:
+ *                         type: boolean
+ *                       completedAt:
+ *                         type: string
+ *                         format: date-time
+ *                         nullable: true
  */
 router.get("/", authorizeRoles("patient", "nurse", "admin"), medicationScheduleController.listMedicationSchedules);
+
+/**
+ * @swagger
+ * /api/v1/medication-schedules/patient-groups:
+ *   get:
+ *     summary: Ambil halaman pasien beserta jadwal obatnya
+ *     tags: [Medication Schedules]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *           maximum: 10
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: adherenceStatus
+ *         schema:
+ *           type: string
+ *           enum: [Need Special Attention, Lagging Behind, On Ideal Schedule]
+ *     responses:
+ *       200:
+ *         description: Halaman jadwal per pasien berhasil diambil
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: berhasil
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     patients:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                     schedules:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                             format: uuid
+ *                           patientId:
+ *                             type: string
+ *                             format: uuid
+ *                           drugName:
+ *                             type: string
+ *                           dosage:
+ *                             type: string
+ *                           stock:
+ *                             type: integer
+ *                           completedAt:
+ *                             type: string
+ *                             format: date-time
+ *                             nullable: true
+ *                 meta:
+ *                   type: object
+ *                   properties:
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     total:
+ *                       type: integer
+ *                     summary:
+ *                       type: object
+ *                       properties:
+ *                         active:
+ *                           type: integer
+ *                         completed:
+ *                           type: integer
+ *                         reminders:
+ *                           type: integer
+ */
+router.get("/patient-groups", authorizeRoles("patient", "nurse", "admin"), medicationScheduleController.listMedicationSchedulePatientGroups);
 
 /**
  * @swagger

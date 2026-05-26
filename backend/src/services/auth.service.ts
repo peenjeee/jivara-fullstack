@@ -1,10 +1,12 @@
 import { db } from "../db";
 import { organizations, patients, users, refreshTokens, userNotificationPreferences } from "../db/schema";
-import { and, desc, eq, or } from "drizzle-orm";
+import { and, count, desc, eq, ilike, or } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { writeAuditLog, writeAuditLogAsync } from "./audit-log.service";
+import { invalidateNurseCache } from "./nurse.service";
+import { invalidatePatientCache } from "./patient.service";
 import { sendUserPushNotification } from "./notification.service";
 import {
   RegisterDTO,
@@ -52,6 +54,7 @@ const publicUserFields = {
   approvedAt: users.approvedAt,
   rejectedAt: users.rejectedAt,
   rejectedReason: users.rejectedReason,
+  lastLoginAt: users.lastLoginAt,
   createdAt: users.createdAt,
 };
 
@@ -267,6 +270,13 @@ export const loginUser = async (dto: LoginDTO) => {
     role: foundUser.role,
   });
   const refreshToken = await generateRefreshToken(foundUser.id);
+  const loginTime = new Date();
+  await db
+    .update(users)
+    .set({ lastLoginAt: loginTime, updatedAt: loginTime })
+    .where(eq(users.id, foundUser.id));
+  invalidatePatientCache();
+  invalidateNurseCache();
 
   return {
     access_token: accessToken,
@@ -286,16 +296,44 @@ export const loginUser = async (dto: LoginDTO) => {
       address: foundUser.address,
       mustChangePassword: foundUser.mustChangePassword,
       rejectedReason: foundUser.rejectedReason,
+      lastLoginAt: loginTime,
     },
   };
 };
 
-export const listPendingAdminApprovals = async () => {
-  return db
+export const listPendingAdminApprovals = async (query: { page?: string; limit?: string; search?: string; status?: string } = {}) => {
+  const page = Math.max(Number(query.page || 1), 1);
+  const limit = Math.min(Math.max(Number(query.limit || 10), 1), 10);
+  const offset = (page - 1) * limit;
+  const conditions = [eq(users.role, "admin")];
+
+  if (query.status && query.status !== "all") conditions.push(eq(users.accountStatus, query.status));
+  if (query.search) {
+    const searchTerm = `%${query.search}%`;
+    const searchCondition = or(
+      ilike(users.fullName, searchTerm),
+      ilike(users.email, searchTerm),
+      ilike(users.phone, searchTerm),
+    );
+    if (searchCondition) conditions.push(searchCondition);
+  }
+
+  const where = and(...conditions);
+  const [data, totalRows] = await Promise.all([
+    db
     .select(publicUserFields)
     .from(users)
-    .where(eq(users.role, "admin"))
-    .orderBy(desc(users.createdAt));
+      .where(where)
+      .orderBy(desc(users.createdAt))
+      .limit(limit)
+      .offset(offset),
+    db.select({ total: count() }).from(users).where(where),
+  ]);
+
+  return {
+    users: data,
+    meta: { page, limit, total: totalRows[0]?.total || 0 },
+  };
 };
 
 export const getAdminApprovalSummary = async () => {

@@ -2,9 +2,9 @@ import api from "@/lib/axios";
 import type { ActivityLogRecord } from "@/lib/mocks/activityLogs";
 import type { PatientRecord } from "@/lib/mocks/patients";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
-import { getFoodScansForPatientFromApi } from "@/lib/foodScanApi";
-import { clearPatientsCache, getPatientsFromApi } from "@/lib/patientApi";
-import { getSchedulesFromApi } from "@/lib/scheduleApi";
+import { getFoodScansPageFromApi } from "@/lib/foodScanApi";
+import { clearPatientsCache, getCurrentPatientFromApi } from "@/lib/patientApi";
+import { getSchedulesForPatientsFromApi } from "@/lib/scheduleApi";
 
 export interface MedicationLogResponse {
   id: string;
@@ -31,6 +31,11 @@ export interface PatientAdherenceStatsResponse {
 
 interface PaginatedResponse<T> {
   data: T[];
+  meta?: {
+    page?: number;
+    limit?: number;
+    total?: number;
+  };
 }
 
 export interface PatientDashboardData {
@@ -40,19 +45,108 @@ export interface PatientDashboardData {
   adherenceStats: PatientAdherenceStatsResponse;
 }
 
+export type PatientDashboardOverviewData = Omit<PatientDashboardData, "medicationLogs">;
+export type PatientScheduleData = Omit<PatientDashboardData, "adherenceStats">;
+export interface PatientActivityLogData {
+  patient: PatientRecord;
+  schedules: MedicationScheduleRecord[];
+  activities: ActivityLogRecord[];
+  monthKey: string;
+}
+
 const dashboardCacheTtl = 15_000;
 let dashboardCache: { data: PatientDashboardData; expiresAt: number } | null = null;
 let dashboardRequest: Promise<PatientDashboardData> | null = null;
+let dashboardOverviewCache: { data: PatientDashboardOverviewData; expiresAt: number } | null = null;
+let dashboardOverviewRequest: Promise<PatientDashboardOverviewData> | null = null;
+const patientScheduleCache = new Map<string, { data: PatientScheduleData; expiresAt: number }>();
+const patientScheduleRequests = new Map<string, Promise<PatientScheduleData>>();
 
 const activitiesCacheTtl = 15_000;
-let activitiesCache: { data: ActivityLogRecord[]; expiresAt: number } | null = null;
-let activitiesRequest: Promise<ActivityLogRecord[]> | null = null;
+const activitiesCache = new Map<string, { data: PatientActivityLogData; expiresAt: number }>();
+const activitiesRequests = new Map<string, Promise<PatientActivityLogData>>();
 
 export const clearPatientDashboardCache = () => {
   dashboardCache = null;
   dashboardRequest = null;
-  activitiesCache = null;
-  activitiesRequest = null;
+  dashboardOverviewCache = null;
+  dashboardOverviewRequest = null;
+  patientScheduleCache.clear();
+  patientScheduleRequests.clear();
+  activitiesCache.clear();
+  activitiesRequests.clear();
+};
+
+const medicationLogMonthPageSize = 100;
+const activityMonthPageSize = 100;
+
+const formatDateParam = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const getMonthLogRange = (monthDate: Date) => {
+  const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+  const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
+  const startDate = formatDateParam(monthStart);
+  const endDate = formatDateParam(monthEnd);
+
+  return {
+    startDate,
+    endDate,
+    cacheKey: `${startDate}:${endDate}`,
+  };
+};
+
+const patientActivityScheduleLimit = 50;
+
+const getPatientScheduleBaseData = async (scheduleLimit?: number) => {
+  const patient = await getCurrentPatientFromApi();
+  const schedules = await getSchedulesForPatientsFromApi([patient], scheduleLimit ? { limit: scheduleLimit } : {});
+
+  return {
+    patient,
+    schedules: schedules.filter((schedule) => schedule.patientId === patient.id),
+  };
+};
+
+const getPatientDashboardBaseData = async (): Promise<PatientDashboardOverviewData> => {
+  const now = Date.now();
+  if (dashboardOverviewCache && dashboardOverviewCache.expiresAt > now) return dashboardOverviewCache.data;
+  if (dashboardOverviewRequest) return dashboardOverviewRequest;
+
+  dashboardOverviewRequest = (async () => {
+    const patient = await getCurrentPatientFromApi();
+
+    const [schedules, adherenceResponse] = await Promise.all([
+      getSchedulesForPatientsFromApi([patient]),
+      api.get<{ data: PatientAdherenceStatsResponse }>("/adherence", { params: { patient_id: patient.id, period: "1y" } }),
+    ]);
+
+    const result = {
+      patient,
+      schedules: schedules.filter((schedule) => schedule.patientId === patient.id),
+      adherenceStats: adherenceResponse.data.data,
+    };
+    dashboardOverviewCache = { data: result, expiresAt: Date.now() + dashboardCacheTtl };
+    return result;
+  })().finally(() => {
+    dashboardOverviewRequest = null;
+  });
+
+  return dashboardOverviewRequest;
+};
+
+export const getPatientDashboardOverviewData = async (): Promise<PatientDashboardOverviewData> => {
+  const now = Date.now();
+  if (dashboardCache && dashboardCache.expiresAt > now) {
+    const { patient, schedules, adherenceStats } = dashboardCache.data;
+    return { patient, schedules, adherenceStats };
+  }
+
+  return getPatientDashboardBaseData();
 };
 
 export const getPatientDashboardData = async (): Promise<PatientDashboardData> => {
@@ -61,21 +155,13 @@ export const getPatientDashboardData = async (): Promise<PatientDashboardData> =
   if (dashboardRequest) return dashboardRequest;
 
   dashboardRequest = (async () => {
-    const patients = await getPatientsFromApi();
-    const patient = patients[0];
-    if (!patient) throw new Error("Data pasien tidak ditemukan.");
+    const baseData = await getPatientDashboardBaseData();
 
-    const [schedules, logResponse, adherenceResponse] = await Promise.all([
-      getSchedulesFromApi(patients),
-      api.get<PaginatedResponse<MedicationLogResponse>>("/medication-logs", { params: { patient_id: patient.id, limit: 100 } }),
-      api.get<{ data: PatientAdherenceStatsResponse }>("/adherence", { params: { patient_id: patient.id, period: "1y" } }),
-    ]);
+    const logResponse = await api.get<PaginatedResponse<MedicationLogResponse>>("/medication-logs", { params: { patient_id: baseData.patient.id, limit: 10 } });
 
     const result = {
-      patient,
-      schedules: schedules.filter((schedule) => schedule.patientId === patient.id),
+      ...baseData,
       medicationLogs: logResponse.data.data,
-      adherenceStats: adherenceResponse.data.data,
     };
     dashboardCache = { data: result, expiresAt: Date.now() + dashboardCacheTtl };
     return result;
@@ -84,6 +170,120 @@ export const getPatientDashboardData = async (): Promise<PatientDashboardData> =
   });
 
   return dashboardRequest;
+};
+
+const getMedicationLogsForMonth = async (patientId: string, monthDate: Date) => {
+  const { startDate, endDate } = getMonthLogRange(monthDate);
+  const params = {
+    patient_id: patientId,
+    start_date: startDate,
+    end_date: endDate,
+    limit: medicationLogMonthPageSize,
+  };
+
+  const firstResponse = await api.get<PaginatedResponse<MedicationLogResponse>>("/medication-logs", {
+    params: { ...params, page: 1 },
+  });
+  const firstPage = firstResponse.data.data;
+  const total = firstResponse.data.meta?.total ?? firstPage.length;
+  const totalPages = Math.ceil(total / medicationLogMonthPageSize);
+
+  if (totalPages <= 1) return firstPage;
+
+  const additionalResponses = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, index) => api.get<PaginatedResponse<MedicationLogResponse>>("/medication-logs", {
+      params: { ...params, page: index + 2 },
+    })),
+  );
+
+  return [
+    ...firstPage,
+    ...additionalResponses.flatMap((response) => response.data.data),
+  ];
+};
+
+const getFoodScansForPatientMonth = async (patientId: string, monthDate: Date) => {
+  const { startDate, endDate } = getMonthLogRange(monthDate);
+  const date = `${startDate}..${endDate}`;
+  const firstPage = await getFoodScansPageFromApi({
+    patientId,
+    date,
+    limit: activityMonthPageSize,
+    page: 1,
+  });
+  const totalPages = Math.ceil(firstPage.meta.total / activityMonthPageSize);
+
+  if (totalPages <= 1) return firstPage.data;
+
+  const additionalPages = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, index) => getFoodScansPageFromApi({
+      patientId,
+      date,
+      limit: activityMonthPageSize,
+      page: index + 2,
+    })),
+  );
+
+  return [
+    ...firstPage.data,
+    ...additionalPages.flatMap((page) => page.data),
+  ];
+};
+
+const getMedicationLogDateKey = (log: MedicationLogResponse) => (log.scheduledTime || log.confirmedAt || log.createdAt || "").slice(0, 10);
+
+const applyCompletedScheduleEndDates = (
+  schedules: readonly MedicationScheduleRecord[],
+  medicationLogs: readonly MedicationLogResponse[],
+): MedicationScheduleRecord[] => {
+  const latestLogDateBySchedule = medicationLogs.reduce<Record<string, string>>((latestDates, log) => {
+    const dateKey = getMedicationLogDateKey(log);
+    if (!dateKey) return latestDates;
+
+    const currentDate = latestDates[log.scheduleId];
+    if (currentDate && currentDate >= dateKey) return latestDates;
+
+    return {
+      ...latestDates,
+      [log.scheduleId]: dateKey,
+    };
+  }, {});
+
+  return schedules.map((schedule) => {
+    if (schedule.status !== "Selesai" || schedule.endDate) return schedule;
+
+    return {
+      ...schedule,
+      endDate: latestLogDateBySchedule[schedule.id] ?? schedule.startDate,
+    };
+  });
+};
+
+export const getPatientScheduleData = async (monthDate = new Date()): Promise<PatientScheduleData> => {
+  const now = Date.now();
+  const { cacheKey } = getMonthLogRange(monthDate);
+  const cached = patientScheduleCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) return cached.data;
+  const activeRequest = patientScheduleRequests.get(cacheKey);
+  if (activeRequest) return activeRequest;
+
+  const request = (async () => {
+    const baseData = await getPatientScheduleBaseData();
+    const medicationLogs = await getMedicationLogsForMonth(baseData.patient.id, monthDate);
+
+    const result = {
+      ...baseData,
+      schedules: applyCompletedScheduleEndDates(baseData.schedules, medicationLogs),
+      medicationLogs,
+    };
+    patientScheduleCache.set(cacheKey, { data: result, expiresAt: Date.now() + dashboardCacheTtl });
+    return result;
+  })().finally(() => {
+    patientScheduleRequests.delete(cacheKey);
+  });
+
+  patientScheduleRequests.set(cacheKey, request);
+  return request;
 };
 
 export const getConfirmedScheduleDates = (logs: readonly MedicationLogResponse[]) => logs.reduce<Record<string, string[]>>((confirmedDates, log) => {
@@ -110,14 +310,24 @@ export const getCompletedScheduleDates = (logs: readonly MedicationLogResponse[]
   };
 }, {});
 
-export const getPatientActivitiesFromApi = async (): Promise<ActivityLogRecord[]> => {
+export const getPatientActivityLogData = async (monthDate = new Date()): Promise<PatientActivityLogData> => {
   const now = Date.now();
-  if (activitiesCache && activitiesCache.expiresAt > now) return activitiesCache.data;
-  if (activitiesRequest) return activitiesRequest;
+  const { cacheKey } = getMonthLogRange(monthDate);
+  const cached = activitiesCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) return cached.data;
+  const activeRequest = activitiesRequests.get(cacheKey);
+  if (activeRequest) return activeRequest;
 
-  activitiesRequest = (async () => {
-    const data = await getPatientDashboardData();
-    const scans = await getFoodScansForPatientFromApi(data.patient.id).catch(() => []);
+  const request = (async () => {
+    const baseData = await getPatientScheduleBaseData(patientActivityScheduleLimit);
+    const [logResponse, scans] = await Promise.all([
+      getMedicationLogsForMonth(baseData.patient.id, monthDate),
+      getFoodScansForPatientMonth(baseData.patient.id, monthDate).catch(() => []),
+    ]);
+    const data = {
+      ...baseData,
+      medicationLogs: logResponse,
+    };
 
     const medicationActivities: ActivityLogRecord[] = data.medicationLogs.map((log) => ({
       id: log.id,
@@ -148,15 +358,27 @@ export const getPatientActivitiesFromApi = async (): Promise<ActivityLogRecord[]
       read: false,
     }));
 
-    const result = [...medicationActivities, ...scanActivities]
+    const activities = [...medicationActivities, ...scanActivities]
       .sort((first, second) => Date.parse(second.timestamp) - Date.parse(first.timestamp));
-    activitiesCache = { data: result, expiresAt: Date.now() + activitiesCacheTtl };
+    const result = {
+      patient: data.patient,
+      schedules: data.schedules,
+      activities,
+      monthKey: cacheKey,
+    };
+    activitiesCache.set(cacheKey, { data: result, expiresAt: Date.now() + activitiesCacheTtl });
     return result;
   })().finally(() => {
-    activitiesRequest = null;
+    activitiesRequests.delete(cacheKey);
   });
 
-  return activitiesRequest;
+  activitiesRequests.set(cacheKey, request);
+  return request;
+};
+
+export const getPatientActivitiesFromApi = async (monthDate = new Date()): Promise<ActivityLogRecord[]> => {
+  const data = await getPatientActivityLogData(monthDate);
+  return data.activities;
 };
 
 export const confirmMedicationScheduleViaApi = async (schedule: MedicationScheduleRecord, selectedDate: Date, doseIndex = 0) => {

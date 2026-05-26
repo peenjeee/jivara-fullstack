@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import type { LucideIcon } from "lucide-react";
 
 type StepColor = "emerald" | "leaf" | "pine" | "forest";
@@ -22,7 +22,7 @@ const stepColorStyles: Record<StepColor, string> = {
 
 export default function WorkflowStepCard({ number, title, description, icon: Icon, color }: WorkflowStepCardProps) {
   return (
-    <motion.article
+    <m.article
       className="relative rounded-[28px] bg-surface p-5 lg:bg-transparent lg:p-0"
       initial={{ opacity: 0, y: 18 }}
       whileInView={{ opacity: 1, y: 0 }}
@@ -43,6 +43,6 @@ export default function WorkflowStepCard({ number, title, description, icon: Ico
           </p>
         </div>
       </div>
-    </motion.article>
+    </m.article>
   );
 }

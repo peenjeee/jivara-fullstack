@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { Loader2 } from "lucide-react";
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -63,8 +63,8 @@ export default function Button({
   const isDisabled = props.disabled || loading;
 
   return (
-    <motion.button
-      {...(props as React.ComponentProps<typeof motion.button>)}
+    <m.button
+      {...(props as React.ComponentProps<typeof m.button>)}
       disabled={isDisabled}
       className={`${BASE_STYLES} ${SIZE_STYLES[size]} ${VARIANT_STYLES[variant]} ${className}`}
       whileHover={isDisabled ? undefined : HOVER_VARIANTS[variant]}
@@ -73,24 +73,24 @@ export default function Button({
     >
       {loading ? (
         <>
-          <Loader2 className="animate-spin -ml-1 mr-3 h-5 w-5" aria-hidden="true" focusable="false" />
-          Memuat...
+          <Loader2 className="animate-spin -ml-1 mr-3 size-5" aria-hidden="true" focusable="false" />
+          Memuat…
         </>
       ) : (
         <>
           {children}
 
           {icon && (
-            <motion.span
+            <m.span
               className="relative z-10 flex items-center justify-center"
               whileHover={{ x: 4 }}
               transition={{ type: "spring", stiffness: 400, damping: 15 }}
             >
               <DecorativeIcon icon={icon} />
-            </motion.span>
+            </m.span>
           )}
         </>
       )}
-    </motion.button>
+    </m.button>
   );
 }

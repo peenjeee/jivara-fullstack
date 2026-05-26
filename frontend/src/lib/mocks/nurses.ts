@@ -9,6 +9,7 @@ export interface NurseRecord {
   readonly gender: NurseGender;
   readonly status: NurseStatus;
   readonly joinedAt: string;
+  readonly lastVisit?: string;
   readonly temporaryPassword: boolean;
   readonly assignedPatients?: number;
 }

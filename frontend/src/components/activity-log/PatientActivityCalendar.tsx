@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { addMonths, getDateKey, getMonthLabel } from "@/helpers/patientSchedule";
+import SelectField from "@/components/ui/SelectField";
+import { addMonths, getDateKey } from "@/helpers/patientSchedule";
 import { formatActivityTime } from "@/helpers/activityLogs";
+import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
 import type { ActivityCategory, ActivityLogRecord, ActivitySeverity } from "@/lib/mocks/activityLogs";
 
 interface PatientActivityCalendarProps {
@@ -24,6 +26,18 @@ interface CalendarDay {
 }
 
 const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const monthOptions = Array.from({ length: 12 }, (_, index) => ({
+  value: String(index),
+  label: new Date(2026, index, 1).toLocaleDateString("id-ID", { month: "short" }),
+}));
+
+const getYearOptions = (date: Date) => {
+  const currentYear = new Date().getFullYear();
+  const selectedYear = date.getFullYear();
+  const startYear = Math.min(currentYear - 5, selectedYear - 2);
+  const endYear = Math.max(currentYear + 5, selectedYear + 2);
+  return Array.from({ length: endYear - startYear + 1 }, (_, index) => startYear + index);
+};
 
 const categoryChipClasses: Record<ActivityCategory, string> = {
   Reminder: "bg-warning/18 text-[#7a5a14]",
@@ -40,6 +54,7 @@ const severityDotClasses: Record<ActivitySeverity, string> = {
 };
 
 export default function PatientActivityCalendar({ month, activities, onMonthChange, onViewDetail }: PatientActivityCalendarProps) {
+  const shouldAnimate = useDashboardEntranceMotion();
   const [openOverflowDateKey, setOpenOverflowDateKey] = useState<string | null>(null);
   const today = useMemo(() => new Date(), []);
   const calendarDays = useMemo(() => getActivityCalendarDays(month, activities, today), [activities, month, today]);
@@ -71,21 +86,17 @@ export default function PatientActivityCalendar({ month, activities, onMonthChan
   };
 
   return (
-    <motion.section
-      className="overflow-hidden rounded-[28px] border border-line/70 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)]"
-      initial={{ opacity: 0, y: 24 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.4 }}
+    <m.section
+      className="rounded-[28px] border border-line/70 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)]"
+      {...getDashboardEntranceMotion(shouldAnimate, 0.4, 24)}
     >
       <div className="flex flex-col gap-4 border-b border-line/70 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between lg:p-6">
         <div className="grid w-full grid-cols-[44px_minmax(0,1fr)_44px] items-center gap-3 lg:w-[360px]">
-          <button type="button" className="flex h-11 w-11 items-center justify-center rounded-2xl text-text-main transition-colors hover:bg-surface" onClick={() => goToMonth(addMonths(month, -1))} aria-label="Bulan sebelumnya">
+          <button type="button" className="flex size-11 items-center justify-center rounded-2xl text-text-main transition-colors hover:bg-surface" onClick={() => goToMonth(addMonths(month, -1))} aria-label="Bulan sebelumnya">
             <ChevronLeft size={20} />
           </button>
-          <h2 className="text-center font-display text-2xl font-extrabold tracking-[-0.05em] text-text-main sm:text-3xl">
-            {getMonthLabel(month)}
-          </h2>
-          <button type="button" className="flex h-11 w-11 items-center justify-center rounded-2xl text-text-main transition-colors hover:bg-surface" onClick={() => goToMonth(addMonths(month, 1))} aria-label="Bulan berikutnya">
+          <MonthYearSelect month={month} onChange={goToMonth} />
+          <button type="button" className="flex size-11 items-center justify-center rounded-2xl text-text-main transition-colors hover:bg-surface" onClick={() => goToMonth(addMonths(month, 1))} aria-label="Bulan berikutnya">
             <ChevronRight size={20} />
           </button>
         </div>
@@ -109,17 +120,45 @@ export default function PatientActivityCalendar({ month, activities, onMonthChan
             key={day.dateKey}
             day={day}
             index={index}
+            shouldAnimate={shouldAnimate}
             isOverflowOpen={openOverflowDateKey === day.dateKey}
             onToggleOverflow={() => setOpenOverflowDateKey((currentKey) => currentKey === day.dateKey ? null : day.dateKey)}
             onViewDetail={openDetail}
           />
         ))}
       </div>
-    </motion.section>
+    </m.section>
   );
 }
 
-function CalendarDayCell({ day, index, isOverflowOpen, onToggleOverflow, onViewDetail }: { readonly day: CalendarDay; readonly index: number; readonly isOverflowOpen: boolean; readonly onToggleOverflow: () => void; readonly onViewDetail: (activity: ActivityLogRecord) => void }) {
+function MonthYearSelect({ month, onChange }: { readonly month: Date; readonly onChange: (month: Date) => void }) {
+  const years = getYearOptions(month).map((year) => ({ label: String(year), value: String(year) }));
+
+  return (
+    <div className="flex min-w-0 items-center justify-center gap-2">
+      <div className="w-24">
+        <SelectField
+          id="patientActivityCalendarMonth"
+          value={String(month.getMonth())}
+          options={monthOptions}
+          className="justify-center rounded-xl bg-transparent px-2 py-1 font-display text-2xl font-extrabold text-text-main hover:bg-surface sm:text-3xl"
+          onChange={(value) => onChange(new Date(month.getFullYear(), Number(value), 1))}
+        />
+      </div>
+      <div className="w-28">
+        <SelectField
+          id="patientActivityCalendarYear"
+          value={String(month.getFullYear())}
+          options={years}
+          className="justify-center rounded-xl bg-transparent px-2 py-1 font-display text-2xl font-extrabold text-text-main hover:bg-surface sm:text-3xl"
+          onChange={(value) => onChange(new Date(Number(value), month.getMonth(), 1))}
+        />
+      </div>
+    </div>
+  );
+}
+
+function CalendarDayCell({ day, index, shouldAnimate, isOverflowOpen, onToggleOverflow, onViewDetail }: { readonly day: CalendarDay; readonly index: number; readonly shouldAnimate: boolean; readonly isOverflowOpen: boolean; readonly onToggleOverflow: () => void; readonly onViewDetail: (activity: ActivityLogRecord) => void }) {
   const visibleActivities = day.activities.slice(0, 2);
   const overflowActivities = day.activities.slice(2);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -144,17 +183,15 @@ function CalendarDayCell({ day, index, isOverflowOpen, onToggleOverflow, onViewD
   };
 
   return (
-    <motion.div
+    <m.div
       className={`relative min-h-[112px] border-b border-r border-line/70 p-1.5 sm:min-h-[140px] sm:p-2 lg:min-h-[172px] lg:p-3 ${day.isCurrentMonth ? "bg-white" : "bg-surface/40"}`}
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1], delay: Math.min(index * 0.008, 0.18) }}
+      {...getDashboardEntranceMotion(shouldAnimate, Math.min(index * 0.008, 0.18), 10)}
     >
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className={`inline-flex h-7 min-w-7 items-center justify-center rounded-full text-sm font-extrabold ${day.isToday ? "bg-text-main text-white" : day.isCurrentMonth ? "text-text-main" : "text-muted/70"}`}>
           {day.date.getDate()}
         </span>
-        {day.activities.some((activity) => !activity.read) && <span className="h-2 w-2 rounded-full bg-primary" aria-label={`${day.date.toLocaleDateString("id-ID")}: ada aktivitas belum dibaca`} />}
+        {day.activities.some((activity) => !activity.read) && <span className="size-2 rounded-full bg-primary" aria-label={`${day.date.toLocaleDateString("id-ID")}: ada aktivitas belum dibaca`} />}
       </div>
 
       <div className="space-y-1">
@@ -167,11 +204,13 @@ function CalendarDayCell({ day, index, isOverflowOpen, onToggleOverflow, onViewD
             </button>
 
             {isOverflowOpen && popupPosition && typeof window !== "undefined" && createPortal(
-              <div
+              <button
+                type="button"
+                aria-label="Tutup daftar aktivitas lainnya"
                 className="fixed inset-0 z-[100]"
                 onClick={() => { setPopupPosition(null); onToggleOverflow(); }}
               >
-                <motion.div
+                <m.div
                   data-lenis-prevent
                   data-lenis-prevent-wheel
                   data-lenis-prevent-touch
@@ -188,20 +227,20 @@ function CalendarDayCell({ day, index, isOverflowOpen, onToggleOverflow, onViewD
                   <div className="space-y-1">
                     {overflowActivities.map((activity, activityIndex) => <ActivityOverflowItem key={`${day.dateKey}-overflow-${activity.category}-${activity.id}-${activityIndex}`} activity={activity} onViewDetail={onViewDetail} />)}
                   </div>
-                </motion.div>
-              </div>,
+                </m.div>
+              </button>,
               document.body,
             )}
           </div>
         )}
       </div>
-    </motion.div>
+    </m.div>
   );
 }
 
 function ActivityCalendarChip({ activity, onViewDetail }: { readonly activity: ActivityLogRecord; readonly onViewDetail: (activity: ActivityLogRecord) => void }) {
   return (
-    <motion.button
+    <m.button
       type="button"
       className={`block w-full truncate rounded-md px-2 py-1 text-left text-[11px] font-extrabold leading-4 transition-transform hover:-translate-y-0.5 sm:text-xs ${categoryChipClasses[activity.category]}`}
       onClick={() => onViewDetail(activity)}
@@ -211,19 +250,19 @@ function ActivityCalendarChip({ activity, onViewDetail }: { readonly activity: A
       transition={{ duration: 0.18 }}
     >
       {formatActivityTime(activity.timestamp)} {activity.title}
-    </motion.button>
+    </m.button>
   );
 }
 
 function ActivityOverflowItem({ activity, onViewDetail }: { readonly activity: ActivityLogRecord; readonly onViewDetail: (activity: ActivityLogRecord) => void }) {
   return (
-    <motion.button type="button" className="w-full rounded-xl px-2 py-2 text-left transition-colors hover:bg-surface" onClick={() => onViewDetail(activity)} whileHover={{ x: 2 }} whileTap={{ scale: 0.98 }}>
+    <m.button type="button" className="w-full rounded-xl p-2 text-left transition-colors hover:bg-surface" onClick={() => onViewDetail(activity)} whileHover={{ x: 2 }} whileTap={{ scale: 0.98 }}>
       <span className="flex items-center gap-2 text-xs font-extrabold text-text-main">
-        <span className={`h-2 w-2 shrink-0 rounded-full ${severityDotClasses[activity.severity]}`} />
+        <span className={`size-2 shrink-0 rounded-full ${severityDotClasses[activity.severity]}`} />
         <span className="truncate">{activity.title}</span>
       </span>
       <span className="mt-1 block text-[11px] font-semibold text-muted">{formatActivityTime(activity.timestamp)} - {activity.category}</span>
-    </motion.button>
+    </m.button>
   );
 }
 
@@ -248,7 +287,7 @@ function getActivityCalendarDays(month: Date, activities: readonly ActivityLogRe
       dateKey,
       isCurrentMonth: date.getMonth() === monthStart.getMonth(),
       isToday: dateKey === todayKey,
-      activities: [...(activitiesByDate[dateKey] ?? [])].sort((first, second) => new Date(first.timestamp).getTime() - new Date(second.timestamp).getTime()),
+      activities: (activitiesByDate[dateKey] ?? []).toSorted((first, second) => new Date(first.timestamp).getTime() - new Date(second.timestamp).getTime()),
     };
   });
 }

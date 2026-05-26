@@ -1,4 +1,5 @@
 import api from "@/lib/axios";
+import { getDateRangeParams } from "@/lib/dateRange";
 import type { ActivityLogRecord } from "@/lib/mocks/activityLogs";
 
 interface AlertResponse {
@@ -22,45 +23,52 @@ interface PaginatedResponse<T> {
 }
 
 const alertsCacheTtl = 10_000;
-let alertsCache: { data: ActivityLogRecord[]; expiresAt: number } | null = null;
-let alertsRequest: Promise<ActivityLogRecord[]> | null = null;
+const alertsCache = new Map<string, { data: ActivityLogRecord[]; expiresAt: number }>();
+const alertsRequests = new Map<string, Promise<ActivityLogRecord[]>>();
 
 export const clearAlertsCache = () => {
-  alertsCache = null;
-  alertsRequest = null;
+  alertsCache.clear();
+  alertsRequests.clear();
 };
 
-export const getAlertActivitiesFromApi = async (params: { page?: number; limit?: number } = {}): Promise<ActivityLogRecord[]> => {
+export const getAlertActivitiesFromApi = async (params: { page?: number; limit?: number; date?: string; severity?: "warning" | "critical" } = {}): Promise<ActivityLogRecord[]> => {
   const page = params.page || 1;
   const limit = params.limit || 100;
-  const useCache = page === 1 && limit === 100;
+  const cacheKey = `${page}:${limit}:${params.date ?? ""}:${params.severity ?? ""}`;
   const now = Date.now();
-  if (useCache && alertsCache && alertsCache.expiresAt > now) return alertsCache.data;
-  if (useCache && alertsRequest) return alertsRequest;
+  const cached = alertsCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) return cached.data;
+  const activeRequest = alertsRequests.get(cacheKey);
+  if (activeRequest) return activeRequest;
 
-  const request = api.get<PaginatedResponse<AlertResponse>>("/alerts", { params: { page, limit } })
+  const request = api.get<PaginatedResponse<AlertResponse>>("/alerts", { params: { page, limit, ...getDateRangeParams(params.date), ...(params.severity && { severity: params.severity }) } })
     .then((response) => {
-      const activities = response.data.data.map((alert) => ({
-        id: alert.id,
-        title: alert.severity === "critical" ? "Kepatuhan kritis" : "Peringatan kepatuhan",
-        description: alert.message,
-        category: "Kepatuhan" as const,
-        severity: alert.severity === "critical" ? "Kritis" as const : "Peringatan" as const,
-        timestamp: alert.updatedAt || alert.createdAt || alert.scheduledTime,
-        patientId: alert.patientId,
-        patientName: alert.patientName,
-        scheduleId: alert.scheduleId,
-        medicineName: `${alert.drugName} ${alert.dosage}`,
-        read: false,
-      }));
-      if (useCache) alertsCache = { data: activities, expiresAt: Date.now() + alertsCacheTtl };
+      const activities = response.data.data.map((alert) => {
+        const isCritical = alert.severity === "critical" || alert.status === "missed";
+
+        return {
+          id: `alert-${alert.id}`,
+          title: isCritical ? "Dosis obat terlewat" : "Pengingat obat penting",
+          description: alert.message,
+          category: "Kepatuhan" as const,
+          severity: isCritical ? "Kritis" as const : "Peringatan" as const,
+          timestamp: alert.updatedAt || alert.createdAt || alert.scheduledTime,
+          alertId: alert.id,
+          patientId: alert.patientId,
+          patientName: alert.patientName,
+          scheduleId: alert.scheduleId,
+          medicineName: `${alert.drugName} ${alert.dosage}`,
+          read: false,
+        };
+      });
+      alertsCache.set(cacheKey, { data: activities, expiresAt: Date.now() + alertsCacheTtl });
       return activities;
     })
     .finally(() => {
-      if (useCache) alertsRequest = null;
+      alertsRequests.delete(cacheKey);
     });
 
-  if (useCache) alertsRequest = request;
+  alertsRequests.set(cacheKey, request);
   return request;
 };
 

@@ -14,7 +14,7 @@ export default function AdminProfileSettingsForm() {
   const { user, setAuth } = useAuthStore();
   const [fullName, setFullName] = useState(user?.fullName ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
-  const [phone, setPhone] = useState(numericPhone(user?.phone));
+  const [phone, setPhone] = useState(() => numericPhone(user?.phone));
   const [isSaving, setIsSaving] = useState(false);
 
   const updatePhone = (value: string) => {

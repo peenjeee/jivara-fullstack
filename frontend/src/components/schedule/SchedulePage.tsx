@@ -1,9 +1,10 @@
 "use client";
 
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { Plus } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
+import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
 import Button from "@/components/ui/Button";
 import PatientPagination from "@/components/patients/PatientPagination";
 import { SummaryCardsSkeleton, TableDataSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
@@ -12,15 +13,17 @@ import ScheduleDetailModal from "./ScheduleDetailModal";
 import ScheduleModal from "./ScheduleModal";
 import ScheduleTable from "./ScheduleTable";
 import ScheduleToolbar from "./ScheduleToolbar";
-import { getEmptyScheduleFormValues } from "./ScheduleForm";
+import { getEmptyScheduleFormValues } from "./scheduleFormUtils";
 import { useScheduleManager } from "./useScheduleManager";
 interface SchedulePageProps {
+  readonly initialPatientId?: string;
   readonly initialPatientName?: string;
   readonly readOnly?: boolean;
 }
 
-export default function SchedulePage({ initialPatientName = "", readOnly = false }: SchedulePageProps) {
-  const schedule = useScheduleManager(initialPatientName);
+export default function SchedulePage({ initialPatientId = "", initialPatientName = "", readOnly = false }: SchedulePageProps) {
+  const shouldAnimate = useDashboardEntranceMotion();
+  const schedule = useScheduleManager({ initialPatientId, initialPatientName });
 
   return (
     <DashboardPageShell>
@@ -33,30 +36,26 @@ export default function SchedulePage({ initialPatientName = "", readOnly = false
         )}
       />
 
-      {schedule.isLoading ? <SummaryCardsSkeleton /> : <SummaryCardGrid stats={schedule.summaryStats} />}
+      {schedule.isSummaryLoading && !schedule.hasLoadedSummary ? <SummaryCardsSkeleton /> : <SummaryCardGrid stats={schedule.summaryStats} />}
 
-      <motion.div
+      <m.div
         className="mt-6"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: 0.32 }}
+        {...getDashboardEntranceMotion(shouldAnimate, 0.32, 20)}
       >
-        {schedule.isLoading ? <ToolbarSkeleton /> : <ScheduleToolbar search={schedule.search} activeFilter={schedule.activeFilter} hasActiveFilters={Boolean(schedule.search || schedule.activeFilter !== "all")} onSearchChange={schedule.handleSearchChange} onFilterChange={schedule.handleFilterChange} onReset={schedule.resetFilters} />}
-      </motion.div>
+        {schedule.isLoading && !schedule.hasLoadedSchedules ? <ToolbarSkeleton /> : <ScheduleToolbar search={schedule.search} activeFilter={schedule.activeFilter} hasActiveFilters={Boolean(schedule.search || schedule.activeFilter !== "all")} onSearchChange={schedule.handleSearchChange} onFilterChange={schedule.handleFilterChange} onReset={schedule.resetFilters} />}
+      </m.div>
 
-      <motion.div
+      <m.div
         className="mt-6 overflow-hidden rounded-3xl shadow-[0_10px_30px_rgba(15,23,42,0.08)]"
-        initial={{ opacity: 0, y: 24 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.4 }}
+        {...getDashboardEntranceMotion(shouldAnimate, 0.4, 24)}
       >
         {schedule.isLoading ? <TableDataSkeleton /> : (
           <>
             <ScheduleTable groups={schedule.paginatedGroups} onViewDetail={(group) => schedule.setSelectedPatientId(group.patientId)} onAddMedicine={(group) => schedule.setAddMedicinePatientId(group.patientId)} readOnly={readOnly} emptyMessage="Tidak ada data jadwal." />
-            <PatientPagination currentPage={schedule.currentPage} totalPages={schedule.totalPages} totalItems={schedule.patientGroups.length} pageSize={10} itemLabel="pasien" onPageChange={schedule.setCurrentPage} />
+            <PatientPagination currentPage={schedule.currentPage} totalPages={schedule.totalPages} totalItems={schedule.totalPatients} pageSize={schedule.pageSize} itemLabel="pasien" onPageChange={schedule.setCurrentPage} />
           </>
         )}
-      </motion.div>
+      </m.div>
 
       {!readOnly && <ScheduleModal isOpen={schedule.isAddModalOpen} patients={schedule.patients} medicineIndexOffsetByPatient={schedule.medicineCountByPatient} onClose={() => schedule.setIsAddModalOpen(false)} onSubmit={schedule.handleAddSchedule} />}
       <ScheduleModal

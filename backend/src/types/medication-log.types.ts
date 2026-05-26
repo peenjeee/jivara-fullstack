@@ -18,6 +18,10 @@ export interface MedicationLogListQuery {
   patient_id?: string;
   patientId?: string;
   date?: string;
+  start_date?: string;
+  startDate?: string;
+  end_date?: string;
+  endDate?: string;
   status?: MedicationLogStatus;
   page?: string;
   limit?: string;

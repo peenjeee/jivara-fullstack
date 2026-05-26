@@ -51,7 +51,7 @@ api.interceptors.response.use(
       const { logout, updateUser } = useAuthStore.getState();
 
       try {
-        const { data } = await axios.post('/api/auth/refresh');
+        const { data } = await axios.post('/api/v1/auth/refresh');
 
         if (data.data.user) updateUser(data.data.user);
 

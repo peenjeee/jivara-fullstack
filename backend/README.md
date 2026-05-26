@@ -93,16 +93,16 @@ Server secara default akan berjalan di `http://localhost:3001`.
 
 Dokumentasi interaktif tersedia melalui Swagger UI saat server berjalan. Endpoint yang perlu diperhatikan untuk integrasi terbaru:
 
-API utama tersedia dengan prefix versioning `/api/v1`. Prefix lama `/api` masih tersedia sebagai alias kompatibilitas.
+API utama tersedia dengan prefix versioning `/api/v1`.
 
 | Endpoint | Fungsi |
 | --- | --- |
-| `PATCH /api/auth/me` | Menyimpan perubahan profil user saat ini |
-| `PUT /api/auth/change-password` | Ganti password normal dengan verifikasi password lama |
-| `GET /api/notifications/preferences` | Membaca status push notification pasien |
-| `PATCH /api/notifications/preferences` | Enable/disable push notification pasien |
-| `POST /api/notifications/events` | Tracking klik/open Web Push dari service worker |
-| `GET /api/notifications/analytics` | Open rate, CTR, dan rata-rata TTO notifikasi |
+| `PATCH /api/v1/auth/me` | Menyimpan perubahan profil user saat ini |
+| `PUT /api/v1/auth/change-password` | Ganti password normal dengan verifikasi password lama |
+| `GET /api/v1/notifications/preferences` | Membaca status push notification pasien |
+| `PATCH /api/v1/notifications/preferences` | Enable/disable push notification pasien |
+| `POST /api/v1/notifications/events` | Tracking klik/open Web Push dari service worker |
+| `GET /api/v1/notifications/analytics` | Open rate, CTR, dan rata-rata TTO notifikasi |
 
 ---
 
@@ -111,7 +111,7 @@ API utama tersedia dengan prefix versioning `/api/v1`. Prefix lama `/api` masih 
 - Untuk Web Push di HP/PWA, frontend harus berjalan pada HTTPS atau secure context.
 - Endpoint `GET /api/v1/notifications/public-key` membutuhkan env `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, dan `VAPID_SUBJECT`; generate key dengan `npm run vapid:generate`, lalu set di Railway/backend production.
 - Untuk Railway/production, jangan mengandalkan filesystem lokal `uploads/`; gunakan Supabase Storage dengan env storage di atas.
-- Endpoint `/api/notifications/events` sengaja tidak membutuhkan bearer token karena dipanggil dari service worker saat user mengklik notifikasi.
+- Endpoint `/api/v1/notifications/events` sengaja tidak membutuhkan bearer token karena dipanggil dari service worker saat user mengklik notifikasi.
 - Pasien yang dibuat oleh role `nurse` otomatis dibuatkan assignment aktif ke nurse pembuat agar tetap muncul setelah refresh.
 - Untuk data lama yang sudah terlanjur dibuat tanpa assignment, jalankan `npm run backfill:patient-assignments` untuk dry-run, lalu `npm run backfill:patient-assignments -- --apply` untuk insert assignment aktif.
 

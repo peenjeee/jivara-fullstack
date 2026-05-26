@@ -11,6 +11,7 @@ export type ScheduleFilter = "all" | PatientStatus;
 
 const filters: { label: string; value: ScheduleFilter }[] = [
   { label: "Semua Pasien", value: "all" },
+  { label: "Complete", value: "Complete" },
   { label: "Need Special Attention", value: "Need Special Attention" },
   { label: "On Ideal Schedule", value: "On Ideal Schedule" },
   { label: "Lagging Behind", value: "Lagging Behind" },

@@ -117,7 +117,6 @@ function getSchedulesForDateWithLimit(schedules: readonly MedicationScheduleReco
   const dateKey = getDateKey(date);
 
   return schedules.filter((schedule) => {
-    if (schedule.status !== "Aktif") return false;
     if (schedule.startDate > dateKey) return false;
     if (getScheduleDisplayEndDate(schedule) < dateKey) return false;
     return true;

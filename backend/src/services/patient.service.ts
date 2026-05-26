@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { and, count, desc, eq, ilike, or } from "drizzle-orm";
+import { and, count, desc, eq, ilike, inArray, or } from "drizzle-orm";
 import { db } from "../db";
 import {
   foodScans,
@@ -11,7 +11,7 @@ import {
   users,
 } from "../db/schema";
 import { AUTH_CONSTANTS } from "../types/auth.types";
-import { AccessUser, assertCanAccessPatient, ensureOrganizationIdForUser, getNurseIdForUser, getOrganizationIdForUser, scopedPatientFilter } from "./access-control.service";
+import { AccessUser, assertCanAccessPatient, ensureOrganizationIdForUser, getAssignedPatientIdsForNurse, getNurseIdForUser, getOrganizationIdForUser, getPatientIdForUser, scopedPatientFilter } from "./access-control.service";
 import { writeAuditLogAsync } from "./audit-log.service";
 import { deleteCachedByPrefix, getCached, setCached } from "./cache.service";
 import {
@@ -20,8 +20,9 @@ import {
   PatientUpdateDTO,
 } from "../types/patient.types";
 import { getAdherenceStats } from "./adherence.service";
+import { invalidateNurseCache } from "./nurse.service";
 
-const PATIENT_CACHE_PREFIX = "patients:";
+const PATIENT_CACHE_PREFIX = "patients:v2:";
 const PATIENT_CACHE_TTL_MS = Number(process.env.PATIENT_CACHE_TTL_MS || 30_000);
 
 const getPatientListCacheKey = (query: PatientListQuery, user?: AccessUser) => {
@@ -40,6 +41,17 @@ const parsePagination = (query: PatientListQuery) => {
   return { page, limit, offset: (page - 1) * limit };
 };
 
+const getPatientAdherenceStatus = (adherence: number) => {
+  if (adherence < 50) return "Need Special Attention";
+  if (adherence < 75) return "Lagging Behind";
+  return "On Ideal Schedule";
+};
+
+const getPatientFinalStatus = (adherence: number, isMedicationComplete: boolean) => {
+  if (isMedicationComplete) return "Complete";
+  return getPatientAdherenceStatus(adherence);
+};
+
 type PatientListResult = {
   data: Array<{
     id: string;
@@ -56,9 +68,11 @@ type PatientListResult = {
     assignedNurseId: string | null;
     isActive: boolean;
     createdAt: Date | null;
+    lastLoginAt: Date | null;
     adherenceRate7d: number | null;
     adherenceRate30d: number | null;
     totalScheduled30d: number;
+    isMedicationComplete: boolean;
   }>;
   meta: { page: number; limit: number; total: number };
 };
@@ -98,51 +112,65 @@ export const listPatients = async (query: PatientListQuery, user?: AccessUser): 
   }
 
   if (query.nurseId) {
-    conditions.push(eq(patientNurseAssignments.nurseId, query.nurseId));
+    const assignedPatientIds = await getAssignedPatientIdsForNurse(query.nurseId);
+    if (assignedPatientIds.length === 0) {
+      const emptyResult = {
+        data: [],
+        meta: { page, limit, total: 0 },
+      };
+      setCached(cacheKey, emptyResult, PATIENT_CACHE_TTL_MS);
+      return emptyResult;
+    }
+    conditions.push(inArray(patients.id, assignedPatientIds));
   }
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
-  const [rows, totalRows] = await Promise.all([
-    db
-      .select({
-        id: patients.id,
-        organizationId: patients.organizationId,
-        userId: patients.userId,
-        fullName: users.fullName,
-        phone: users.phone,
-        email: users.email,
-        dateOfBirth: patients.dateOfBirth,
-        gender: patients.gender,
-        address: patients.address,
-        diagnosis: patients.diagnosis,
-        emergencyContact: patients.emergencyContact,
-        assignedNurseId: patientNurseAssignments.nurseId,
-        isActive: patients.isActive,
-        createdAt: patients.createdAt,
-      })
-      .from(patients)
-      .innerJoin(users, eq(patients.userId, users.id))
-      .leftJoin(patientNurseAssignments, and(
-        eq(patientNurseAssignments.patientId, patients.id),
-        eq(patientNurseAssignments.isActive, true),
-      ))
-      .where(where)
-      .orderBy(desc(patients.createdAt))
-      .limit(limit)
-      .offset(offset),
-    db
-      .select({ total: count() })
-      .from(patients)
-      .innerJoin(users, eq(patients.userId, users.id))
-      .leftJoin(patientNurseAssignments, and(
-        eq(patientNurseAssignments.patientId, patients.id),
-        eq(patientNurseAssignments.isActive, true),
-      ))
-      .where(where),
-  ]);
+  const baseSelect = () => db
+    .select({
+      id: patients.id,
+      organizationId: patients.organizationId,
+      userId: patients.userId,
+      fullName: users.fullName,
+      phone: users.phone,
+      email: users.email,
+      dateOfBirth: patients.dateOfBirth,
+      gender: patients.gender,
+      address: patients.address,
+      diagnosis: patients.diagnosis,
+      emergencyContact: patients.emergencyContact,
+      isActive: patients.isActive,
+      createdAt: patients.createdAt,
+      lastLoginAt: users.lastLoginAt,
+    })
+    .from(patients)
+    .innerJoin(users, eq(patients.userId, users.id))
+    .where(where)
+    .orderBy(desc(patients.createdAt));
 
-  const rowsWithAdherence = await Promise.all(rows.map(async (row) => {
+  const rows = query.adherenceStatus
+    ? await baseSelect()
+    : await baseSelect().limit(limit).offset(offset);
+  const assignmentRows = rows.length > 0
+    ? await db
+      .select({
+        patientId: patientNurseAssignments.patientId,
+        nurseId: patientNurseAssignments.nurseId,
+      })
+      .from(patientNurseAssignments)
+      .where(and(
+        eq(patientNurseAssignments.isActive, true),
+        inArray(patientNurseAssignments.patientId, rows.map((row) => row.id)),
+      ))
+    : [];
+  const assignmentByPatientId = new Map<string, string>();
+  for (const assignment of assignmentRows) {
+    if (!assignmentByPatientId.has(assignment.patientId)) {
+      assignmentByPatientId.set(assignment.patientId, assignment.nurseId);
+    }
+  }
+
+  const enrichedRows = await Promise.all(rows.map(async (row) => {
     const adherence30d = await getAdherenceStats({ patientId: row.id, period: "30d" }, user).catch(() => null);
     const adherence7d = await getAdherenceStats({ patientId: row.id, period: "7d" }, user).catch(() => null);
 
@@ -158,21 +186,66 @@ export const listPatients = async (query: PatientListQuery, user?: AccessUser): 
       address: row.address,
       diagnosis: row.diagnosis,
       emergencyContact: row.emergencyContact as string | null,
-      assignedNurseId: row.assignedNurseId,
+      assignedNurseId: assignmentByPatientId.get(row.id) ?? null,
       isActive: row.isActive ?? true,
       createdAt: row.createdAt,
+      lastLoginAt: row.lastLoginAt,
       adherenceRate7d: adherence7d?.adherenceRate ?? null,
       adherenceRate30d: adherence30d?.adherenceRate ?? null,
       totalScheduled30d: adherence30d?.totalScheduled ?? 0,
     };
   }));
 
+  const allPatientIds = enrichedRows.map((row) => row.id);
+  const activeSchedules = allPatientIds.length > 0
+    ? await db
+        .select({
+          patientId: medicationSchedules.patientId,
+          stock: medicationSchedules.stock,
+        })
+        .from(medicationSchedules)
+        .where(and(
+          inArray(medicationSchedules.patientId, allPatientIds),
+          eq(medicationSchedules.isActive, true),
+        ))
+    : [];
+  const schedulesByPatientId = new Map<string, number[]>();
+  for (const schedule of activeSchedules) {
+    const stocks = schedulesByPatientId.get(schedule.patientId) ?? [];
+    stocks.push(schedule.stock ?? 0);
+    schedulesByPatientId.set(schedule.patientId, stocks);
+  }
+  const enrichedRowsWithComplete = enrichedRows.map((row) => {
+    const stocks = schedulesByPatientId.get(row.id) ?? [];
+    const isMedicationComplete = stocks.length > 0 && stocks.every((stock) => (stock ?? 0) <= 0);
+    return { ...row, isMedicationComplete };
+  });
+
+  const computeRowStatus = (row: typeof enrichedRowsWithComplete[number]) => {
+    const adherence = row.totalScheduled30d ? Math.round(row.adherenceRate30d ?? row.adherenceRate7d ?? 100) : 100;
+    return getPatientFinalStatus(adherence, row.isMedicationComplete);
+  };
+
+  const rowsWithAdherence = query.adherenceStatus
+    ? enrichedRowsWithComplete
+      .filter((row) => computeRowStatus(row) === query.adherenceStatus)
+      .slice(offset, offset + limit)
+    : enrichedRowsWithComplete;
+
+  const total = query.adherenceStatus
+    ? enrichedRowsWithComplete.filter((row) => computeRowStatus(row) === query.adherenceStatus).length
+    : (await db
+      .select({ total: count() })
+      .from(patients)
+      .innerJoin(users, eq(patients.userId, users.id))
+      .where(where))[0]?.total || 0;
+
   const result = {
     data: rowsWithAdherence,
     meta: {
       page,
       limit,
-      total: totalRows[0]?.total || 0,
+      total,
     },
   };
 
@@ -198,6 +271,7 @@ export const getPatientById = async (patientId: string, user?: AccessUser) => {
       emergencyContact: patients.emergencyContact,
       isActive: patients.isActive,
       registeredAt: patients.createdAt,
+      lastLoginAt: users.lastLoginAt,
     })
     .from(patients)
     .innerJoin(users, eq(patients.userId, users.id))
@@ -228,6 +302,7 @@ export const getPatientById = async (patientId: string, user?: AccessUser) => {
         prescriptionId: medicationSchedules.prescriptionId,
         drugName: medicationSchedules.drugName,
         dosage: medicationSchedules.dosage,
+        stock: medicationSchedules.stock,
         frequency: medicationSchedules.frequency,
         scheduledTimes: medicationSchedules.scheduledTimes,
         instructions: medicationSchedules.instructions,
@@ -256,17 +331,38 @@ export const getPatientById = async (patientId: string, user?: AccessUser) => {
     ? { id: assignment[0].nurseId, name: assignment[0].nurseName }
     : null;
 
+  const isMedicationComplete = activeMedications.length > 0
+    && activeMedications.every((medication) => (medication.stock ?? 0) <= 0);
+
   return {
     ...row[0],
     assignedNurseId: assignedNurse?.id || null,
     assignedNurse,
     activeMedications,
     activeMedicationsCount: activeMedications.length,
+    isMedicationComplete,
     adherenceRate7d: adherence7d?.adherenceRate ?? null,
     adherenceRate30d: adherence30d?.adherenceRate ?? null,
     totalFoodScans: foodScanCount[0]?.total || 0,
     totalInteractionWarnings: interactionWarningCount[0]?.total || 0,
   };
+};
+
+export const getCurrentPatient = async (user?: AccessUser) => {
+  if (!user) {
+    throw { status: 401, message: "Autentikasi diperlukan", code: "MISSING_TOKEN" };
+  }
+
+  if (user.role !== "patient") {
+    throw { status: 403, message: "Endpoint ini hanya untuk pasien", code: "FORBIDDEN" };
+  }
+
+  const patientId = await getPatientIdForUser(user.id);
+  if (!patientId) {
+    throw { status: 404, message: "Pasien tidak ditemukan", code: "PATIENT_NOT_FOUND" };
+  }
+
+  return getPatientById(patientId, user);
 };
 
 const getPatientCoreById = async (patientId: string, user?: AccessUser) => {
@@ -288,6 +384,7 @@ const getPatientCoreById = async (patientId: string, user?: AccessUser) => {
       isActive: patients.isActive,
       registeredAt: patients.createdAt,
       assignedNurseId: patientNurseAssignments.nurseId,
+      lastLoginAt: users.lastLoginAt,
     })
     .from(patients)
     .innerJoin(users, eq(patients.userId, users.id))
@@ -396,6 +493,7 @@ export const createPatient = async (dto: PatientCreateDTO, createdBy?: string) =
     });
 
     invalidatePatientCache();
+    invalidateNurseCache();
     return patient;
   });
 };
@@ -438,6 +536,7 @@ export const updatePatient = async (patientId: string, dto: PatientUpdateDTO, us
   });
 
   invalidatePatientCache();
+  invalidateNurseCache();
   return getPatientCoreById(patientId, user);
 };
 
@@ -492,6 +591,7 @@ export const assignPatient = async (patientId: string, nurseId: string, assigned
   });
 
   invalidatePatientCache();
+  invalidateNurseCache();
   return getPatientCoreById(patientId, assignedBy ? { id: assignedBy, email: "", role: isSuperAdmin ? "super_admin" : "admin" } : undefined);
 };
 
@@ -512,4 +612,5 @@ export const deactivatePatient = async (patientId: string, user?: AccessUser) =>
   });
 
   invalidatePatientCache();
+  invalidateNurseCache();
 };

@@ -14,6 +14,7 @@ const filters: { label: string; value: PatientFilter }[] = [
   { label: "Need Special Attention", value: "Need Special Attention" },
   { label: "On Ideal Schedule", value: "On Ideal Schedule" },
   { label: "Lagging Behind", value: "Lagging Behind" },
+  { label: "Complete", value: "Complete" },
 ];
 
 interface PatientToolbarProps {
@@ -23,11 +24,12 @@ interface PatientToolbarProps {
   readonly onSearchChange: (value: string) => void;
   readonly onFilterChange: (value: PatientFilter) => void;
   readonly onReset: () => void;
+  readonly framed?: boolean;
 }
 
-export default function PatientToolbar({ search, activeFilter, hasActiveFilters, onSearchChange, onFilterChange, onReset }: PatientToolbarProps) {
-  return (
-    <ToolbarCard>
+export default function PatientToolbar({ search, activeFilter, hasActiveFilters, onSearchChange, onFilterChange, onReset, framed = true }: PatientToolbarProps) {
+  const content = (
+    <>
       <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
         <SearchField id="patientSearch" value={search} placeholder="Cari nama pasien ..." onChange={onSearchChange} />
         {hasActiveFilters && (
@@ -38,6 +40,16 @@ export default function PatientToolbar({ search, activeFilter, hasActiveFilters,
       </div>
 
       <FilterPills options={filters} activeValue={activeFilter} onChange={onFilterChange} className="mt-4" />
+    </>
+  );
+
+  return framed ? (
+    <ToolbarCard>
+      {content}
     </ToolbarCard>
+  ) : (
+    <div className="relative z-10">
+      {content}
+    </div>
   );
 }

@@ -1,4 +1,4 @@
-import { motion } from "motion/react";
+import { m } from "motion/react";
 
 interface MarqueeProps {
   readonly className?: string;
@@ -12,7 +12,7 @@ const marqueeItems = [
 
 export default function Marquee({ className = "" }: MarqueeProps) {
   return (
-    <motion.div
+    <m.div
       className={`relative w-screen overflow-hidden z-999 bg-leaf text-white shadow-[0_18px_60px_rgba(15,23,42,0.12)] ${className}`}
       aria-hidden="true"
       initial={{ opacity: 0 }}
@@ -35,6 +35,6 @@ export default function Marquee({ className = "" }: MarqueeProps) {
           </div>
         ))}
       </div>
-    </motion.div>
+    </m.div>
   );
 }

@@ -15,6 +15,13 @@ export interface InteractionCheckDTO {
   patientId: string;
   scanId: string;
   detectedItems: string[];
+  includeRecommendations?: boolean;
+}
+
+export interface FoodRecommendationDTO {
+  patientId: string;
+  scanId: string;
+  topN?: number;
 }
 
 export interface NutritionDTO {

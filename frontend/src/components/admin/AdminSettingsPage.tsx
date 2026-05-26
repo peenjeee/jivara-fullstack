@@ -19,11 +19,11 @@ export default function AdminSettingsPage() {
         <SettingsCard title="Keamanan Akun" icon={<ShieldCheck size={22} />} delay={0.2}>
           <SecuritySettingsForm />
         </SettingsCard>
-      </div>
 
-      <SettingsCard className="mt-5" title="Notifikasi Sistem" icon={<Bell size={22} />} delay={0.26}>
-        <AdminNotificationSettingsForm />
-      </SettingsCard>
+        <SettingsCard title="Notifikasi Sistem" icon={<Bell size={22} />} delay={0.26} className="xl:col-span-2">
+          <AdminNotificationSettingsForm />
+        </SettingsCard>
+      </div>
     </DashboardPageShell>
   );
 }

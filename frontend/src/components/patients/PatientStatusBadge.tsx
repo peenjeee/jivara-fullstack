@@ -5,6 +5,7 @@ const statusStyles: Record<PatientStatus, string> = {
   "On Ideal Schedule": "bg-safe/10 text-safe",
   "Lagging Behind": "bg-warning/15 text-warning-dark",
   "Need Special Attention": "bg-danger/10 text-danger",
+  "Complete": "bg-blue/10 text-blue",
 };
 
 interface PatientStatusBadgeProps {

@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 export default function DocsPage() {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://api.jivara.web.id/api";
-  const swaggerUrl = `${apiUrl.replace(/\/api\/?$/, "")}/api-docs`;
+  const swaggerUrl = `${apiUrl.replace(/\/api(?:\/v\d+)?\/?$/, "")}/api-docs/`;
 
   redirect(swaggerUrl);
 }

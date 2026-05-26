@@ -4,6 +4,7 @@ import { authenticateToken, authorizeRoles } from "../middleware/auth.middleware
 import { uploadSingleFoodImage } from "../middleware/upload.middleware";
 import {
   validateFoodDetect,
+  validateFoodRecommendations,
   validateFoodUpload,
   validateInteractionCheck,
   validateNutrition,
@@ -50,6 +51,22 @@ const attachScanIdParam = (req: Request, _res: Response, next: NextFunction) => 
  *         schema:
  *           type: string
  *           format: uuid
+ *       - in: query
+ *         name: date
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Filter satu tanggal dibuat. Untuk range gunakan start_date dan end_date.
+ *       - in: query
+ *         name: start_date
+ *         schema:
+ *           type: string
+ *           format: date
+ *       - in: query
+ *         name: end_date
+ *         schema:
+ *           type: string
+ *           format: date
  *     responses:
  *       200:
  *         description: Daftar scan makanan berhasil diambil
@@ -164,11 +181,13 @@ router.post("/food-scans/:scanId/detections", authorizeRoles("patient", "nurse",
  * @swagger
  * /api/v1/food-scans/{scanId}/interactions:
  *   post:
- *     summary: Buat hasil analisis interaksi obat-makanan dan rekomendasi wajib untuk scan
+ *     summary: Buat hasil analisis interaksi obat-makanan untuk scan
  *     description: |
  *       Mengambil label makanan hasil YOLO dari request, mengambil obat aktif pasien dari database,
  *       lalu backend memanggil AI reasoning service (`FOOD_REASONING_API_URL`) ke `/interaction-check`
- *       untuk setiap makanan dan wajib memanggil `/recommend` untuk rekomendasi makanan aman.
+ *       untuk setiap makanan. Secara default endpoint ini juga memanggil `/recommend` untuk kompatibilitas
+ *       client lama, tetapi client baru dapat mengirim `includeRecommendations: false` lalu memanggil
+ *       `/api/v1/food-scans/{scanId}/recommendations` agar request rekomendasi terlihat eksplisit.
  *     tags: [Food AI]
  *     security:
  *       - bearerAuth: []
@@ -197,9 +216,14 @@ router.post("/food-scans/:scanId/detections", authorizeRoles("patient", "nurse",
  *                 description: Label makanan hasil YOLO yang akan diteruskan sebagai `yolo_class` ke AI reasoning.
  *                 items:
  *                   type: string
+ *               includeRecommendations:
+ *                 type: boolean
+ *                 default: true
+ *                 description: Jika false, endpoint ini hanya menjalankan `/interaction-check` dan tidak memanggil AI `/recommend`.
  *           example:
  *             patientId: d2945f3f-d09c-4d9f-8ed2-1b9914328746
  *             detectedItems: ["tumis-kangkung"]
+ *             includeRecommendations: false
  *     responses:
  *       200:
  *         description: Hasil interaksi dan rekomendasi AI berhasil dibuat
@@ -235,8 +259,83 @@ router.post("/food-scans/:scanId/detections", authorizeRoles("patient", "nurse",
  *                 overall_risk_score: 5
  *                 overall_risk_level: tinggi
  *                 overall_recommendation: Ditemukan potensi interaksi obat-makanan. Ikuti alternatif makanan aman dari rekomendasi AI.
+ *                 disclaimer: Ini bukan nasihat medis. Selalu konsultasikan dengan dokter atau apoteker Anda.
  */
 router.post("/food-scans/:scanId/interactions", authorizeRoles("patient", "nurse", "admin"), attachScanIdParam, validateInteractionCheck, foodAiController.checkInteraction);
+
+/**
+ * @swagger
+ * /api/v1/food-scans/{scanId}/recommendations:
+ *   post:
+ *     summary: Buat rekomendasi makanan aman untuk scan
+ *     description: |
+ *       Mengambil obat aktif pasien dari database, lalu backend memanggil AI reasoning service
+ *       (`FOOD_REASONING_API_URL`) ke endpoint `/recommend` dengan payload
+ *       `{ patient_medications, top_n }`. Frontend mengirim `topN: 100` agar seluruh hasil
+ *       rekomendasi yang tersedia dari AI ikut ditampilkan. Endpoint ini tidak memanggil root,
+ *       health, atau alert dari AI service.
+ *       Backend memisahkan hasil rekomendasi berdasarkan risiko: `aman` dan `ringan` masuk
+ *       `recommended_foods`, sedangkan `sedang`, `tinggi`, dan `kritis` masuk `foods_to_avoid`.
+ *       Hasil rekomendasi juga disimpan sebagai snapshot pada scan agar detail scan dapat
+ *       menampilkan rekomendasi yang sama tanpa memanggil AI ulang saat modal dibuka.
+ *     tags: [Food AI]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: scanId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - patientId
+ *             properties:
+ *               patientId:
+ *                 type: string
+ *                 format: uuid
+ *               topN:
+ *                 type: integer
+ *                 minimum: 1
+ *                 maximum: 100
+ *                 default: 100
+ *                 description: Jumlah rekomendasi yang diteruskan sebagai `top_n` ke AI `/recommend`.
+ *           example:
+ *             patientId: d2945f3f-d09c-4d9f-8ed2-1b9914328746
+ *             topN: 100
+ *     responses:
+ *       200:
+ *         description: Rekomendasi makanan aman berhasil dibuat
+ *         content:
+ *           application/json:
+ *             example:
+ *               status: berhasil
+ *               data:
+ *                 patient_medications: ["WARFARIN"]
+ *                 analyzed_medications_count: 1
+ *                 recommended_foods:
+ *                   - food_name: apel
+ *                     severity_score: 0
+ *                     risk_level: aman
+ *                     worst_category: null
+ *                 foods_to_avoid:
+ *                   - food_name: soerabi
+ *                     severity_score: 2
+ *                     risk_level: sedang
+ *                     worst_category: diabetes
+ *                 recommendation_summary:
+ *                   safe: 5
+ *                   avoid: 2
+ *                 matched_medication_categories:
+ *                   WARFARIN: ["antikoagulan"]
+ */
+router.post("/food-scans/:scanId/recommendations", authorizeRoles("patient", "nurse", "admin"), attachScanIdParam, validateFoodRecommendations, foodAiController.recommendFoods);
 
 /**
  * @swagger

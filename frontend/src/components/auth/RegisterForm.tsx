@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useReducer } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Building2, Lock, Mail, Phone, User, UserPlus } from "lucide-react";
@@ -13,38 +13,68 @@ import Button from "@/components/ui/Button";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+interface RegisterFormState {
+  readonly fullName: string;
+  readonly organizationName: string;
+  readonly email: string;
+  readonly phone: string;
+  readonly password: string;
+  readonly confirmPassword: string;
+  readonly loading: boolean;
+}
+
+type RegisterFormAction =
+  | { readonly type: "setField"; readonly field: keyof Omit<RegisterFormState, "loading">; readonly value: string }
+  | { readonly type: "setLoading"; readonly value: boolean };
+
+const initialRegisterFormState: RegisterFormState = {
+  fullName: "",
+  organizationName: "",
+  email: "",
+  phone: "",
+  password: "",
+  confirmPassword: "",
+  loading: false,
+};
+
+function registerFormReducer(state: RegisterFormState, action: RegisterFormAction): RegisterFormState {
+  switch (action.type) {
+    case "setField":
+      return { ...state, [action.field]: action.value };
+    case "setLoading":
+      return { ...state, loading: action.value };
+    default:
+      return state;
+  }
+}
+
 export default function RegisterForm() {
-  const [fullName, setFullName] = useState("");
-  const [organizationName, setOrganizationName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const router = useRouter();
+  const [state, dispatch] = useReducer(registerFormReducer, initialRegisterFormState);
+  const { fullName, organizationName, email, phone, password, confirmPassword, loading } = state;
+  const { push } = useRouter();
 
   const updatePhone = (value: string) => {
-    setPhone(value.replace(/\D/g, ""));
+    dispatch({ type: "setField", field: "phone", value: value.replace(/\D/g, "") });
   };
 
   const handleRegister = async (event: React.FormEvent) => {
     event.preventDefault();
-    setLoading(true);
+    dispatch({ type: "setLoading", value: true });
 
     if (!fullName || !organizationName || !email || !password || !phone || !confirmPassword) {
-      setLoading(false);
+      dispatch({ type: "setLoading", value: false });
       showWarning("Harap isi semua kolom yang tersedia.");
       return;
     }
 
     if (!emailRegex.test(email)) {
-      setLoading(false);
+      dispatch({ type: "setLoading", value: false });
       showWarning("Silakan masukkan alamat email yang valid.", "Format Email Salah!");
       return;
     }
 
     if (password !== confirmPassword) {
-      setLoading(false);
+      dispatch({ type: "setLoading", value: false });
       showWarning("Kata sandi dan konfirmasi kata sandi tidak cocok.", "Password Tidak Cocok!");
       return;
     }
@@ -61,12 +91,12 @@ export default function RegisterForm() {
       });
 
       showToast("Pendaftaran berhasil!", "success");
-      router.push("/login");
+      push("/login");
     } catch (error) {
       closeAlert();
       showError(getApiErrorMessage(error, "Terjadi kesalahan saat mendaftar. Silakan coba lagi."));
     } finally {
-      setLoading(false);
+      dispatch({ type: "setLoading", value: false });
     }
   };
 
@@ -89,7 +119,7 @@ export default function RegisterForm() {
           type="text"
           placeholder="Nama Lengkap"
           value={fullName}
-          onChange={(event) => setFullName(event.target.value)}
+          onChange={(event) => dispatch({ type: "setField", field: "fullName", value: event.target.value })}
           autoComplete="name"
           icon={<User size={20} />}
         />
@@ -100,7 +130,7 @@ export default function RegisterForm() {
           type="text"
           placeholder="Masukkan Nama Organisasi"
           value={organizationName}
-          onChange={(event) => setOrganizationName(event.target.value)}
+          onChange={(event) => dispatch({ type: "setField", field: "organizationName", value: event.target.value })}
           autoComplete="organization"
           icon={<Building2 size={20} />}
         />
@@ -111,7 +141,7 @@ export default function RegisterForm() {
           type="email"
           placeholder="nama@email.com"
           value={email}
-          onChange={(event) => setEmail(event.target.value)}
+          onChange={(event) => dispatch({ type: "setField", field: "email", value: event.target.value })}
           autoComplete="email"
           icon={<Mail size={20} />}
         />
@@ -135,7 +165,7 @@ export default function RegisterForm() {
           type="password"
           placeholder="••••••••"
           value={password}
-          onChange={(event) => setPassword(event.target.value)}
+          onChange={(event) => dispatch({ type: "setField", field: "password", value: event.target.value })}
           autoComplete="new-password"
           icon={<Lock size={20} />}
         />
@@ -146,7 +176,7 @@ export default function RegisterForm() {
           type="password"
           placeholder="••••••••"
           value={confirmPassword}
-          onChange={(event) => setConfirmPassword(event.target.value)}
+          onChange={(event) => dispatch({ type: "setField", field: "confirmPassword", value: event.target.value })}
           autoComplete="new-password"
           icon={<Lock size={20} />}
         />

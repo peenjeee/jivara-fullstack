@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { LogIn } from "lucide-react";
 import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
@@ -29,7 +29,7 @@ export default function TeamPage() {
 
       <main className={`overflow-hidden pt-28 lg:pt-34 ${isStandalonePwa ? "pt-[calc(96px+env(safe-area-inset-top))] pb-28 lg:pt-34 lg:pb-0" : ""}`}>
         <section className="relative mx-auto flex w-full max-w-[1440px] flex-col items-center px-5 pb-0 pt-10 text-center sm:px-8 sm:pt-12 lg:px-[84px] lg:pt-0">
-          <motion.div
+          <m.div
             className="relative z-20 mx-auto max-w-4xl"
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
@@ -41,21 +41,21 @@ export default function TeamPage() {
             <p className="mx-auto mt-5 max-w-3xl text-sm font-semibold leading-7 text-muted sm:text-base lg:text-lg">
               A care-focused team building safer medication routines, smarter food interaction checks, and calmer patient monitoring.
             </p>
-          </motion.div>
+          </m.div>
 
           <div className="relative mt-10 flex min-h-[330px] w-full items-end justify-center sm:mt-14 sm:min-h-[470px] lg:mt-18 lg:min-h-[620px]">
             <div className="pointer-events-none absolute inset-x-0 top-6 z-0 overflow-hidden text-center sm:top-4 lg:top-0" aria-hidden="true">
-              <motion.p
+              <m.p
                 className="whitespace-nowrap text-center font-display text-[clamp(92px,22vw,300px)] font-extrabold leading-none tracking-[-0.035em] text-text-main/[0.08]"
                 initial={{ opacity: 0, scale: 0.92, y: 24 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 transition={{ duration: 0.85, ease: [0.16, 1, 0.3, 1], delay: 0.18 }}
               >
                 JIVARA
-              </motion.p>
+              </m.p>
             </div>
 
-            <motion.div
+            <m.div
               className="relative z-20 w-full translate-y-2 sm:translate-y-6 lg:translate-y-8"
               initial={{ opacity: 0, y: 52, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -73,7 +73,7 @@ export default function TeamPage() {
                 />
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[6%] " aria-hidden="true" />
               </div>
-            </motion.div>
+            </m.div>
           </div>
           <Marquee className="-mt-32 sm:-mt-34 lg:-mt-28" />
         </section>

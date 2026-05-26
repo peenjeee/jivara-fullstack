@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import Modal from "@/components/ui/Modal";
 import DetailItem from "@/components/ui/DetailItem";
 import PatientStatusBadge from "@/components/patients/PatientStatusBadge";
@@ -21,7 +21,7 @@ export default function ScheduleDetailModal({ group, readOnly = false, processin
     <Modal isOpen={Boolean(group)} title="Detail Jadwal Obat" onClose={onClose}>
       {group && (
         <div className="space-y-5">
-          <motion.div
+          <m.div
             className="flex items-start justify-between gap-4 rounded-3xl bg-surface p-5"
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
@@ -32,7 +32,7 @@ export default function ScheduleDetailModal({ group, readOnly = false, processin
               <p className="mt-1 font-display text-2xl font-extrabold tracking-[-0.04em] text-text-main">{group.patientName}</p>
             </div>
             <PatientStatusBadge status={group.patientStatus} />
-          </motion.div>
+          </m.div>
 
           <div className="space-y-4">
             {group.schedules.map((schedule, index) => (
@@ -47,7 +47,7 @@ export default function ScheduleDetailModal({ group, readOnly = false, processin
 
 function MedicineDetail({ schedule, index, readOnly, processingAction, onAction }: { readonly schedule: MedicationScheduleRecord; readonly index: number; readonly readOnly: boolean; readonly processingAction: string | null; readonly onAction: (action: ScheduleAction, schedule: MedicationScheduleRecord) => void }) {
   return (
-    <motion.article
+    <m.article
       className="rounded-3xl bg-surface p-5"
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
@@ -77,6 +77,6 @@ function MedicineDetail({ schedule, index, readOnly, processingAction, onAction 
         <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-primary">Instruksi</p>
         <p className="mt-1 text-sm font-semibold leading-6 text-muted">{schedule.instructions || "Tidak ada instruksi khusus."}</p>
       </div>
-    </motion.article>
+    </m.article>
   );
 }

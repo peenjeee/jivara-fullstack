@@ -1,4 +1,5 @@
 import api from "@/lib/axios";
+import { getDateRangeParams } from "@/lib/dateRange";
 import type { ActivityCategory, ActivityLogRecord, ActivitySeverity } from "@/lib/mocks/activityLogs";
 
 interface AuditLogResponse {
@@ -14,6 +15,8 @@ interface AuditLogResponse {
 }
 
 type ApprovalAction = "auth.register.pending" | "admin.approved" | "admin.rejected" | "admin.restored" | "admin.suspended" | "admin.activated";
+export type ApprovalLogStatus = "all" | "pending" | "active" | "rejected" | "suspended";
+export type ApprovalLogSeverity = "all" | "success" | "info" | "warning" | "critical";
 
 const approvalActionLabels: Record<ApprovalAction, { title: string; severity: ActivitySeverity }> = {
   "auth.register.pending": { title: "Pengajuan admin masuk", severity: "Info" },
@@ -25,40 +28,100 @@ const approvalActionLabels: Record<ApprovalAction, { title: string; severity: Ac
 };
 
 const approvalActions = new Set<ApprovalAction>(Object.keys(approvalActionLabels) as ApprovalAction[]);
+const approvalActionsByStatus: Record<Exclude<ApprovalLogStatus, "all">, ApprovalAction[]> = {
+  pending: ["auth.register.pending", "admin.restored"],
+  active: ["admin.approved", "admin.activated"],
+  rejected: ["admin.rejected"],
+  suspended: ["admin.suspended"],
+};
+const approvalActionsBySeverity: Record<Exclude<ApprovalLogSeverity, "all">, ApprovalAction[]> = {
+  success: ["admin.approved", "admin.activated"],
+  info: ["auth.register.pending", "admin.restored"],
+  warning: ["admin.rejected"],
+  critical: ["admin.suspended"],
+};
 
 interface PaginatedResponse<T> {
   data: T[];
-  meta?: { page: number; limit: number; total: number };
+  meta?: AuditLogMeta;
 }
 
-const auditCacheTtl = 10_000;
-let auditCache: { data: AuditLogResponse[]; expiresAt: number } | null = null;
-let auditRequest: Promise<AuditLogResponse[]> | null = null;
+interface AuditLogMeta {
+  page: number;
+  limit: number;
+  total: number;
+  summary?: {
+    warningCritical?: number;
+    today?: number;
+    pending?: number;
+    processedToday?: number;
+  };
+}
 
-export const clearAuditLogCache = () => {
-  auditCache = null;
-  auditRequest = null;
+interface AuditLogPage {
+  data: AuditLogResponse[];
+  meta: AuditLogMeta;
+}
+
+interface ActivityLogPage {
+  activities: ActivityLogRecord[];
+  meta: AuditLogMeta;
+}
+
+type AuditLogParams = {
+  page?: number;
+  limit?: number;
+  action?: string;
+  status?: string;
+  severityFilter?: string;
+  category?: ActivityCategory | "all";
+  activityCategory?: AuditActivityCategory;
+  date?: string;
+  userRole?: string;
+  nurseId?: string;
+  severity?: "success" | "info" | "critical" | "warning";
+  search?: string;
+  forceRefresh?: boolean;
 };
 
-const getAuditLogs = async (params: { page?: number; limit?: number; forceRefresh?: boolean } = {}) => {
+type AuditActivityCategory = "reminder" | "adherence" | "food_scan" | "administration";
+
+const auditCacheTtl = 10_000;
+const auditCache = new Map<string, { data: AuditLogPage; expiresAt: number }>();
+const auditRequests = new Map<string, Promise<AuditLogPage>>();
+
+export const clearAuditLogCache = () => {
+  auditCache.clear();
+  auditRequests.clear();
+};
+
+const getAuditLogs = async (params: AuditLogParams = {}) => {
   const page = params.page || 1;
   const limit = params.limit || 100;
-  const useCache = page === 1 && limit === 100;
+  const activityCategory = params.activityCategory || getAuditCategoryParam(params.category);
+  const search = params.search?.trim() || "";
+  const cacheKey = `${page}:${limit}:${params.action ?? ""}:${activityCategory ?? ""}:${params.date ?? ""}:${params.userRole ?? ""}:${params.nurseId ?? ""}:${params.severity ?? ""}:${search}`;
   const now = Date.now();
   if (params.forceRefresh) clearAuditLogCache();
-  if (useCache && auditCache && auditCache.expiresAt > now) return auditCache.data;
-  if (useCache && auditRequest) return auditRequest;
+  const cached = auditCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) return cached.data;
+  const activeRequest = auditRequests.get(cacheKey);
+  if (activeRequest) return activeRequest;
 
-  const request = api.get<PaginatedResponse<AuditLogResponse>>("/audit-logs", { params: { page, limit } })
+  const request = api.get<PaginatedResponse<AuditLogResponse>>("/audit-logs", { params: { page, limit, ...(params.action && { action: params.action }), ...(params.status && { status: params.status }), ...(params.severityFilter && { severityFilter: params.severityFilter }), ...(activityCategory && { activity_category: activityCategory }), ...getDateRangeParams(params.date), ...(params.userRole && { user_role: params.userRole }), ...(params.nurseId && { nurse_id: params.nurseId }), ...(params.severity && { severity: params.severity }), ...(search && { search }) } })
     .then((response) => {
-      if (useCache) auditCache = { data: response.data.data, expiresAt: Date.now() + auditCacheTtl };
-      return response.data.data;
+      const data = {
+        data: response.data.data,
+        meta: response.data.meta ?? { page, limit, total: response.data.data.length },
+      };
+      auditCache.set(cacheKey, { data, expiresAt: Date.now() + auditCacheTtl });
+      return data;
     })
     .finally(() => {
-      if (useCache) auditRequest = null;
+      auditRequests.delete(cacheKey);
     });
 
-  if (useCache) auditRequest = request;
+  auditRequests.set(cacheKey, request);
   return request;
 };
 
@@ -93,6 +156,14 @@ const getDescription = (log: AuditLogResponse) => {
   const resource = formatResource(log.resourceType);
   const resourceId = log.resourceId ? ` (${log.resourceId.slice(0, 8)})` : "";
   return `${actor} menjalankan ${formatAction(log.action)} pada ${resource}${resourceId}.`;
+};
+
+const getAuditCategoryParam = (category?: ActivityCategory | "all"): AuditActivityCategory | undefined => {
+  if (!category || category === "all") return undefined;
+  if (category === "Reminder") return "reminder";
+  if (category === "Kepatuhan") return "adherence";
+  if (category === "Scan Makanan") return "food_scan";
+  return "administration";
 };
 
 const getChangeRecord = (changes: unknown) => {
@@ -131,8 +202,8 @@ const getRelatedNurseId = (log: AuditLogResponse) => {
     || getNestedString(changes, "sourceNurseId");
 };
 
-export const getAuditActivitiesFromApi = async (params: { page?: number; limit?: number; forceRefresh?: boolean } = {}): Promise<ActivityLogRecord[]> => {
-  const logs = await getAuditLogs(params);
+export const getAuditActivityPageFromApi = async (params: { page?: number; limit?: number; status?: string; severityFilter?: string; category?: ActivityCategory | "all"; date?: string; userRole?: string; nurseId?: string; severity?: "success" | "info" | "critical" | "warning"; search?: string; forceRefresh?: boolean } = {}): Promise<ActivityLogPage> => {
+  const { data: logs, meta } = await getAuditLogs(params);
   const activities = logs.map((log) => ({
     id: log.id,
     title: formatAction(log.action),
@@ -150,7 +221,12 @@ export const getAuditActivitiesFromApi = async (params: { page?: number; limit?:
     read: false,
   }));
 
-  return activities;
+  return { activities, meta };
+};
+
+export const getAuditActivitiesFromApi = async (params: { page?: number; limit?: number; category?: ActivityCategory | "all"; date?: string; userRole?: string; nurseId?: string; severity?: "success" | "info" | "critical" | "warning"; search?: string; forceRefresh?: boolean } = {}): Promise<ActivityLogRecord[]> => {
+  const response = await getAuditActivityPageFromApi(params);
+  return response.activities;
 };
 
 const getApprovalDescription = (log: AuditLogResponse) => {
@@ -169,14 +245,38 @@ const getApprovalDescription = (log: AuditLogResponse) => {
   return `${actor} mengaktifkan kembali akun ${target}.`;
 };
 
-export const getSuperAdminApprovalActivitiesFromApi = async (params: { forceRefresh?: boolean } = {}): Promise<ActivityLogRecord[]> => {
-  const logs = await getAuditLogs({ forceRefresh: params.forceRefresh });
+export const getSuperAdminApprovalActivitiesFromApi = async (params: { page?: number; limit?: number; status?: ApprovalLogStatus; severity?: ApprovalLogSeverity; date?: string; search?: string; forceRefresh?: boolean } = {}): Promise<ActivityLogRecord[]> => {
+  const response = await getSuperAdminApprovalActivityPageFromApi(params);
+  return response.activities;
+};
 
-  return logs
-    .filter((log) => approvalActions.has(log.action as ApprovalAction))
-    .map((log) => {
+export const getSuperAdminApprovalActivityPageFromApi = async (params: { page?: number; limit?: number; status?: ApprovalLogStatus; severity?: ApprovalLogSeverity; date?: string; search?: string; forceRefresh?: boolean } = {}): Promise<ActivityLogPage> => {
+  const status = params.status ?? "all";
+  const severity = params.severity ?? "all";
+  const statusActions = status === "all" ? Array.from(approvalActions) : approvalActionsByStatus[status];
+  const severityActions = severity === "all" ? Array.from(approvalActions) : approvalActionsBySeverity[severity];
+  const actions = statusActions.filter((action) => severityActions.includes(action));
+  const page = params.page ?? 1;
+  const limit = params.limit ?? 100;
+
+  if (actions.length === 0) {
+    return { activities: [], meta: { page, limit, total: 0, summary: { warningCritical: 0, today: 0 } } };
+  }
+
+  const { data: logs, meta } = await getAuditLogs({
+    page,
+    limit,
+    date: params.date,
+    search: params.search,
+    forceRefresh: params.forceRefresh,
+    userRole: "super_admin",
+  });
+
+  const activities = logs
+    .flatMap((log) => {
+      if (!actions.includes(log.action as ApprovalAction)) return [];
       const config = approvalActionLabels[log.action as ApprovalAction];
-      return {
+      return [{
         id: log.id,
         title: config.title,
         description: getApprovalDescription(log),
@@ -184,6 +284,8 @@ export const getSuperAdminApprovalActivitiesFromApi = async (params: { forceRefr
         severity: config.severity,
         timestamp: log.createdAt || new Date().toISOString(),
         read: false,
-      };
+      }];
     });
+
+  return { activities, meta };
 };

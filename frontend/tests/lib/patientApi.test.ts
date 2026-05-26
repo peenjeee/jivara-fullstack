@@ -10,7 +10,7 @@ import {
   getPatientsFromApi,
   updatePatientViaApi,
 } from "@/lib/patientApi";
-import type { AddPatientValues } from "@/components/patients/AddPatientForm";
+import type { AddPatientValues } from "@/components/patients/addPatientFormUtils";
 
 vi.mock("@/lib/axios", () => ({
   default: {

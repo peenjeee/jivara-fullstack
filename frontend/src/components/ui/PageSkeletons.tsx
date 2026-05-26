@@ -5,12 +5,17 @@ export function DashboardPageSkeleton() {
 }
 
 export function SummaryCardsSkeleton({ count = 3 }: { readonly count?: number }) {
+  const desktopGridClass = count === 4 ? "xl:grid-cols-4" : "xl:grid-cols-3";
+
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    <section className={`mt-6 grid auto-rows-fr grid-cols-2 items-stretch gap-4 ${desktopGridClass}`}>
       {Array.from({ length: count }).map((_, index) => (
-        <div key={`summary-skeleton-${index}`} className="h-32 animate-pulse rounded-[28px] bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)]" />
+        <div
+          key={`summary-skeleton-${index}`}
+          className={`h-32 animate-pulse rounded-[28px] bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)] ${count === 3 && index === 2 ? "summary-skeleton-last" : ""}`}
+        />
       ))}
-    </div>
+    </section>
   );
 }
 
@@ -58,11 +63,63 @@ export function ActivityDataSkeleton({ rows = 5 }: { readonly rows?: number }) {
   );
 }
 
-export function DetailDataSkeleton() {
+export function PatientDashboardContentSkeleton() {
+  return (
+    <div className="h-[300px] animate-pulse rounded-[32px] bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)] md:h-[360px]" />
+  );
+}
+
+export function PatientScheduleContentSkeleton() {
+  return (
+    <div className="space-y-6">
+      <section className="rounded-[32px] bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+        <div className="h-7 w-44 animate-pulse rounded-xl bg-line/70" />
+        <div className="mt-8 h-28 animate-pulse rounded-3xl bg-line/45" />
+      </section>
+
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(340px,0.72fr)]">
+        <section className="rounded-[32px] bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+          <div className="mx-auto h-8 w-56 animate-pulse rounded-xl bg-line/70" />
+          <div className="mt-8 grid grid-cols-7 gap-4">
+            {Array.from({ length: 42 }).map((_, index) => (
+              <div key={`patient-schedule-calendar-skeleton-${index}`} className="mx-auto size-9 animate-pulse rounded-full bg-line/45" />
+            ))}
+          </div>
+        </section>
+        <section className="rounded-[32px] bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+          <div className="h-7 w-44 animate-pulse rounded-xl bg-line/70" />
+          <div className="mt-5 h-24 animate-pulse rounded-3xl bg-line/45" />
+          <div className="mt-5 h-40 animate-pulse rounded-3xl bg-line/45" />
+        </section>
+      </div>
+    </div>
+  );
+}
+
+export function PatientActivityCalendarSkeleton() {
+  return (
+    <section className="rounded-[32px] bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+      <div className="flex items-center justify-between gap-4">
+        <div className="h-8 w-48 animate-pulse rounded-xl bg-line/70" />
+        <div className="h-10 w-28 animate-pulse rounded-full bg-line/50" />
+      </div>
+      <div className="mt-8 grid grid-cols-7 gap-px overflow-hidden rounded-2xl border border-line">
+        {Array.from({ length: 42 }).map((_, index) => (
+          <div key={`patient-activity-calendar-skeleton-${index}`} className="h-24 animate-pulse border border-line/60 bg-line/25 p-3">
+            <div className="h-4 w-5 rounded-full bg-line/60" />
+            {index % 5 === 0 && <div className="mt-4 h-5 rounded-md bg-line/70" />}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export function DetailDataSkeleton({ summaryCount = 4 }: { readonly summaryCount?: number }) {
   return (
     <div className="space-y-6">
       <div className="h-52 animate-pulse rounded-[32px] bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)]" />
-      <SummaryCardsSkeleton count={4} />
+      <SummaryCardsSkeleton count={summaryCount} />
       <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
         <div className="h-96 animate-pulse rounded-[32px] bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)]" />
         <div className="h-96 animate-pulse rounded-[32px] bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)]" />

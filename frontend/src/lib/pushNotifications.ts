@@ -2,10 +2,6 @@ import api from "@/lib/axios";
 import { updateUserNotificationPreferenceViaApi, type UserNotificationPreferenceKey } from "@/lib/notificationSettingsApi";
 import type { User } from "@/types/auth";
 
-interface PatientResponse {
-  id: string;
-}
-
 interface PublicKeyResponse {
   publicKey: string;
 }
@@ -16,6 +12,22 @@ interface PreferenceResponse {
   subscriptionCount: number;
   activeSubscriptions: number;
 }
+
+const firstLoginPromptStoragePrefix = "jivara-notification-first-login-prompt:";
+const medicationPreferenceCacheTtl = 30_000;
+const currentMedicationPreferenceCacheKey = "current-patient";
+
+const getPushNotificationCache = () => {
+  const globalStore = globalThis as typeof globalThis & {
+    __jivaraMedicationPreferenceCache?: Map<string, { data: PreferenceResponse; expiresAt: number }>;
+    __jivaraMedicationPreferenceRequests?: Map<string, Promise<PreferenceResponse>>;
+  };
+
+  globalStore.__jivaraMedicationPreferenceCache ??= new Map();
+  globalStore.__jivaraMedicationPreferenceRequests ??= new Map();
+
+  return globalStore;
+};
 
 const urlBase64ToUint8Array = (base64String: string) => {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -30,21 +42,19 @@ const urlBase64ToUint8Array = (base64String: string) => {
   return outputArray;
 };
 
-export const getNotificationPatientId = async () => {
-  const response = await api.get<{ data: PatientResponse[] }>("/patients", { params: { limit: 1 } });
-  const patient = response.data.data[0];
-
-  if (!patient?.id) {
-    throw new Error("Data pasien tidak ditemukan untuk mengaktifkan notifikasi.");
-  }
-
-  return patient.id;
-};
-
 export const supportsBrowserPushNotifications = () => {
   if (typeof window === "undefined") return false;
   return window.isSecureContext && "Notification" in window && "PushManager" in window && "serviceWorker" in navigator;
 };
+
+export const isBrowserPushPermissionDenied = () => {
+  if (typeof window === "undefined" || !("Notification" in window)) return false;
+  return Notification.permission === "denied";
+};
+
+export const getBlockedNotificationPermissionMessage = () => (
+  "Mohon izinkan aplikasi/browser untuk izin notifikasi."
+);
 
 const getServiceWorkerRegistration = async () => {
   if (!("serviceWorker" in navigator)) {
@@ -77,7 +87,7 @@ const getPushSubscription = async (registration: ServiceWorkerRegistration, publ
         applicationServerKey,
       });
     } catch {
-      throw new Error("Gagal mengaktifkan notifikasi di browser ini. Pastikan menggunakan HTTPS dan browser mendukung push notification.");
+      throw new Error("Preferensi notifikasi gagal disimpan. Pastikan Browser sudah izin dan mendukung notifikasi.");
     }
   }
 };
@@ -87,25 +97,19 @@ export const enableMedicationPushNotifications = async () => {
     throw new Error("Browser belum mendukung push notification.");
   }
 
-  const permission = await Notification.requestPermission();
-  if (permission !== "granted") {
-    throw new Error("Izin notifikasi belum diberikan.");
-  }
+  return Notification.requestPermission().then((permission) => {
+    if (permission !== "granted") {
+      throw new Error("Izin notifikasi belum diberikan.");
+    }
 
-  const [patientId, keyResponse, registration] = await Promise.all([
-    getNotificationPatientId(),
-    api.get<{ data: PublicKeyResponse }>("/notifications/public-key"),
-    getServiceWorkerRegistration(),
-  ]);
-
-  const subscription = await getPushSubscription(registration, keyResponse.data.data.publicKey);
-
-  await api.post("/notifications/subscribe", {
-    patient_id: patientId,
-    subscription: subscription.toJSON(),
-  });
-
-  return patientId;
+    return Promise.all([
+      api.get<{ data: PublicKeyResponse }>("/notifications/public-key"),
+      getServiceWorkerRegistration(),
+    ]);
+  }).then(([keyResponse, registration]) => getPushSubscription(registration, keyResponse.data.data.publicKey))
+    .then((subscription) => api.post("/notifications/subscribe", {
+      subscription: subscription.toJSON(),
+    }));
 };
 
 export const enableUserPushNotifications = async () => {
@@ -113,21 +117,19 @@ export const enableUserPushNotifications = async () => {
     throw new Error("Browser belum mendukung push notification.");
   }
 
-  const permission = await Notification.requestPermission();
-  if (permission !== "granted") {
-    throw new Error("Izin notifikasi belum diberikan.");
-  }
+  return Notification.requestPermission().then((permission) => {
+    if (permission !== "granted") {
+      throw new Error("Izin notifikasi belum diberikan.");
+    }
 
-  const [keyResponse, registration] = await Promise.all([
-    api.get<{ data: PublicKeyResponse }>("/notifications/public-key"),
-    getServiceWorkerRegistration(),
-  ]);
-
-  const subscription = await getPushSubscription(registration, keyResponse.data.data.publicKey);
-
-  await api.post("/notifications/user-subscribe", {
-    subscription: subscription.toJSON(),
-  });
+    return Promise.all([
+      api.get<{ data: PublicKeyResponse }>("/notifications/public-key"),
+      getServiceWorkerRegistration(),
+    ]);
+  }).then(([keyResponse, registration]) => getPushSubscription(registration, keyResponse.data.data.publicKey))
+    .then((subscription) => api.post("/notifications/user-subscribe", {
+      subscription: subscription.toJSON(),
+    }));
 };
 
 const getDefaultUserPreferenceKey = (role: string): UserNotificationPreferenceKey | null => {
@@ -137,25 +139,32 @@ const getDefaultUserPreferenceKey = (role: string): UserNotificationPreferenceKe
   return null;
 };
 
-export const disableDefaultPushPreference = async (user: Pick<User, "role">) => {
-  try {
-    if (user.role === "patient") {
-      await setMedicationPushPreference(false);
-      return;
-    }
+const getFirstLoginPromptStorageKey = (user: Pick<User, "id" | "role">) => `${firstLoginPromptStoragePrefix}${user.id}:${user.role}`;
 
-    const preferenceKey = getDefaultUserPreferenceKey(String(user.role));
-    if (preferenceKey) await updateUserNotificationPreferenceViaApi(preferenceKey, false);
-  } catch {
-    // console.warn("[Jivara Push] Failed to disable default preference", error);
+const disableDefaultPushPreference = async (user: Pick<User, "role">) => {
+  if (user.role === "patient") {
+    await setMedicationPushPreference(false);
+    return;
   }
+
+  const preferenceKey = getDefaultUserPreferenceKey(String(user.role));
+  if (preferenceKey) await updateUserNotificationPreferenceViaApi(preferenceKey, false);
 };
 
-export const tryEnableDefaultPushNotifications = async (user: Pick<User, "role">, options: { requestPermission?: boolean } = {}) => {
+export const promptForFirstLoginPushNotifications = async (user: Pick<User, "id" | "role">) => {
   if (typeof window === "undefined") return;
-  if (!supportsBrowserPushNotifications()) return;
-  if (Notification.permission === "denied") return;
-  if (Notification.permission === "default" && options.requestPermission !== true) return;
+  if (!supportsBrowserPushNotifications()) {
+    await disableDefaultPushPreference(user).catch(() => undefined);
+    return;
+  }
+  if (Notification.permission === "denied") {
+    await disableDefaultPushPreference(user).catch(() => undefined);
+    return;
+  }
+
+  const storageKey = getFirstLoginPromptStorageKey(user);
+  if (window.localStorage.getItem(storageKey) === "1") return;
+  window.localStorage.setItem(storageKey, "1");
 
   try {
     if (user.role === "patient") {
@@ -165,27 +174,56 @@ export const tryEnableDefaultPushNotifications = async (user: Pick<User, "role">
     }
 
     const preferenceKey = getDefaultUserPreferenceKey(String(user.role));
-    if (preferenceKey) {
-      await enableUserPushNotifications();
-      await updateUserNotificationPreferenceViaApi(preferenceKey, true);
-    }
+    if (!preferenceKey) return;
+
+    await enableUserPushNotifications();
+    await updateUserNotificationPreferenceViaApi(preferenceKey, true);
   } catch {
-    await disableDefaultPushPreference(user);
-    // console.warn("[Jivara Push] Default subscription skipped", error);
+    await disableDefaultPushPreference(user).catch(() => undefined);
+    // User can still enable notifications later from Settings.
   }
 };
 
 export const setMedicationPushPreference = async (enabled: boolean) => {
-  const patientId = await getNotificationPatientId();
-
-  await api.patch("/notifications/preferences", {
-    patient_id: patientId,
+  const response = await api.patch<{ data: PreferenceResponse }>("/notifications/preferences", {
     enabled,
+  });
+
+  const cache = getPushNotificationCache();
+  cache.__jivaraMedicationPreferenceCache?.set(currentMedicationPreferenceCacheKey, {
+    data: response.data.data,
+    expiresAt: Date.now() + medicationPreferenceCacheTtl,
+  });
+  cache.__jivaraMedicationPreferenceCache?.set(response.data.data.patientId, {
+    data: response.data.data,
+    expiresAt: Date.now() + medicationPreferenceCacheTtl,
   });
 };
 
 export const getMedicationPushPreference = async () => {
-  const patientId = await getNotificationPatientId();
-  const response = await api.get<{ data: PreferenceResponse }>("/notifications/preferences", { params: { patient_id: patientId } });
-  return response.data.data;
+  const cache = getPushNotificationCache();
+  const cached = cache.__jivaraMedicationPreferenceCache?.get(currentMedicationPreferenceCacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.data;
+
+  const activeRequest = cache.__jivaraMedicationPreferenceRequests?.get(currentMedicationPreferenceCacheKey);
+  if (activeRequest) return activeRequest;
+
+  const request = api.get<{ data: PreferenceResponse }>("/notifications/preferences")
+    .then((response) => {
+      cache.__jivaraMedicationPreferenceCache?.set(currentMedicationPreferenceCacheKey, {
+        data: response.data.data,
+        expiresAt: Date.now() + medicationPreferenceCacheTtl,
+      });
+      cache.__jivaraMedicationPreferenceCache?.set(response.data.data.patientId, {
+        data: response.data.data,
+        expiresAt: Date.now() + medicationPreferenceCacheTtl,
+      });
+      return response.data.data;
+    })
+    .finally(() => {
+      cache.__jivaraMedicationPreferenceRequests?.delete(currentMedicationPreferenceCacheKey);
+    });
+
+  cache.__jivaraMedicationPreferenceRequests?.set(currentMedicationPreferenceCacheKey, request);
+  return request;
 };

@@ -159,6 +159,38 @@ router.post(
  *     responses:
  *       200:
  *         description: Login berhasil. Salin data.access_token untuk autentikasi Bearer.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: berhasil
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     access_token:
+ *                       type: string
+ *                     refresh_token:
+ *                       type: string
+ *                     user:
+ *                       type: object
+ *                       properties:
+ *                         id:
+ *                           type: string
+ *                           format: uuid
+ *                         fullName:
+ *                           type: string
+ *                         email:
+ *                           type: string
+ *                           format: email
+ *                         role:
+ *                           type: string
+ *                         lastLoginAt:
+ *                           type: string
+ *                           nullable: true
+ *                           format: date-time
  *       400:
  *         description: Kredensial tidak valid
  */
@@ -295,13 +327,38 @@ router.post("/logout", authController.logout);
  * /api/v1/auth/me:
  *   get:
  *     summary: Ambil profil pengguna saat ini
- *     description: Klik tombol Authorize di bagian atas Swagger UI, lalu masukkan access_token dari /api/auth/login tanpa awalan Bearer.
+ *     description: Klik tombol Authorize di bagian atas Swagger UI, lalu masukkan access_token dari /api/v1/auth/login tanpa awalan Bearer.
  *     tags: [Auth]
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
  *         description: Profil berhasil diambil
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: berhasil
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                       format: uuid
+ *                     fullName:
+ *                       type: string
+ *                     email:
+ *                       type: string
+ *                       format: email
+ *                     role:
+ *                       type: string
+ *                     lastLoginAt:
+ *                       type: string
+ *                       nullable: true
+ *                       format: date-time
  *       401:
  *         description: Tidak terautentikasi
  */

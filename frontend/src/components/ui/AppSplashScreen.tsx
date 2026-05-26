@@ -1,8 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { AnimatePresence, motion } from "motion/react";
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { AnimatePresence, m } from "motion/react";
+import { createContext, useEffect, useMemo, useState, use } from "react";
 import { useIsStandalonePwa } from "@/hooks";
 
 const splashSessionKey = "jivara-pwa-splash-shown";
@@ -16,7 +16,7 @@ interface SplashScreenContextValue {
 
 const SplashScreenContext = createContext<SplashScreenContextValue>({ isSplashFinished: true });
 
-export const useSplashScreen = () => useContext(SplashScreenContext);
+export const useSplashScreen = () => use(SplashScreenContext);
 
 export default function AppSplashScreen() {
   const isStandalonePwa = useIsStandalonePwa();
@@ -32,27 +32,25 @@ export default function AppSplashScreen() {
   });
 
   useEffect(() => {
-    if (!shouldShowSplash || phase === "done") return;
+    if (!shouldShowSplash || phase === "done" || phase === "idle") return;
 
-    if (phase === "pre-splash") {
-      window.sessionStorage.setItem(splashSessionKey, "true");
-      const timer = setTimeout(() => setPhase("main-splash"), preSplashDuration);
-      return () => clearTimeout(timer);
-    }
+    if (phase === "pre-splash") window.sessionStorage.setItem(splashSessionKey, "true");
 
-    if (phase === "main-splash") {
-      const timer = setTimeout(() => setPhase("done"), mainSplashDuration);
-      return () => clearTimeout(timer);
-    }
+    const nextPhase = phase === "pre-splash" ? "main-splash" : "done";
+    const duration = phase === "pre-splash" ? preSplashDuration : mainSplashDuration;
+    const timer = setTimeout(() => setPhase(nextPhase), duration);
+    return () => clearTimeout(timer);
   }, [phase, shouldShowSplash]);
 
   const isReady = phase === "done";
 
+  const splashValue = useMemo(() => ({ isSplashFinished: isReady }), [isReady]);
+
   return (
-    <SplashScreenContext.Provider value={{ isSplashFinished: isReady }}>
+    <SplashScreenContext.Provider value={splashValue}>
       <AnimatePresence>
         {phase === "pre-splash" && (
-          <motion.div
+          <m.div
             className="fixed inset-0 z-[100000] flex items-center justify-center bg-white"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -67,18 +65,18 @@ export default function AppSplashScreen() {
               priority
               className="h-[60px] w-[200px] object-contain"
             />
-          </motion.div>
+          </m.div>
         )}
 
         {phase === "main-splash" && (
-          <motion.div
+          <m.div
             className="fixed inset-0 z-[100000] flex items-center justify-center bg-white"
             initial={{ opacity: 1 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: exitDuration / 1000, ease: [0.16, 1, 0.3, 1] }}
           >
-            <motion.div
+            <m.div
               initial={{ opacity: 0, scale: 0.92, y: 10 }}
               animate={{ opacity: 1, scale: [0.92, 1, 0.985, 1], y: 0 }}
               exit={{ opacity: 0, scale: 1.03, y: -8 }}
@@ -93,8 +91,8 @@ export default function AppSplashScreen() {
                 sizes="(max-width: 640px) 150px, 180px"
                 className="h-[150px] w-[150px] rounded-[36px] object-contain sm:h-[180px] sm:w-[180px]"
               />
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         )}
       </AnimatePresence>
     </SplashScreenContext.Provider>

@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { Ban, CheckCircle2, Clock3, PauseCircle, Power, RotateCcw, XCircle } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
+import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
 import PatientPagination from "@/components/patients/PatientPagination";
 import Button from "@/components/ui/Button";
 import FilterPills from "@/components/ui/FilterPills";
@@ -29,7 +30,8 @@ const approvalFilters: { readonly label: string; readonly value: ApprovalFilter 
 ];
 
 export default function AdminApprovalsPage() {
-  const router = useRouter();
+  const shouldAnimate = useDashboardEntranceMotion();
+  const { replace } = useRouter();
   const role = useAuthStore((state) => state.user?.role);
   const hasAuthHydrated = useAuthStore((state) => state.hasHydrated);
   const approvals = useAdminApprovals(hasAuthHydrated && role === "super_admin");
@@ -44,45 +46,45 @@ export default function AdminApprovalsPage() {
   useEffect(() => {
     if (!hasAuthHydrated) return;
     if (role !== "super_admin") {
-      router.replace("/dashboard");
+      replace("/dashboard");
       return;
     }
-  }, [hasAuthHydrated, role, router]);
+  }, [hasAuthHydrated, role, replace]);
 
   if (!hasAuthHydrated || role !== "super_admin") return null;
 
   return (
-    <DashboardPageShell>
+      <DashboardPageShell>
       <DashboardPageHeader title="Persetujuan Admin" />
-      {approvals.loading ? <SummaryCardsSkeleton count={4} /> : <SummaryCardGrid stats={approvals.loadError ? [] : stats} desktopColumns={4} />}
+      {approvals.summaryLoading && !approvals.hasLoadedSummary ? <SummaryCardsSkeleton count={4} /> : <SummaryCardGrid stats={approvals.loadError ? [] : stats} desktopColumns={4} />}
 
-      {!approvals.loading && approvals.loadError && (
+      {!approvals.summaryLoading && !approvals.loading && approvals.loadError && (
         <section className="mt-6 rounded-[32px] bg-white p-8 text-center shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
           <p className="text-sm font-bold text-muted">Data persetujuan admin belum bisa dimuat dari API.</p>
         </section>
       )}
 
-      {!approvals.loadError && <motion.div className="mt-6" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: 0.12 }}>
-        {approvals.loading ? <ToolbarSkeleton /> : <ToolbarCard>
+      {!approvals.loadError && <m.div className="mt-6" {...getDashboardEntranceMotion(shouldAnimate, 0.12, 20)}>
+        {approvals.loading && !approvals.hasLoadedApprovals ? <ToolbarSkeleton /> : <ToolbarCard>
           <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
             <SearchField id="adminApprovalSearch" value={approvals.search} placeholder="Cari akun admin ..." onChange={(value) => { approvals.setSearch(value); approvals.setCurrentPage(1); }} />
             {(approvals.search || approvals.filter !== "pending") && <Button type="button" size="sm" variant="outline" onClick={approvals.resetFilters}>Reset</Button>}
           </div>
           <FilterPills options={approvalFilters} activeValue={approvals.filter} onChange={(value) => { approvals.setFilter(value); approvals.setCurrentPage(1); }} className="mt-4" />
         </ToolbarCard>}
-      </motion.div>}
+      </m.div>}
 
-      {!approvals.loadError && <motion.section className="mt-6 overflow-hidden rounded-3xl bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)]" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}>
+      {!approvals.loadError && <m.section className="mt-6 overflow-hidden rounded-3xl bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)]" {...getDashboardEntranceMotion(shouldAnimate, 0.2, 24)}>
         {approvals.loading ? <ApprovalSkeleton /> : <ApprovalList approvals={approvals.paginatedApprovals} activeFilter={approvals.filter} processingId={approvals.processingId} onApprove={approvals.handleApprove} onActivate={approvals.handleActivate} onSuspend={approvals.handleSuspend} onRestore={approvals.handleRestore} onReject={approvals.setRejectingUser} />}
         {!approvals.loading && <PatientPagination
           currentPage={approvals.currentPage}
           totalPages={approvals.totalPages}
-          totalItems={approvals.filteredApprovals.length}
+          totalItems={approvals.totalApprovals}
           pageSize={pageSize}
           itemLabel="admin"
           onPageChange={approvals.setCurrentPage}
         />}
-      </motion.section>}
+      </m.section>}
 
       <RejectApprovalModal key={approvals.rejectingUser?.id ?? "empty"} user={approvals.rejectingUser} loading={approvals.processingId === approvals.rejectingUser?.id} onClose={() => approvals.setRejectingUser(null)} onSubmit={approvals.handleReject} />
     </DashboardPageShell>
@@ -210,17 +212,12 @@ function RejectApprovalModal({ user, loading, onClose, onSubmit }: { readonly us
 
   return (
     <Modal isOpen={Boolean(user)} title="Tolak Pengajuan Admin" onClose={onClose}>
-      <form
-        className="space-y-5"
-        onSubmit={(event) => {
-          event.preventDefault();
-          onSubmit(reason.trim());
-        }}
-      >
+      <div className="space-y-5">
         <label className="block text-sm font-extrabold text-text-main" htmlFor="rejectReason">Alasan Penolakan</label>
         <textarea
           id="rejectReason"
           name="reason"
+          aria-label="Alasan penolakan pengajuan admin"
           value={reason}
           onChange={(event) => setReason(event.target.value)}
           rows={4}
@@ -228,9 +225,9 @@ function RejectApprovalModal({ user, loading, onClose, onSubmit }: { readonly us
           placeholder="Isi alasan penolakan."
         />
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <Button type="submit" icon={<XCircle size={16} />} loading={loading}>Tolak Pengajuan</Button>
+          <Button type="button" icon={<XCircle size={16} />} loading={loading} onClick={() => onSubmit(reason.trim())}>Tolak Pengajuan</Button>
         </div>
-      </form>
+      </div>
     </Modal>
   );
 }

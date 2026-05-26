@@ -1,7 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { motion } from "motion/react";
+import { m } from "motion/react";
+import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
 
 interface PatientDetailSectionProps {
   readonly title: string;
@@ -13,12 +14,12 @@ interface PatientDetailSectionProps {
 }
 
 export default function PatientDetailSection({ title, description, action, children, className = "", delay = 0 }: PatientDetailSectionProps) {
+  const shouldAnimate = useDashboardEntranceMotion();
+
   return (
-    <motion.section
+    <m.section
       className={`rounded-3xl bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)] sm:p-6 ${className}`}
-      initial={{ opacity: 0, y: 22 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay }}
+      {...getDashboardEntranceMotion(shouldAnimate, delay, 22)}
     >
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
@@ -28,6 +29,6 @@ export default function PatientDetailSection({ title, description, action, child
         {action}
       </div>
       {children}
-    </motion.section>
+    </m.section>
   );
 }

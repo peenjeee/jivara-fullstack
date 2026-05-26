@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { motion } from "motion/react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { m } from "motion/react";
+import SelectField from "@/components/ui/SelectField";
+import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
 import type { PatientAdherenceDayResponse } from "@/lib/patientDashboardApi";
 
 interface PatientAdherenceHeatmapProps {
@@ -14,6 +16,7 @@ interface HeatmapDay {
   readonly level: number;
   readonly total: number;
   readonly confirmed: number;
+  readonly isOutsideYear: boolean;
   readonly isFuture: boolean;
 }
 
@@ -22,6 +25,8 @@ interface HeatmapTooltipState {
   readonly x: number;
   readonly y: number;
   readonly placement: "top" | "bottom";
+  readonly left: number;
+  readonly align: "center" | "left" | "right";
 }
 
 const monthFormatter = new Intl.DateTimeFormat("id-ID", { month: "short" });
@@ -29,30 +34,29 @@ const dateFormatter = new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: 
 const levelClasses = ["bg-surface", "bg-primary/15", "bg-primary/30", "bg-primary/55", "bg-primary"];
 
 export default function PatientAdherenceHeatmap({ dailyBreakdown }: PatientAdherenceHeatmapProps) {
+  const shouldAnimate = useDashboardEntranceMotion();
   const today = useMemo(() => new Date(), []);
+  const [selectedYear, setSelectedYear] = useState(() => today.getFullYear());
   const dailyStats = useMemo(() => getDailyAdherenceStats(dailyBreakdown), [dailyBreakdown]);
-  const weeks = useMemo(() => getHeatmapWeeks(today, dailyStats), [today, dailyStats]);
-  const monthLabels = useMemo(() => getMonthLabels(weeks), [weeks]);
+  const yearOptions = useMemo(() => getYearOptions(dailyBreakdown, today.getFullYear()), [dailyBreakdown, today]);
+  const weeks = useMemo(() => getHeatmapWeeks(selectedYear, today, dailyStats), [selectedYear, today, dailyStats]);
+  const monthLabels = useMemo(() => getMonthLabels(weeks, selectedYear), [weeks, selectedYear]);
   const cellSize = 20;
   const cellGap = 4;
   const gridWidth = weeks.length * cellSize + (weeks.length - 1) * cellGap;
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const tooltipRef = useRef<HTMLDivElement | null>(null);
   const [tooltip, setTooltip] = useState<HeatmapTooltipState | null>(null);
-  const [tooltipLeft, setTooltipLeft] = useState<number | null>(null);
-  const [tooltipAlign, setTooltipAlign] = useState<"center" | "left" | "right">("center");
+  const todayKey = useMemo(() => getDateKey(today), [today]);
   const todayColumnIndex = useMemo(() => {
-    const todayKey = getDateKey(today);
     return weeks.findIndex((week) => week.some((day) => day.dateKey === todayKey));
-  }, [today, weeks]);
+  }, [todayKey, weeks]);
 
-  useEffect(() => {
-    if (todayColumnIndex < 0) return;
-    const container = scrollRef.current;
-    if (!container) return;
-    const targetLeft = todayColumnIndex * (cellSize + cellGap);
-    const centeredLeft = Math.max(0, targetLeft - container.clientWidth / 2 + cellSize / 2);
-    container.scrollLeft = centeredLeft;
+  const setScrollContainer = useCallback((node: HTMLDivElement | null) => {
+    scrollRef.current = node;
+    if (!node) return;
+    requestAnimationFrame(() => {
+      scrollHeatmapToColumn(node, todayColumnIndex, cellSize, cellGap);
+    });
   }, [cellGap, cellSize, todayColumnIndex]);
 
   const showTooltip = (label: string, rect: DOMRect) => {
@@ -60,12 +64,16 @@ export default function PatientAdherenceHeatmap({ dailyBreakdown }: PatientAdher
     const centerX = rect.left + rect.width / 2;
     const topY = rect.top - 8;
     const shouldFlip = topY < viewportPadding + 24;
+    const tooltipWidth = estimateTooltipWidth(label);
+    const { left, align } = getTooltipPosition(centerX, tooltipWidth);
 
     setTooltip({
       label,
       x: centerX,
       y: shouldFlip ? rect.bottom + 8 : rect.top - 8,
       placement: shouldFlip ? "bottom" : "top",
+      left,
+      align,
     });
   };
 
@@ -73,54 +81,43 @@ export default function PatientAdherenceHeatmap({ dailyBreakdown }: PatientAdher
     setTooltip(null);
   };
 
-  useLayoutEffect(() => {
-    if (!tooltip || !tooltipRef.current) {
-      setTooltipLeft(null);
-      setTooltipAlign("center");
-      return;
-    }
-
-    const viewportPadding = 6;
-    const tooltipWidth = tooltipRef.current.getBoundingClientRect().width;
-    const minLeft = viewportPadding + tooltipWidth / 2;
-    const maxLeft = window.innerWidth - viewportPadding - tooltipWidth / 2;
-    const clampedLeft = Math.min(maxLeft, Math.max(minLeft, tooltip.x));
-
-    if (tooltip.x <= minLeft) {
-      setTooltipAlign("left");
-      setTooltipLeft(viewportPadding);
-      return;
-    }
-
-    if (tooltip.x >= maxLeft) {
-      setTooltipAlign("right");
-      setTooltipLeft(window.innerWidth - viewportPadding);
-      return;
-    }
-
-    setTooltipAlign("center");
-    setTooltipLeft(clampedLeft);
-  }, [tooltip]);
+  const handleYearChange = (value: string) => {
+    const nextYear = Number(value);
+    setSelectedYear(nextYear);
+    const container = scrollRef.current;
+    if (!container) return;
+    const nextWeeks = getHeatmapWeeks(nextYear, today, dailyStats);
+    requestAnimationFrame(() => {
+      scrollHeatmapToColumn(container, getTodayColumnIndex(nextWeeks, todayKey), cellSize, cellGap);
+    });
+  };
 
   return (
-    <motion.article
+    <m.article
       className="rounded-[32px] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)] sm:p-6 xl:p-8"
-      initial={{ opacity: 0, y: 22 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: 0.18 }}
+      {...getDashboardEntranceMotion(shouldAnimate, 0.18, 22)}
     >
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="font-display text-xl font-extrabold tracking-[-0.04em] text-text-main sm:text-2xl">Riwayat Kepatuhan Saya</h2>
         </div>
+        <div className="w-full sm:w-32">
+          <SelectField
+            id="patientAdherenceHeatmapYear"
+            value={String(selectedYear)}
+            options={yearOptions}
+            className="rounded-full bg-surface px-4 py-3 text-sm font-extrabold text-text-main transition-colors hover:bg-line/70"
+            optionsPlacement="bottom"
+            onChange={handleYearChange}
+          />
+        </div>
       </div>
 
-      <div
-        className="mt-6 -mx-4 w-[calc(100%+2rem)] overflow-x-auto overflow-y-visible pb-3 overscroll-x-contain outline-none focus:outline-none focus-visible:outline-none sm:-mx-6 sm:w-[calc(100%+3rem)] xl:-mx-8 xl:w-[calc(100%+4rem)]"
-        style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-x", scrollbarGutter: "stable both-edges" }}
-        tabIndex={0}
-        data-lenis-prevent
-        ref={scrollRef}
+        <div
+          className="mt-6 -mx-4 w-[calc(100%+2rem)] overflow-x-auto overflow-y-visible pb-3 overscroll-x-contain outline-none focus:outline-none focus-visible:outline-none sm:-mx-6 sm:w-[calc(100%+3rem)] xl:-mx-8 xl:w-[calc(100%+4rem)]"
+          style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-x", scrollbarGutter: "stable both-edges" }}
+          data-lenis-prevent
+          ref={setScrollContainer}
       >
         <div className="min-w-full inline-flex justify-center px-4 sm:px-6 xl:px-8">
           <div className="text-left">
@@ -159,27 +156,26 @@ export default function PatientAdherenceHeatmap({ dailyBreakdown }: PatientAdher
         <div
           className="pointer-events-none fixed z-[60000] whitespace-nowrap rounded-2xl bg-text-main px-3 py-2 text-center text-xs font-semibold leading-tight text-white shadow-[0_8px_20px_rgba(15,23,42,0.25)]"
           style={{
-            left: tooltipLeft ?? tooltip.x,
+            left: tooltip.left,
             top: tooltip.y,
             transform: tooltip.placement === "top"
-              ? tooltipAlign === "left"
+              ? tooltip.align === "left"
                 ? "translate(0, -100%)"
-                : tooltipAlign === "right"
+                : tooltip.align === "right"
                   ? "translate(-100%, -100%)"
                   : "translate(-50%, -100%)"
-              : tooltipAlign === "left"
+              : tooltip.align === "left"
                 ? "translate(0, 0)"
-                : tooltipAlign === "right"
+                : tooltip.align === "right"
                   ? "translate(-100%, 0)"
                   : "translate(-50%, 0)",
           }}
-          ref={tooltipRef}
         >
           {tooltip.label}
         </div>
       )}
 
-    </motion.article>
+    </m.article>
   );
 }
 
@@ -187,61 +183,72 @@ function HeatmapLegend() {
   return (
     <div className="mt-5 flex items-center justify-end gap-2 text-xs font-bold text-muted">
       <span>rendah</span>
-      {levelClasses.map((className) => <span key={className} className={`h-4 w-4 rounded-[5px] ${className}`} />)}
+      {levelClasses.map((className) => <span key={className} className={`size-4 rounded-[5px] ${className}`} />)}
       <span>tinggi</span>
     </div>
   );
 }
 
 function HeatmapDayCell({ day, sizeClass, onShow, onHide }: { readonly day: HeatmapDay; readonly sizeClass: string; readonly onShow: (label: string, rect: DOMRect) => void; readonly onHide: () => void }) {
+  if (day.isOutsideYear) {
+    return <span className={`${sizeClass} invisible block`} aria-hidden="true" />;
+  }
+
   const label = getTooltipLabel(day);
   const surfaceClass = day.isFuture ? "bg-surface" : levelClasses[day.level];
 
   return (
-    <span
+    <button
+      type="button"
       className="relative inline-block rounded-[5px] outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
       onMouseEnter={(event) => onShow(label, event.currentTarget.getBoundingClientRect())}
       onMouseLeave={onHide}
       onFocus={(event) => onShow(label, event.currentTarget.getBoundingClientRect())}
       onBlur={onHide}
-      tabIndex={0}
       aria-label={label}
     >
       <span className={`${sizeClass} block ${surfaceClass}`} />
-    </span>
+    </button>
   );
 }
 
-function getHeatmapWeeks(today: Date, dailyStats: ReadonlyMap<string, { readonly total: number; readonly confirmed: number }>) {
-  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const start = new Date(end);
-  start.setDate(end.getDate() - 364 - end.getDay());
+function getHeatmapWeeks(selectedYear: number, today: Date, dailyStats: ReadonlyMap<string, { readonly total: number; readonly confirmed: number }>) {
+  const startOfYear = new Date(selectedYear, 0, 1);
+  const endOfYear = new Date(selectedYear, 11, 31);
+  const start = new Date(startOfYear);
+  start.setDate(startOfYear.getDate() - startOfYear.getDay());
+  const end = new Date(endOfYear);
+  end.setDate(endOfYear.getDate() + (6 - endOfYear.getDay()));
+  const dayCount = Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1;
+  const weekCount = Math.ceil(dayCount / 7);
 
-  const days: HeatmapDay[] = Array.from({ length: 53 * 7 }, (_, index) => {
+  const days: HeatmapDay[] = Array.from({ length: weekCount * 7 }, (_, index) => {
     const date = new Date(start);
     date.setDate(start.getDate() + index);
     const dateKey = getDateKey(date);
-    const isFuture = date > end;
+    const isOutsideYear = date.getFullYear() !== selectedYear;
+    const isFuture = date > today;
     const stats = dailyStats.get(dateKey);
 
     return {
       date,
       dateKey,
-      level: isFuture ? 0 : getAdherenceLevel(stats),
-      total: stats?.total ?? 0,
-      confirmed: stats?.confirmed ?? 0,
+      level: isOutsideYear || isFuture ? 0 : getAdherenceLevel(stats),
+      total: isOutsideYear ? 0 : stats?.total ?? 0,
+      confirmed: isOutsideYear ? 0 : stats?.confirmed ?? 0,
+      isOutsideYear,
       isFuture,
     };
   });
 
-  return Array.from({ length: 53 }, (_, weekIndex) => days.slice(weekIndex * 7, weekIndex * 7 + 7));
+  return Array.from({ length: weekCount }, (_, weekIndex) => days.slice(weekIndex * 7, weekIndex * 7 + 7));
 }
 
-function getMonthLabels(weeks: HeatmapDay[][]) {
+function getMonthLabels(weeks: HeatmapDay[][], selectedYear: number) {
   const labels: { label: string; column: number; span: number }[] = [];
 
   weeks.forEach((week, column) => {
-    const firstOfMonth = week.find((day) => day.date.getDate() <= 7);
+    const firstOfMonth = week.find((day) => day.date.getFullYear() === selectedYear && day.date.getDate() <= 7);
     if (!firstOfMonth) return;
 
     const label = monthFormatter.format(firstOfMonth.date);
@@ -250,6 +257,48 @@ function getMonthLabels(weeks: HeatmapDay[][]) {
   });
 
   return labels;
+}
+
+function getYearOptions(days: readonly PatientAdherenceDayResponse[], fallbackYear: number) {
+  const years = new Set<number>([fallbackYear]);
+  days.forEach((day) => {
+    const year = Number(day.date.slice(0, 4));
+    if (Number.isFinite(year)) years.add(year);
+  });
+
+  return Array.from(years)
+    .toSorted((first, second) => second - first)
+    .map((year) => ({ label: String(year), value: String(year) }));
+}
+
+function getTodayColumnIndex(weeks: HeatmapDay[][], todayKey: string) {
+  return weeks.findIndex((week) => week.some((day) => day.dateKey === todayKey));
+}
+
+function scrollHeatmapToColumn(container: HTMLDivElement, columnIndex: number, cellSize: number, cellGap: number) {
+  if (columnIndex < 0) {
+    container.scrollLeft = 0;
+    return;
+  }
+
+  const targetLeft = columnIndex * (cellSize + cellGap);
+  const centeredLeft = Math.max(0, targetLeft - container.clientWidth / 2 + cellSize / 2);
+  container.scrollLeft = centeredLeft;
+}
+
+function estimateTooltipWidth(label: string) {
+  return Math.max(120, Math.min(320, label.length * 7 + 28));
+}
+
+function getTooltipPosition(x: number, tooltipWidth: number) {
+  const viewportPadding = 6;
+  const minLeft = viewportPadding + tooltipWidth / 2;
+  const maxLeft = window.innerWidth - viewportPadding - tooltipWidth / 2;
+  const clampedLeft = Math.min(maxLeft, Math.max(minLeft, x));
+
+  if (x <= minLeft) return { left: viewportPadding, align: "left" as const };
+  if (x >= maxLeft) return { left: window.innerWidth - viewportPadding, align: "right" as const };
+  return { left: clampedLeft, align: "center" as const };
 }
 
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { getUnreadActivityCount } from "@/helpers/activityLogs";
 import { useActivityLogStore } from "@/store/activityLog";
 import { useAuthStore } from "@/store/auth";
@@ -15,7 +15,12 @@ export default function DashboardBottomNav() {
   const patientId = usePatientDashboardStore((state) => state.patientId);
   const hasAuthHydrated = useAuthStore((state) => state.hasHydrated);
   const dashboardRole = getDashboardRole(userRole);
-  const unreadActivityCount = useActivityLogStore((state) => isAdminDashboardRole(dashboardRole) ? 0 : getUnreadActivityCount(state.activities, dashboardRole === "patient" ? patientId ?? undefined : undefined));
+  const globalUnreadActivityCount = useActivityLogStore((state) => state.unreadActivityCount);
+  const unreadActivityCount = useActivityLogStore((state) => {
+    if (isAdminDashboardRole(dashboardRole)) return 0;
+    if (dashboardRole === "nurse" && state.unreadActivityCount !== null) return state.unreadActivityCount;
+    return getUnreadActivityCount(state.activities, dashboardRole === "patient" ? patientId ?? undefined : undefined);
+  });
   const isActivityLogLoading = useActivityLogStore((state) => state.isLoading);
   const bottomNavItems = getDashboardBottomNavItems(dashboardRole);
   const columnCount = bottomNavItems.length;
@@ -23,7 +28,7 @@ export default function DashboardBottomNav() {
   if (!hasAuthHydrated) return null;
 
   return (
-    <motion.nav
+    <m.nav
       aria-label="Navigasi bawah PWA"
       className="fixed inset-x-3 bottom-3 z-[30000] rounded-[28px] border border-line bg-white/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_18px_45px_rgba(15,23,42,0.18)] backdrop-blur-xl lg:hidden"
       initial={{ opacity: 0, y: 28 }}
@@ -35,11 +40,11 @@ export default function DashboardBottomNav() {
           const Icon = item.icon;
           const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
           const badgeCount = item.href === "/activity-log" ? unreadActivityCount : 0;
-          const isBadgeLoading = item.href === "/activity-log" && !isAdminDashboardRole(dashboardRole) && isActivityLogLoading;
+          const isBadgeLoading = item.href === "/activity-log" && !isAdminDashboardRole(dashboardRole) && globalUnreadActivityCount === null && isActivityLogLoading;
           const isFeatured = "featured" in item && item.featured;
 
           return (
-            <motion.div
+            <m.div
               key={item.href}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -55,7 +60,7 @@ export default function DashboardBottomNav() {
                   isActive ? "text-primary" : "text-muted hover:text-primary"
                 }`}
               >
-                <motion.span
+                <m.span
                   className={`relative flex items-center justify-center ${isFeatured ? "h-14 w-14 rounded-full bg-primary text-white" : ""}`}
                   animate={isActive ? { y: -1 } : { y: 0 }}
                   transition={{ type: "spring", stiffness: 420, damping: 22 }}
@@ -67,13 +72,13 @@ export default function DashboardBottomNav() {
                       {badgeCount > 99 ? "99+" : badgeCount}
                     </span>
                   )}
-                </motion.span>
+                </m.span>
                 <span className={`max-w-full truncate transition-colors ${isActive ? "text-primary" : "text-text-main group-hover:text-primary"}`}>{item.label}</span>
               </Link>
-            </motion.div>
+            </m.div>
           );
         })}
       </div>
-    </motion.nav>
+    </m.nav>
   );
 }

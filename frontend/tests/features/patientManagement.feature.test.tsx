@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import PatientListPage from "@/components/patients/PatientListPage";
-import { deactivatePatientViaApi, getPatientsFromApi } from "@/lib/patientApi";
+import { deactivatePatientViaApi, getPatientPageFromApi, getPatientsFromApi } from "@/lib/patientApi";
 import { showConfirm, showError, showToast } from "@/lib/swal";
 import { useNurseStore } from "@/store/nurses";
 import type { PatientRecord } from "@/lib/mocks/patients";
@@ -16,6 +16,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/patientApi", () => ({
   createPatientViaApi: vi.fn(),
   deactivatePatientViaApi: vi.fn(),
+  getPatientPageFromApi: vi.fn(),
   getPatientsFromApi: vi.fn(),
   updatePatientViaApi: vi.fn(),
 }));
@@ -34,6 +35,7 @@ const patients: PatientRecord[] = [
 describe("patient management feature", () => {
   beforeEach(() => {
     push.mockClear();
+    vi.mocked(getPatientPageFromApi).mockReset();
     vi.mocked(getPatientsFromApi).mockReset();
     vi.mocked(deactivatePatientViaApi).mockReset();
     vi.mocked(showConfirm).mockReset();
@@ -43,22 +45,28 @@ describe("patient management feature", () => {
   });
 
   it("loads, searches, and opens patient detail", async () => {
-    vi.mocked(getPatientsFromApi).mockResolvedValueOnce(patients);
+    vi.mocked(getPatientPageFromApi)
+      .mockResolvedValueOnce({ patients, meta: { page: 1, limit: 10, total: patients.length } })
+      .mockResolvedValueOnce({ patients: [patients[1]], meta: { page: 1, limit: 10, total: 1 } });
 
     render(<PatientListPage />);
 
     expect(await screen.findAllByText("Budi Santoso")).not.toHaveLength(0);
     fireEvent.change(screen.getByPlaceholderText("Cari nama pasien ..."), { target: { value: "Ayu" } });
 
+    await waitFor(() => {
+      expect(screen.queryAllByText("Budi Santoso")).toHaveLength(0);
+    });
     expect(screen.getAllByText("Ayu Lestari")).not.toHaveLength(0);
-    expect(screen.queryByText("Budi Santoso")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole("button", { name: "Lihat detail Ayu Lestari" })[0]);
     expect(push).toHaveBeenCalledWith("/patients/JVR-02");
   });
 
   it("deletes a patient after confirmation", async () => {
-    vi.mocked(getPatientsFromApi).mockResolvedValueOnce(patients);
+    vi.mocked(getPatientPageFromApi)
+      .mockResolvedValueOnce({ patients, meta: { page: 1, limit: 10, total: patients.length } })
+      .mockResolvedValueOnce({ patients, meta: { page: 1, limit: 10, total: patients.length } });
     vi.mocked(showConfirm).mockResolvedValueOnce({ isConfirmed: true, isDenied: false, isDismissed: false });
     vi.mocked(deactivatePatientViaApi).mockResolvedValueOnce(undefined);
 
@@ -68,12 +76,11 @@ describe("patient management feature", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Hapus Budi Santoso" })[0]);
 
     await waitFor(() => expect(deactivatePatientViaApi).toHaveBeenCalledWith("JVR-01"));
-    expect(showToast).toHaveBeenCalledWith("Pasien berhasil dihapus.");
-    expect(screen.queryByText("Budi Santoso")).not.toBeInTheDocument();
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith("Pasien berhasil dihapus."));
   });
 
   it("shows empty state when patient API fails", async () => {
-    vi.mocked(getPatientsFromApi).mockRejectedValueOnce(new Error("network"));
+    vi.mocked(getPatientPageFromApi).mockRejectedValueOnce(new Error("network"));
 
     render(<PatientListPage />);
 

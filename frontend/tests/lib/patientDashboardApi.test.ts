@@ -15,12 +15,14 @@ vi.mock("@/lib/axios", () => ({
 }));
 
 vi.mock("@/lib/patientApi", () => ({
+  getCurrentPatientFromApi: vi.fn(async () => patient),
   getPatientsFromApi: vi.fn(async () => [patient]),
   getPatientDetailFromApi: vi.fn(async () => ({ patient, schedules: [], activities: [], scans: [] })),
   clearPatientsCache: vi.fn(),
 }));
 
 vi.mock("@/lib/scheduleApi", () => ({
+  getSchedulesForPatientsFromApi: vi.fn(async () => [schedule, { ...schedule, id: "schedule-2", patientId: "other-patient" }]),
   getSchedulesFromApi: vi.fn(async () => [schedule, { ...schedule, id: "schedule-2", patientId: "other-patient" }]),
 }));
 
@@ -42,12 +44,12 @@ describe("patientDashboardApi", () => {
   });
 
   it("loads patient dashboard data and filters schedules to current patient", async () => {
-    mockedGet.mockResolvedValueOnce({ data: { data: [{ id: "log-1", scheduleId: "schedule-1", patientId: "patient-1", drugName: "Metformin", status: "confirmed", scheduledTime: "2026-05-09T08:00:00.000Z" }] } });
     mockedGet.mockResolvedValueOnce({ data: { data: { adherenceRate: 100, totalScheduled: 1, dailyBreakdown: [{ date: "2026-05-09", scheduled: 1, confirmed: 1 }] } } });
+    mockedGet.mockResolvedValueOnce({ data: { data: [{ id: "log-1", scheduleId: "schedule-1", patientId: "patient-1", drugName: "Metformin", status: "confirmed", scheduledTime: "2026-05-09T08:00:00.000Z" }] } });
 
     const data = await getPatientDashboardData();
 
-    expect(mockedGet).toHaveBeenCalledWith("/medication-logs", { params: { patient_id: "patient-1", limit: 100 } });
+    expect(mockedGet).toHaveBeenCalledWith("/medication-logs", { params: { patient_id: "patient-1", limit: 10 } });
     expect(data.schedules).toEqual([schedule]);
     expect(data.medicationLogs).toHaveLength(1);
     expect(data.adherenceStats.adherenceRate).toBe(100);

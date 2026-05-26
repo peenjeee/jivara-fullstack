@@ -26,7 +26,7 @@ describe("dashboardApi", () => {
 
     const result = await getAdminDashboardStats();
 
-    expect(mockedGet).toHaveBeenCalledWith("/adherence/aggregate", { params: { period: "30d" } });
+    expect(mockedGet).toHaveBeenCalledWith("/adherence/aggregate");
     expect(mockedGet).toHaveBeenCalledWith("/nurses", { params: { limit: 100 } });
     expect(result.stats.map((stat) => [stat.label, stat.value])).toEqual([
       ["Total Perawat Saya", "2"],

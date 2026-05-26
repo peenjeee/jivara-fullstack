@@ -1,9 +1,10 @@
 "use client";
 
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { Bell, Box, CheckCircle2, Clock3 } from "lucide-react";
 import ScheduleStatusBadge from "@/components/schedule/ScheduleStatusBadge";
 import Button from "@/components/ui/Button";
+import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
 
 interface PatientNextMedicineCardProps {
@@ -14,12 +15,12 @@ interface PatientNextMedicineCardProps {
 }
 
 export default function PatientNextMedicineCard({ schedule, canConfirm, confirmed, onConfirm }: PatientNextMedicineCardProps) {
+  const shouldAnimate = useDashboardEntranceMotion();
+
   return (
-    <motion.article
+    <m.article
       className="rounded-[32px] bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.08)] sm:p-8"
-      initial={{ opacity: 0, y: 22 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: 0.18 }}
+      {...getDashboardEntranceMotion(shouldAnimate, 0.18, 22)}
     >
       <h2 className="font-display text-xl font-extrabold tracking-[-0.04em] text-text-main sm:text-2xl">Obat Berikutnya</h2>
       <div className="mt-5 rounded-3xl bg-surface p-4">
@@ -49,6 +50,6 @@ export default function PatientNextMedicineCard({ schedule, canConfirm, confirme
           {!canConfirm && <p className="text-center text-xs font-extrabold leading-5 text-danger">Scan makanan dulu sebelum konfirmasi minum obat.</p>}
         </div>
       </div>
-    </motion.article>
+    </m.article>
   );
 }

@@ -3,7 +3,7 @@
 import Section from "@/components/ui/Section";
 import SectionHeader from "@/components/ui/SectionHeader";
 import { BellRing, Camera, ClipboardList, HeartPulse } from "lucide-react";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import WorkflowStepCard from "./WorkflowStepCard";
 
 const steps = [
@@ -45,7 +45,7 @@ export default function Workflow() {
         title="Alur"
         subtitle="Sistem"
       />
-      <motion.div
+      <m.div
         className="relative overflow-hidden rounded-[36px] bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.08)] sm:p-8 lg:p-10"
         initial={{ opacity: 0, y: 28 }}
         whileInView={{ opacity: 1, y: 0 }}
@@ -57,7 +57,7 @@ export default function Workflow() {
         <div className="grid gap-5 lg:grid-cols-4 lg:gap-6">
           {steps.map((step) => <WorkflowStepCard key={step.number} {...step} />)}
         </div>
-      </motion.div>
+      </m.div>
     </Section>
   );
 }

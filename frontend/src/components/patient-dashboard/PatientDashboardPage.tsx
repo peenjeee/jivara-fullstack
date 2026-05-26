@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useReducer } from "react";
 import { BellRing, Pill, ShieldCheck } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
-import { ActivityDataSkeleton, SummaryCardsSkeleton } from "@/components/ui/PageSkeletons";
+import { PatientDashboardContentSkeleton, SummaryCardsSkeleton } from "@/components/ui/PageSkeletons";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import type { SummaryCardItem } from "@/components/ui/SummaryCard";
 import type { PatientRecord } from "@/lib/mocks/patients";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
-import { getPatientDashboardData, type PatientAdherenceStatsResponse } from "@/lib/patientDashboardApi";
+import { getPatientDashboardOverviewData, type PatientAdherenceStatsResponse } from "@/lib/patientDashboardApi";
 import { usePatientDashboardStore } from "@/store/patientDashboard";
 import { useSplashScreen } from "@/components/ui/AppSplashScreen";
 import PatientAdherenceHeatmap from "./PatientAdherenceHeatmap";
@@ -31,34 +31,87 @@ const emptyAdherenceStats: PatientAdherenceStatsResponse = {
   dailyBreakdown: [],
 };
 
+let patientDashboardCache: {
+  patient: PatientRecord;
+  schedules: MedicationScheduleRecord[];
+  adherenceStats: PatientAdherenceStatsResponse;
+} | null = null;
+
+interface PatientDashboardState {
+  readonly patient: PatientRecord;
+  readonly patientSchedules: MedicationScheduleRecord[];
+  readonly adherenceStats: PatientAdherenceStatsResponse;
+  readonly isLoading: boolean;
+  readonly hasLoadedDashboard: boolean;
+  readonly hasLoadError: boolean;
+}
+
+type PatientDashboardAction =
+  | { readonly type: "loadSuccess"; readonly payload: { readonly patient: PatientRecord; readonly schedules: MedicationScheduleRecord[]; readonly adherenceStats: PatientAdherenceStatsResponse } }
+  | { readonly type: "loadFailure" }
+  | { readonly type: "finishLoading" };
+
+function buildInitialPatientDashboardState(): PatientDashboardState {
+  return {
+    patient: patientDashboardCache?.patient ?? initialPatient,
+    patientSchedules: patientDashboardCache?.schedules ?? [],
+    adherenceStats: patientDashboardCache?.adherenceStats ?? emptyAdherenceStats,
+    isLoading: !patientDashboardCache,
+    hasLoadedDashboard: Boolean(patientDashboardCache),
+    hasLoadError: false,
+  };
+}
+
+function patientDashboardReducer(state: PatientDashboardState, action: PatientDashboardAction): PatientDashboardState {
+  switch (action.type) {
+    case "loadSuccess":
+      return {
+        ...state,
+        patient: action.payload.patient,
+        patientSchedules: action.payload.schedules,
+        adherenceStats: action.payload.adherenceStats,
+        hasLoadError: false,
+      };
+    case "loadFailure":
+      return {
+        ...state,
+        hasLoadError: true,
+      };
+    case "finishLoading":
+      return {
+        ...state,
+        isLoading: false,
+        hasLoadedDashboard: true,
+      };
+    default:
+      return state;
+  }
+}
+
 export default function PatientDashboardPage() {
   const setPatientId = usePatientDashboardStore((state) => state.setPatientId);
   const { isSplashFinished } = useSplashScreen();
-  const [patient, setPatient] = useState<PatientRecord>(initialPatient);
-  const [patientSchedules, setPatientSchedules] = useState<MedicationScheduleRecord[]>([]);
-  const [adherenceStats, setAdherenceStats] = useState<PatientAdherenceStatsResponse>(emptyAdherenceStats);
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasLoadError, setHasLoadError] = useState(false);
+  const [state, dispatch] = useReducer(patientDashboardReducer, undefined, buildInitialPatientDashboardState);
+  const { patient, patientSchedules, adherenceStats, isLoading, hasLoadedDashboard, hasLoadError } = state;
 
   useEffect(() => {
     let isMounted = true;
 
-    getPatientDashboardData()
+    getPatientDashboardOverviewData()
       .then((data) => {
         if (!isMounted) return;
-        setHasLoadError(false);
-        setPatient(data.patient);
+        patientDashboardCache = { patient: data.patient, schedules: data.schedules, adherenceStats: data.adherenceStats };
+        dispatch({ type: "loadSuccess", payload: { patient: data.patient, schedules: data.schedules, adherenceStats: data.adherenceStats } });
         setPatientId(data.patient.id);
-        setPatientSchedules(data.schedules);
-        setAdherenceStats(data.adherenceStats);
       })
       .catch(() => {
         if (!isMounted) return;
-        setHasLoadError(true);
+        dispatch({ type: "loadFailure" });
         setPatientId(null);
       })
       .finally(() => {
-        if (isMounted) setIsLoading(false);
+        if (!isMounted) return;
+        dispatch({ type: "finishLoading" });
       });
 
     return () => {
@@ -111,10 +164,10 @@ export default function PatientDashboardPage() {
   return (
     <DashboardPageShell>
       <DashboardPageHeader title={`${greeting}, ${patient.name}`} />
-      {isLoading ? <SummaryCardsSkeleton /> : <SummaryCardGrid stats={stats} />}
+      {isLoading && !hasLoadedDashboard ? <SummaryCardsSkeleton /> : <SummaryCardGrid stats={stats} />}
 
       <div className="mt-6 space-y-6">
-        {isLoading ? <ActivityDataSkeleton rows={5} /> : <PatientAdherenceHeatmap dailyBreakdown={adherenceStats.dailyBreakdown} />}
+        {isLoading && !hasLoadedDashboard ? <PatientDashboardContentSkeleton /> : <PatientAdherenceHeatmap dailyBreakdown={adherenceStats.dailyBreakdown} />}
       </div>
     </DashboardPageShell>
   );

@@ -23,7 +23,6 @@ export default function DashboardNavItem({ item, isActive, badgeCount = 0, isBad
         isActive ? "!text-primary" : "text-text-main hover:bg-surface hover:text-primary"
       }`}
     >
-      {isActive && <span className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-primary" />}
       <Icon size={18} strokeWidth={2.3} className={isActive ? "!text-primary" : undefined} />
       <span className={`min-w-0 flex-1 ${isActive ? "!text-primary" : ""}`}>{item.label}</span>
       {isBadgeLoading && <span className="h-6 min-w-10 shrink-0 animate-pulse rounded-full bg-line" aria-label="Memuat jumlah log aktivitas" />}

@@ -11,14 +11,17 @@ import { FORM_PILL_INPUT_CLASS } from "@/components/ui/formStyles";
 import { activityCategories, type ActivityCategory } from "@/lib/mocks/activityLogs";
 import type { NurseRecord } from "@/lib/mocks/nurses";
 
-export type ActivityQuickFilter = "all" | "unread" | "critical" | "warning";
+export type ActivityQuickFilter = "all" | "unread" | "success" | "info" | "warning" | "critical";
 
 const quickFilters: { readonly label: string; readonly value: ActivityQuickFilter }[] = [
   { label: "Semua", value: "all" },
   { label: "Belum Dibaca", value: "unread" },
-  { label: "Kritis", value: "critical" },
+  { label: "Sukses", value: "success" },
+  { label: "Info", value: "info" },
   { label: "Peringatan", value: "warning" },
+  { label: "Kritis", value: "critical" },
 ];
+const emptyNurses: readonly NurseRecord[] = [];
 
 interface ActivityToolbarProps {
   readonly search: string;
@@ -27,6 +30,8 @@ interface ActivityToolbarProps {
   readonly nurseId?: string;
   readonly nurses?: readonly NurseRecord[];
   readonly showNurseFilter?: boolean;
+  readonly showUnreadFilter?: boolean;
+  readonly framed?: boolean;
   readonly date: string;
   readonly hasActiveFilters: boolean;
   readonly onSearchChange: (value: string) => void;
@@ -37,11 +42,11 @@ interface ActivityToolbarProps {
   readonly onReset: () => void;
 }
 
-export default function ActivityToolbar({ search, quickFilter, category, nurseId = "all", nurses = [], showNurseFilter = true, date, hasActiveFilters, onSearchChange, onQuickFilterChange, onCategoryChange, onNurseChange, onDateChange, onReset }: ActivityToolbarProps) {
+export default function ActivityToolbar({ search, quickFilter, category, nurseId = "all", nurses = emptyNurses, showNurseFilter = true, showUnreadFilter = true, framed = true, date, hasActiveFilters, onSearchChange, onQuickFilterChange, onCategoryChange, onNurseChange, onDateChange, onReset }: ActivityToolbarProps) {
   const gridClass = showNurseFilter ? "lg:grid-cols-[1fr_220px_220px_180px_auto]" : "lg:grid-cols-[1fr_220px_180px_auto]";
-
-  return (
-    <ToolbarCard>
+  const visibleQuickFilters = showUnreadFilter ? quickFilters : quickFilters.filter((filter) => filter.value !== "unread");
+  const content = (
+    <>
       <div className={`grid gap-3 lg:items-center ${gridClass}`}>
         <SearchField id="activitySearch" value={search} placeholder="Cari aktivitas ..." onChange={onSearchChange} />
 
@@ -63,7 +68,7 @@ export default function ActivityToolbar({ search, quickFilter, category, nurseId
           />
         )}
 
-        <DatePickerField id="activityDate" value={date} popoverAlign="right" className={FORM_PILL_INPUT_CLASS} onChange={onDateChange} />
+        <DatePickerField id="activityDate" value={date} mode="range" popoverAlign="right" className={FORM_PILL_INPUT_CLASS} onChange={onDateChange} />
 
         {hasActiveFilters && (
           <Button type="button" size="sm" variant="outline" icon={<X size={15} />} onClick={onReset} className="w-full lg:w-auto">
@@ -72,7 +77,17 @@ export default function ActivityToolbar({ search, quickFilter, category, nurseId
         )}
       </div>
 
-      <FilterPills options={quickFilters} activeValue={quickFilter} onChange={onQuickFilterChange} className="mt-4" />
+      <FilterPills options={visibleQuickFilters} activeValue={quickFilter} onChange={onQuickFilterChange} className="mt-4" />
+    </>
+  );
+
+  return framed ? (
+    <ToolbarCard>
+      {content}
     </ToolbarCard>
+  ) : (
+    <div className="relative z-10">
+      {content}
+    </div>
   );
 }

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { motion, useReducedMotion, useScroll, useTransform } from "motion/react";
+import { m, useReducedMotion, useScroll, useTransform } from "motion/react";
 import { TypeAnimation } from 'react-type-animation';
 import { Download } from "lucide-react";
 import Button from "@/components/ui/Button";
@@ -13,21 +13,44 @@ const ModelViewer = dynamic(() => import("@/components/ui/ModelViewer"), {
   ssr: false,
 });
 
+const subscribeToWindowResize = (onStoreChange: () => void) => {
+  window.addEventListener("resize", onStoreChange, { passive: true });
+  return () => window.removeEventListener("resize", onStoreChange);
+};
+
+const getWindowInnerHeight = () => window.innerHeight;
+const getServerInnerHeight = () => 0;
+
+const getInstallState = () => {
+  const mediaQuery = window.matchMedia("(display-mode: standalone)");
+  const standalone = mediaQuery.matches || Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
+  return standalone || window.localStorage.getItem("jivara-pwa-installed") === "true";
+};
+
+const getServerInstallState = () => false;
+
+const subscribeToInstallState = (onStoreChange: () => void) => {
+  const mediaQuery = window.matchMedia("(display-mode: standalone)");
+  mediaQuery.addEventListener("change", onStoreChange);
+  window.addEventListener("appinstalled", onStoreChange);
+  return () => {
+    mediaQuery.removeEventListener("change", onStoreChange);
+    window.removeEventListener("appinstalled", onStoreChange);
+  };
+};
+
 export default function Hero() {
-  const router = useRouter();
-  const [innerHeight, setInnerHeight] = useState(800);
-  const [isInstalled, setIsInstalled] = useState(false);
+  const { push } = useRouter();
+  const innerHeight = useSyncExternalStore(subscribeToWindowResize, getWindowInnerHeight, getServerInnerHeight);
+  const isInstalled = useSyncExternalStore(subscribeToInstallState, getInstallState, getServerInstallState);
   const [canPromptInstall, setCanPromptInstall] = useState(false);
   const mascotRef = useRef<HTMLDivElement>(null);
   const shouldReduceMotion = useReducedMotion();
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia("(display-mode: standalone)");
-    const getIsStandalone = () => mediaQuery.matches || Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
     const updateInstallState = () => {
-      const standalone = getIsStandalone();
+      const standalone = getInstallState();
       if (standalone) window.localStorage.setItem("jivara-pwa-installed", "true");
-      setIsInstalled(standalone || window.localStorage.getItem("jivara-pwa-installed") === "true");
       setCanPromptInstall(Boolean(window.__jivaraInstallPrompt));
     };
     const handleAppInstalled = () => {
@@ -35,18 +58,14 @@ export default function Hero() {
       updateInstallState();
     };
 
-    updateInstallState();
     const installStateTimer = window.setTimeout(() => {
       const hasPrompt = Boolean(window.__jivaraInstallPrompt);
       setCanPromptInstall(hasPrompt);
-      if (!hasPrompt && navigator.serviceWorker?.controller) setIsInstalled(true);
     }, 1200);
-    mediaQuery.addEventListener("change", updateInstallState);
     window.addEventListener("beforeinstallprompt", updateInstallState);
     window.addEventListener("appinstalled", handleAppInstalled);
     return () => {
       window.clearTimeout(installStateTimer);
-      mediaQuery.removeEventListener("change", updateInstallState);
       window.removeEventListener("beforeinstallprompt", updateInstallState);
       window.removeEventListener("appinstalled", handleAppInstalled);
     };
@@ -56,7 +75,7 @@ export default function Hero() {
     const isStandalone = window.matchMedia("(display-mode: standalone)").matches || Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
 
     if (isStandalone) {
-      router.push("/dashboard");
+      push("/dashboard");
       return;
     }
 
@@ -85,16 +104,6 @@ export default function Hero() {
     }
   };
 
-  useEffect(() => {
-    const handleResize = () => {
-      const currentHeight = window.innerHeight;
-      setInnerHeight((prev) => (prev !== currentHeight ? currentHeight : prev));
-    };
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
   const { scrollY } = useScroll();
   const sectionScale = useTransform(scrollY, [0, innerHeight], [1, 0.92]);
   const sectionOpacity = useTransform(
@@ -111,13 +120,12 @@ export default function Hero() {
   const orbitState = useRef({ theta: 20, phi: 75, targetTheta: 20, targetPhi: 75 });
   const viewportCenterRef = useRef({ x: 0, y: 0 });
   const latestPointerRef = useRef<{ x: number; y: number } | null>(null);
-  const pointerFrameRef = useRef<number>(0);
-
   useEffect(() => {
     const coarsePointerQuery = window.matchMedia("(pointer: coarse)");
     if (shouldReduceMotion || coarsePointerQuery.matches) return;
 
     let animId: number;
+    let pointerFrameId = 0;
     let modelElement: Element | null = null;
     let lastCameraOrbit = "";
     let lastOrbitUpdate = 0;
@@ -151,7 +159,7 @@ export default function Hero() {
     };
 
     const updateTargetOrbit = () => {
-      pointerFrameRef.current = 0;
+      pointerFrameId = 0;
       const latestPointer = latestPointerRef.current;
       if (!latestPointer) return;
 
@@ -164,8 +172,8 @@ export default function Hero() {
       if (event.pointerType !== "mouse") return;
 
       latestPointerRef.current = { x: event.clientX, y: event.clientY };
-      if (!pointerFrameRef.current) {
-        pointerFrameRef.current = requestAnimationFrame(updateTargetOrbit);
+      if (!pointerFrameId) {
+        pointerFrameId = requestAnimationFrame(updateTargetOrbit);
       }
     };
 
@@ -177,17 +185,17 @@ export default function Hero() {
       window.removeEventListener("resize", updateViewportCenter);
       window.removeEventListener("pointermove", handlePointerMove);
       cancelAnimationFrame(animId);
-      if (pointerFrameRef.current) cancelAnimationFrame(pointerFrameRef.current);
+      if (pointerFrameId) cancelAnimationFrame(pointerFrameId);
     };
   }, [shouldReduceMotion]);
 
   return (
-    <motion.section
+    <m.section
       style={{ scale: sectionScale, opacity: sectionOpacity }}
       className="relative sticky top-0 h-screen overflow-hidden flex flex-col lg:flex-row items-center pt-20 sm:pt-[100px] lg:pt-[140px] px-5 lg:px-[76px] pb-[60px] lg:pb-20 bg-bg isolate text-center lg:text-left gap-10 lg:gap-0 origin-center"
       aria-labelledby="hero-title"
     >
-      <motion.div
+      <m.div
         ref={mascotRef}
         className="relative lg:absolute lg:top-[20vh] lg:right-[4.5vw] w-[min(280px,70vw)] lg:w-[min(460px,40vw)] h-[min(280px,70vw)] lg:h-[min(580px,60vh)] flex items-center justify-center z-50 mx-auto lg:mx-0 pointer-events-auto"
         aria-label="Maskot Jiva 3D"
@@ -212,24 +220,24 @@ export default function Hero() {
           environmentImage=""
           className="w-full h-full"
         />
-      </motion.div>
+      </m.div>
 
-      <motion.div
+      <m.div
         className="relative z-[5] w-full lg:w-[min(900px,100%)] flex flex-col items-center lg:items-start"
         style={{
           y: contentY,
         }}
       >
         <h1 id="hero-title" className="font-display text-[clamp(28px,8vw,44px)] lg:text-[clamp(40px,6.4vw,76px)] font-extrabold leading-[1.1] lg:leading-[1.05] tracking-[-0.02em]">
-          <motion.span
+          <m.span
             className="block mb-3 lg:mb-5 text-primary"
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}
           >
             Jivara
-          </motion.span>
-          <motion.span
+          </m.span>
+          <m.span
             className="block text-dark"
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -249,18 +257,18 @@ export default function Hero() {
               cursor={false}
               className="block min-h-[1.05em] text-primary"
             />
-          </motion.span>
+          </m.span>
         </h1>
-        <motion.p
+        <m.p
           className="w-full max-w-[450px] lg:max-w-[560px] pt-4 lg:pt-6 text-muted text-base lg:text-[18px] font-normal leading-relaxed lg:leading-[1.6]"
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: 0.5 }}
         >
           <strong className="text-primary font-extrabold">Jivara</strong> membantu pasien patuh minum obat dan mendeteksi interaksi berbahaya dengan makanan menggunakan teknologi <i className="text-dark font-extrabold not-italic">Computer Vision</i>
-        </motion.p>
+        </m.p>
 
-        <motion.div
+        <m.div
           className="mt-7 flex justify-center lg:justify-start"
           initial={{ opacity: 0, y: 28 }}
           animate={{ opacity: 1, y: 0 }}
@@ -269,9 +277,9 @@ export default function Hero() {
           <Button type="button" size="sm" icon={<Download size={16} />} onClick={handleInstallClick}>
             {isInstalled && !canPromptInstall ? "Buka App" : "Install App"}
           </Button>
-        </motion.div>
+        </m.div>
 
-      </motion.div>
-    </motion.section>
+      </m.div>
+    </m.section>
   );
 }

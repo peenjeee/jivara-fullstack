@@ -33,6 +33,15 @@ export const getPatient = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const getCurrentPatient = async (req: AuthRequest, res: Response) => {
+  try {
+    const patient = await patientService.getCurrentPatient(req.user);
+    res.status(200).json({ status: "berhasil", data: patient });
+  } catch (error) {
+    sendError(res, error);
+  }
+};
+
 export const createPatient = async (req: AuthRequest, res: Response) => {
   try {
     const patient = await patientService.createPatient(req.body, req.user?.id);

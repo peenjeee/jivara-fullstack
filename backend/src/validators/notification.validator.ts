@@ -23,7 +23,7 @@ export const validateSubscribe = (req: Request, res: Response, next: NextFunctio
   const patientId = resolvePatientId(req.body);
   const subscription = req.body.subscription as { endpoint?: string; keys?: { p256dh?: string; auth?: string } } | undefined;
 
-  if (typeof patientId !== "string" || !isValidUuid(patientId)) {
+  if (patientId !== undefined && (typeof patientId !== "string" || !isValidUuid(patientId))) {
     return res.status(400).json({ status: "gagal", message: "patientId wajib berupa UUID valid", error_code: "VALIDATION_ERROR" });
   }
 
@@ -39,7 +39,7 @@ export const validateSubscribe = (req: Request, res: Response, next: NextFunctio
     return res.status(400).json({ status: "gagal", message: "key subscription terlalu panjang", error_code: "VALIDATION_ERROR" });
   }
 
-  req.body.patientId = patientId;
+  if (typeof patientId === "string") req.body.patientId = patientId;
   req.body.endpoint = subscription.endpoint;
   req.body.keys = subscription.keys;
   next();
@@ -69,7 +69,7 @@ export const validatePreference = (req: Request, res: Response, next: NextFuncti
   const patientId = resolvePatientId(req.body);
   const enabled = req.body.enabled;
 
-  if (typeof patientId !== "string" || !isValidUuid(patientId)) {
+  if (patientId !== undefined && (typeof patientId !== "string" || !isValidUuid(patientId))) {
     return res.status(400).json({ status: "gagal", message: "patientId wajib berupa UUID valid", error_code: "VALIDATION_ERROR" });
   }
 
@@ -77,7 +77,7 @@ export const validatePreference = (req: Request, res: Response, next: NextFuncti
     return res.status(400).json({ status: "gagal", message: "enabled wajib boolean", error_code: "VALIDATION_ERROR" });
   }
 
-  req.body.patientId = patientId;
+  if (typeof patientId === "string") req.body.patientId = patientId;
   next();
 };
 

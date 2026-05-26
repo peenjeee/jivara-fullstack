@@ -1,8 +1,9 @@
 "use client";
 
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { Eye, Plus } from "lucide-react";
 import IconActionButton from "@/components/ui/IconActionButton";
+import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
 import type { PatientScheduleGroup } from "@/lib/mocks/schedules";
 import ScheduleStatusBadge from "./ScheduleStatusBadge";
 
@@ -15,6 +16,7 @@ interface ScheduleTableProps {
 }
 
 export default function ScheduleTable({ groups, onViewDetail, onAddMedicine, readOnly = false, emptyMessage = "Tidak ada data yang tersedia." }: ScheduleTableProps) {
+  const shouldAnimate = useDashboardEntranceMotion();
   const isEmpty = groups.length === 0;
 
   return (
@@ -30,11 +32,11 @@ export default function ScheduleTable({ groups, onViewDetail, onAddMedicine, rea
           </colgroup>
           <thead className="bg-surface text-xs font-extrabold uppercase tracking-[0.08em] text-muted">
             <tr>
-              <th className="px-4 py-4">Nama Pasien</th>
-              <th className="px-4 py-4">Jumlah Obat</th>
-              <th className="px-4 py-4">Total Obat Keseluruhan</th>
-              <th className="px-4 py-4">Reminder Aktif</th>
-              <th className="px-4 py-4 text-right">Aksi</th>
+              <th className="p-4">Nama Pasien</th>
+              <th className="p-4">Jumlah Obat Aktif</th>
+              <th className="p-4">Total Obat Keseluruhan</th>
+              <th className="p-4">Reminder Aktif</th>
+              <th className="p-4 text-right">Aksi</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
@@ -46,19 +48,17 @@ export default function ScheduleTable({ groups, onViewDetail, onAddMedicine, rea
               </tr>
             ) : (
               groups.map((group, index) => (
-                <motion.tr
+                <m.tr
                   key={group.patientId}
                   className="transition-colors hover:bg-surface/60"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1], delay: index * 0.035 }}
+                  {...getDashboardEntranceMotion(shouldAnimate, index * 0.035, 10)}
                 >
-                  <td className="px-4 py-4"><PatientCell group={group} /></td>
-                  <td className="px-4 py-4 text-sm font-extrabold text-text-main">{group.schedules.length} obat</td>
-                  <td className="px-4 py-4 text-sm font-extrabold text-text-main">{group.totalMedicineStock} item</td>
-                  <td className="px-4 py-4 text-sm font-extrabold text-text-main">{group.activeReminders}</td>
-                  <td className="px-4 py-4"><GroupActions group={group} readOnly={readOnly} onViewDetail={onViewDetail} onAddMedicine={onAddMedicine} /></td>
-                </motion.tr>
+                  <td className="p-4"><PatientCell group={group} /></td>
+                  <td className="p-4 text-sm font-extrabold text-text-main">{getActiveMedicineCount(group)} obat</td>
+                  <td className="p-4 text-sm font-extrabold text-text-main">{group.totalMedicineStock} item</td>
+                  <td className="p-4 text-sm font-extrabold text-text-main">{group.activeReminders}</td>
+                  <td className="p-4"><GroupActions group={group} readOnly={readOnly} onViewDetail={onViewDetail} onAddMedicine={onAddMedicine} /></td>
+                </m.tr>
               ))
             )}
           </tbody>
@@ -70,27 +70,25 @@ export default function ScheduleTable({ groups, onViewDetail, onAddMedicine, rea
           <p className="px-5 py-12 text-center text-sm font-bold text-muted">{emptyMessage}</p>
         ) : (
           groups.map((group, index) => (
-            <motion.article
+            <m.article
               key={group.patientId}
               className="p-5"
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
+              {...getDashboardEntranceMotion(shouldAnimate, index * 0.04, 16)}
               whileHover={{ backgroundColor: "rgba(248,250,252,0.7)" }}
-              transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1], delay: index * 0.04 }}
             >
               <div className="flex items-start justify-between gap-4">
                 <PatientCell group={group} />
                 <ScheduleStatusBadge status={group.summaryStatus} />
               </div>
               <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
-                <InfoItem label="Jumlah Obat" value={`${group.schedules.length} obat`} />
+                <InfoItem label="Jumlah Obat Aktif" value={`${getActiveMedicineCount(group)} obat`} />
                 <InfoItem label="Total Obat" value={`${group.totalMedicineStock} item`} />
                 <InfoItem label="Reminder" value={`${group.activeReminders} aktif`} />
               </div>
               <div className="mt-4">
                 <GroupActions group={group} readOnly={readOnly} onViewDetail={onViewDetail} onAddMedicine={onAddMedicine} />
               </div>
-            </motion.article>
+            </m.article>
           ))
         )}
       </div>
@@ -101,7 +99,7 @@ export default function ScheduleTable({ groups, onViewDetail, onAddMedicine, rea
 function PatientCell({ group }: { readonly group: PatientScheduleGroup }) {
   return (
     <div className="flex min-w-0 items-center gap-3">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald/10 text-sm font-extrabold text-emerald">
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald/10 text-sm font-extrabold text-emerald">
         {group.patientAvatar}
       </span>
       <div className="min-w-0">
@@ -134,4 +132,8 @@ function InfoItem({ label, value }: { readonly label: string; readonly value: st
       <p className="mt-1 font-bold text-text-main">{value}</p>
     </div>
   );
+}
+
+function getActiveMedicineCount(group: PatientScheduleGroup) {
+  return group.schedules.filter((schedule) => schedule.status === "Aktif").length;
 }

@@ -289,3 +289,10 @@ model-viewer {
   --progress-bar-color: transparent !important;
   --progress-bar-height: 0 !important;
 }
+
+/* Summary skeleton: 3rd card spans 2 columns on mobile (< xl breakpoint) */
+@media (max-width: 1279px) {
+  .summary-skeleton-last {
+    grid-column: span 2;
+  }
+}

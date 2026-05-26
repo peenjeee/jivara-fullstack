@@ -1,0 +1,5 @@
+{
+  "ignore": {
+    "rules": ["deslop/unused-file"]
+  }
+}

@@ -1,20 +1,22 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { motion } from "motion/react";
+import { useDeferredValue, useEffect, useMemo, useReducer, useRef } from "react";
+import { m } from "motion/react";
 import { AlertTriangle, Bell, CheckCheck, ClipboardList } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import Button from "@/components/ui/Button";
-import { ActivityDataSkeleton, SummaryCardsSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
+import { PatientActivityCalendarSkeleton, SummaryCardsSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import { FoodScanDetailModal } from "@/components/food-scan";
 import PatientMedicineDetailModal from "@/components/schedule/PatientMedicineDetailModal";
 import { getDateKey } from "@/helpers/patientSchedule";
+import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
 import { getActivityReadIdsFromApi, markActivitiesReadViaApi } from "@/lib/activityReadApi";
+import { isDateInRange } from "@/lib/dateRange";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
 import type { ActivityCategory, ActivityLogRecord } from "@/lib/mocks/activityLogs";
-import { getPatientActivitiesFromApi, getPatientDashboardData } from "@/lib/patientDashboardApi";
+import { getPatientActivityLogData } from "@/lib/patientDashboardApi";
 import { showToast } from "@/lib/swal";
 import { useActivityLogStore } from "@/store/activityLog";
 import ActivityDetailModal from "./ActivityDetailModal";
@@ -26,55 +28,117 @@ interface PatientActivityLogPageProps {
   readonly initialCategory?: string;
 }
 
+let patientActivityLogViewCache: {
+  search: string;
+  quickFilter: ActivityQuickFilter;
+  category: ActivityCategory | "all";
+  date: string;
+  visibleMonth: Date;
+  schedules: MedicationScheduleRecord[];
+} | null = null;
+
+interface PatientActivityLogState {
+  readonly search: string;
+  readonly quickFilter: ActivityQuickFilter;
+  readonly category: ActivityCategory | "all";
+  readonly date: string;
+  readonly visibleMonth: Date;
+  readonly selectedActivity: ActivityLogRecord | null;
+  readonly selectedSchedule: MedicationScheduleRecord | null;
+  readonly selectedFoodScanId: string | null;
+  readonly isLoading: boolean;
+  readonly hasLoadedActivities: boolean;
+  readonly isMarkingAllRead: boolean;
+}
+
+type PatientActivityLogAction = { readonly type: "patch"; readonly payload: Partial<PatientActivityLogState> };
+
+function patientActivityLogReducer(state: PatientActivityLogState, action: PatientActivityLogAction): PatientActivityLogState {
+  return action.type === "patch" ? { ...state, ...action.payload } : state;
+}
+
 export default function PatientActivityLogPage({ initialCategory }: PatientActivityLogPageProps) {
+  const shouldAnimate = useDashboardEntranceMotion();
   const activities = useActivityLogStore((state) => state.activities);
   const setActivities = useActivityLogStore((state) => state.setActivities);
   const setActivityLogLoading = useActivityLogStore((state) => state.setLoading);
   const markActivityAsRead = useActivityLogStore((state) => state.markAsRead);
   const markAllActivitiesAsRead = useActivityLogStore((state) => state.markAllAsRead);
-  const [search, setSearch] = useState("");
-  const [quickFilter, setQuickFilter] = useState<ActivityQuickFilter>("all");
-  const [category, setCategory] = useState<ActivityCategory | "all">(isActivityCategory(initialCategory) ? initialCategory : "all");
-  const [visibleMonth, setVisibleMonth] = useState(() => {
-    const today = new Date();
-    return new Date(today.getFullYear(), today.getMonth(), 1);
+  const [state, dispatch] = useReducer(patientActivityLogReducer, {
+    search: patientActivityLogViewCache?.search ?? "",
+    quickFilter: patientActivityLogViewCache?.quickFilter ?? "all",
+    category: patientActivityLogViewCache?.category ?? (isActivityCategory(initialCategory) ? initialCategory : "all"),
+    date: patientActivityLogViewCache?.date ?? "",
+    visibleMonth: patientActivityLogViewCache?.visibleMonth ?? new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+    selectedActivity: null,
+    selectedSchedule: null,
+    selectedFoodScanId: null,
+    isLoading: !patientActivityLogViewCache,
+    hasLoadedActivities: Boolean(patientActivityLogViewCache),
+    isMarkingAllRead: false,
   });
-  const [selectedActivity, setSelectedActivity] = useState<ActivityLogRecord | null>(null);
-  const [selectedSchedule, setSelectedSchedule] = useState<MedicationScheduleRecord | null>(null);
-  const [schedules, setSchedules] = useState<MedicationScheduleRecord[]>([]);
-  const [selectedFoodScanId, setSelectedFoodScanId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isMarkingAllRead, setIsMarkingAllRead] = useState(false);
+  const { search, quickFilter, category, date, visibleMonth, selectedActivity, selectedSchedule, selectedFoodScanId, isLoading, hasLoadedActivities, isMarkingAllRead } = state;
+  const stateRef = useRef(state);
+  const schedulesRef = useRef<MedicationScheduleRecord[]>(patientActivityLogViewCache?.schedules ?? []);
   const deferredSearch = useDeferredValue(search);
   const todayKey = getDateKey(new Date());
 
   useEffect(() => {
-    let isMounted = true;
-    setActivityLogLoading(true);
+    stateRef.current = state;
+  }, [state]);
 
-    Promise.all([getPatientActivitiesFromApi(), getPatientDashboardData(), getActivityReadIdsFromApi().catch(() => new Set<string>())])
-      .then(([nextActivities, dashboardData, readIds]) => {
+  useEffect(() => {
+    setActivityLogLoading(isLoading);
+
+    return () => {
+      setActivityLogLoading(false);
+    };
+  }, [isLoading, setActivityLogLoading]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    dispatch({ type: "patch", payload: { isLoading: true } });
+
+    Promise.all([getPatientActivityLogData(visibleMonth), getActivityReadIdsFromApi().catch(() => new Set<string>())])
+      .then(([activityData, readIds]) => {
         if (!isMounted) return;
-        setActivities(nextActivities.map((activity) => ({ ...activity, read: readIds.has(activity.id) || activity.read })));
-        setSchedules(dashboardData.schedules);
+        setActivities(activityData.activities.map((activity) => ({ ...activity, read: readIds.has(activity.id) || activity.read })));
+        schedulesRef.current = activityData.schedules;
+        const currentState = stateRef.current;
+        patientActivityLogViewCache = {
+          search: currentState.search,
+          quickFilter: currentState.quickFilter,
+          category: currentState.category,
+          date: currentState.date,
+          visibleMonth: currentState.visibleMonth,
+          schedules: activityData.schedules,
+        };
+        dispatch({ type: "patch", payload: { hasLoadedActivities: true, isLoading: false } });
       })
       .catch(() => {
         if (!isMounted) return;
         setActivities([]);
-        setSchedules([]);
-      })
-      .finally(() => {
-        if (isMounted) {
-          setIsLoading(false);
-          setActivityLogLoading(false);
-        }
+        schedulesRef.current = [];
+        dispatch({ type: "patch", payload: { hasLoadedActivities: true, isLoading: false } });
       });
 
     return () => {
       isMounted = false;
-      setActivityLogLoading(false);
     };
-  }, [setActivities, setActivityLogLoading]);
+  }, [setActivities, visibleMonth]);
+
+  useEffect(() => {
+    if (!hasLoadedActivities) return;
+    patientActivityLogViewCache = {
+      search,
+      quickFilter,
+      category,
+      date,
+      visibleMonth,
+      schedules: schedulesRef.current,
+    };
+  }, [category, date, hasLoadedActivities, quickFilter, search, visibleMonth]);
 
   const patientActivities = useMemo(() => activities, [activities]);
 
@@ -98,33 +162,38 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
         .some((value) => value.toLowerCase().includes(query));
       const matchesQuickFilter = quickFilter === "all"
         || (quickFilter === "unread" && !activity.read)
+        || (quickFilter === "success" && activity.severity === "Sukses")
+        || (quickFilter === "info" && activity.severity === "Info")
         || (quickFilter === "critical" && activity.severity === "Kritis")
         || (quickFilter === "warning" && activity.severity === "Peringatan");
       const matchesCategory = category === "all" || activity.category === category;
+      const matchesDate = isDateInRange(getDateKey(new Date(activity.timestamp)), date);
 
-      return matchesSearch && matchesQuickFilter && matchesCategory;
+      return matchesSearch && matchesQuickFilter && matchesCategory && matchesDate;
     });
-  }, [category, deferredSearch, patientActivities, quickFilter]);
+  }, [category, date, deferredSearch, patientActivities, quickFilter]);
 
   const hasUnread = patientActivities.some((activity) => !activity.read);
-  const hasActiveFilters = Boolean(search || quickFilter !== "all" || category !== "all");
+  const hasActiveFilters = Boolean(search || quickFilter !== "all" || category !== "all" || date);
 
   const resetFilters = () => {
-    setSearch("");
-    setQuickFilter("all");
-    setCategory("all");
+    dispatch({ type: "patch", payload: { search: "", quickFilter: "all", category: "all", date: "" } });
   };
 
   const markAllAsRead = async () => {
-    setIsMarkingAllRead(true);
+    dispatch({ type: "patch", payload: { isMarkingAllRead: true } });
     try {
-      await markActivitiesReadViaApi(patientActivities.filter((activity) => !activity.read).map((activity) => activity.id));
+      const unreadIds: string[] = [];
+      for (const activity of patientActivities) {
+        if (!activity.read) unreadIds.push(activity.id);
+      }
+      await markActivitiesReadViaApi(unreadIds);
       markAllActivitiesAsRead();
       showToast("Semua aktivitas ditandai sudah dibaca.");
     } catch {
       showToast("Gagal menandai semua aktivitas sebagai dibaca.", "error");
     } finally {
-      setIsMarkingAllRead(false);
+      dispatch({ type: "patch", payload: { isMarkingAllRead: false } });
     }
   };
 
@@ -137,22 +206,20 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
         showToast("Gagal menandai aktivitas sebagai dibaca.", "error");
       }
     }
-    setSelectedActivity(activity.read ? activity : { ...activity, read: true });
+    dispatch({ type: "patch", payload: { selectedActivity: activity.read ? activity : { ...activity, read: true } } });
   };
 
   const viewFoodScan = (scanId: string) => {
-    setSelectedActivity(null);
-    setSelectedFoodScanId(scanId);
+    dispatch({ type: "patch", payload: { selectedActivity: null, selectedFoodScanId: scanId } });
   };
 
   const viewSchedule = (activity: ActivityLogRecord) => {
-    const schedule = schedules.find((currentSchedule) => currentSchedule.id === activity.scheduleId)
-      ?? schedules.find((currentSchedule) => currentSchedule.medicineName === activity.medicineName);
+    const schedule = schedulesRef.current.find((currentSchedule) => currentSchedule.id === activity.scheduleId)
+      ?? schedulesRef.current.find((currentSchedule) => currentSchedule.medicineName === activity.medicineName);
 
     if (!schedule) return;
 
-    setSelectedActivity(null);
-    setSelectedSchedule(schedule);
+    dispatch({ type: "patch", payload: { selectedActivity: null, selectedSchedule: schedule } });
   };
 
   return (
@@ -166,33 +233,33 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
         )}
       />
 
-      {isLoading ? <SummaryCardsSkeleton /> : <SummaryCardGrid stats={summaryStats} />}
+      {isLoading && !hasLoadedActivities ? <SummaryCardsSkeleton /> : <SummaryCardGrid stats={summaryStats} />}
 
-      <motion.div
+      <m.div
         className="mt-6"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: 0.32 }}
+        {...getDashboardEntranceMotion(shouldAnimate, 0.32, 20)}
       >
-        {isLoading ? <ToolbarSkeleton /> : <PatientActivityToolbar
+        {isLoading && !hasLoadedActivities ? <ToolbarSkeleton /> : <PatientActivityToolbar
           search={search}
           quickFilter={quickFilter}
           category={category}
+          date={date}
           hasActiveFilters={hasActiveFilters}
-          onSearchChange={setSearch}
-          onQuickFilterChange={setQuickFilter}
-          onCategoryChange={setCategory}
+          onSearchChange={(value) => dispatch({ type: "patch", payload: { search: value } })}
+          onQuickFilterChange={(value) => dispatch({ type: "patch", payload: { quickFilter: value } })}
+          onCategoryChange={(value) => dispatch({ type: "patch", payload: { category: value } })}
+          onDateChange={(value) => dispatch({ type: "patch", payload: { date: value } })}
           onReset={resetFilters}
         />}
-      </motion.div>
+      </m.div>
 
       <div className="mt-6">
-        {isLoading ? <ActivityDataSkeleton rows={6} /> : <PatientActivityCalendar month={visibleMonth} activities={filteredActivities} onMonthChange={setVisibleMonth} onViewDetail={viewActivityDetail} />}
+        {isLoading ? <PatientActivityCalendarSkeleton /> : <PatientActivityCalendar month={visibleMonth} activities={filteredActivities} onMonthChange={(month) => dispatch({ type: "patch", payload: { visibleMonth: month } })} onViewDetail={viewActivityDetail} />}
       </div>
 
-      <ActivityDetailModal activity={selectedActivity} useScheduleQuery={false} onClose={() => setSelectedActivity(null)} onViewFoodScan={viewFoodScan} onViewSchedule={viewSchedule} />
-      <PatientMedicineDetailModal schedule={selectedSchedule} onClose={() => setSelectedSchedule(null)} />
-      <FoodScanDetailModal scanId={selectedFoodScanId} onClose={() => setSelectedFoodScanId(null)} />
+      <ActivityDetailModal activity={selectedActivity} useScheduleQuery={false} onClose={() => dispatch({ type: "patch", payload: { selectedActivity: null } })} onViewFoodScan={viewFoodScan} onViewSchedule={viewSchedule} />
+      <PatientMedicineDetailModal schedule={selectedSchedule} onClose={() => dispatch({ type: "patch", payload: { selectedSchedule: null } })} />
+      <FoodScanDetailModal scanId={selectedFoodScanId} onClose={() => dispatch({ type: "patch", payload: { selectedFoodScanId: null } })} />
     </DashboardPageShell>
   );
 }

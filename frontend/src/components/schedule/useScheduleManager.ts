@@ -1,96 +1,135 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BellRing, CalendarClock, CheckCircle2 } from "lucide-react";
 import { groupSchedulesByPatient } from "@/helpers/schedules";
 import { getApiErrorMessage } from "@/lib/apiErrors";
 import type { PatientRecord } from "@/lib/mocks/patients";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
-import { getPatientsFromApi } from "@/lib/patientApi";
-import { createSchedulesViaApi, deactivateScheduleViaApi, getSchedulesFromApi, setScheduleActiveViaApi, updateScheduleViaApi } from "@/lib/scheduleApi";
+import { createSchedulesViaApi, deactivateScheduleViaApi, getSchedulePatientGroupsPageFromApi, setScheduleActiveViaApi, updateScheduleViaApi } from "@/lib/scheduleApi";
 import { showConfirm, showError, showToast } from "@/lib/swal";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import type { ScheduleAction } from "./ScheduleActions";
-import { getScheduleFormValues, type ScheduleFormValues } from "./ScheduleForm";
+import { getScheduleFormValues, type ScheduleFormValues } from "./scheduleFormUtils";
 import type { ScheduleFilter } from "./ScheduleToolbar";
 
 const pageSize = 10;
+const defaultScheduleSummary = { active: 0, completed: 0, reminders: 0 };
+let scheduleManagerViewCache: {
+  schedules: MedicationScheduleRecord[];
+  patients: PatientRecord[];
+  totalPatients: number;
+  scheduleSummary: { active: number; completed: number; reminders: number };
+  search: string;
+  activeFilter: ScheduleFilter;
+  currentPage: number;
+} | null = null;
 
-export function useScheduleManager(initialPatientName: string) {
+interface UseScheduleManagerOptions {
+  readonly initialPatientId?: string;
+  readonly initialPatientName?: string;
+}
+
+export function useScheduleManager({ initialPatientId = "", initialPatientName = "" }: UseScheduleManagerOptions = {}) {
+  const linkedPatientId = initialPatientId.trim();
   const linkedPatientName = initialPatientName.trim().toLowerCase();
-  const [schedules, setSchedules] = useState<MedicationScheduleRecord[]>([]);
-  const [patients, setPatients] = useState<PatientRecord[]>([]);
-  const [search, setSearch] = useState("");
-  const [activeFilter, setActiveFilter] = useState<ScheduleFilter>("all");
-  const [currentPage, setCurrentPage] = useState(1);
+  const [schedules, setSchedules] = useState<MedicationScheduleRecord[]>(() => scheduleManagerViewCache?.schedules ?? []);
+  const [patients, setPatients] = useState<PatientRecord[]>(() => scheduleManagerViewCache?.patients ?? []);
+  const [totalPatients, setTotalPatients] = useState(() => scheduleManagerViewCache?.totalPatients ?? 0);
+  const [scheduleSummary, setScheduleSummary] = useState(() => scheduleManagerViewCache?.scheduleSummary ?? defaultScheduleSummary);
+  const [search, setSearch] = useState(() => scheduleManagerViewCache?.search ?? "");
+  const [activeFilter, setActiveFilter] = useState<ScheduleFilter>(() => scheduleManagerViewCache?.activeFilter ?? "all");
+  const [currentPage, setCurrentPage] = useState(() => scheduleManagerViewCache?.currentPage ?? 1);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [addMedicinePatientId, setAddMedicinePatientId] = useState<string | null>(null);
   const [editingSchedule, setEditingSchedule] = useState<MedicationScheduleRecord | null>(null);
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [returnToDetailPatientId, setReturnToDetailPatientId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!scheduleManagerViewCache);
+  const [isSummaryLoading, setIsSummaryLoading] = useState(!scheduleManagerViewCache);
+  const [hasLoadedSchedules, setHasLoadedSchedules] = useState(Boolean(scheduleManagerViewCache));
+  const [hasLoadedSummary, setHasLoadedSummary] = useState(Boolean(scheduleManagerViewCache));
+  const hasLoadedSummaryRef = useRef(Boolean(scheduleManagerViewCache));
   const [processingAction, setProcessingAction] = useState<string | null>(null);
-  const deferredSearch = useDeferredValue(search);
+  const debouncedSearch = useDebouncedValue(search);
+
+  const loadSchedulePage = useCallback(async (page: number, forceRefresh = false, overrides?: { search?: string; activeFilter?: ScheduleFilter }) => {
+    const nextSearch = overrides?.search ?? debouncedSearch;
+    const nextFilter = overrides?.activeFilter ?? activeFilter;
+    const canUseVisibleCache = !forceRefresh
+      && scheduleManagerViewCache?.currentPage === page
+      && scheduleManagerViewCache.search === nextSearch
+      && scheduleManagerViewCache.activeFilter === nextFilter;
+    setIsLoading(!canUseVisibleCache);
+    try {
+      const schedulePage = await getSchedulePatientGroupsPageFromApi({
+        page,
+        limit: pageSize,
+        search: nextSearch,
+        adherenceStatus: nextFilter === "all" ? undefined : nextFilter,
+        forceRefresh,
+      });
+      setPatients(schedulePage.patients);
+      setSchedules(schedulePage.schedules);
+      setTotalPatients(schedulePage.meta.total);
+      const shouldRefreshSummary = !nextSearch && nextFilter === "all";
+      const nextSummary = shouldRefreshSummary
+        ? schedulePage.meta.summary ?? scheduleManagerViewCache?.scheduleSummary ?? defaultScheduleSummary
+        : scheduleManagerViewCache?.scheduleSummary ?? defaultScheduleSummary;
+      if (shouldRefreshSummary || !hasLoadedSummaryRef.current) setScheduleSummary(nextSummary);
+      hasLoadedSummaryRef.current = true;
+      setHasLoadedSummary(true);
+      setIsSummaryLoading(false);
+      scheduleManagerViewCache = {
+        schedules: schedulePage.schedules,
+        patients: schedulePage.patients,
+        totalPatients: schedulePage.meta.total,
+        scheduleSummary: nextSummary,
+        search: nextSearch,
+        activeFilter: nextFilter,
+        currentPage: page,
+      };
+    } catch {
+      setSchedules([]);
+      setPatients([]);
+      setTotalPatients(0);
+      setIsSummaryLoading(false);
+      hasLoadedSummaryRef.current = true;
+      setHasLoadedSummary(true);
+    } finally {
+      setHasLoadedSchedules(true);
+      setIsLoading(false);
+    }
+  }, [activeFilter, debouncedSearch]);
 
   useEffect(() => {
-    let isMounted = true;
-
-    getPatientsFromApi()
-      .then(async (apiPatients) => {
-        if (!isMounted) return;
-        const apiSchedules = await getSchedulesFromApi(apiPatients);
-        if (!isMounted) return;
-        setSchedules(apiSchedules);
-        setPatients(apiPatients);
-      })
-      .catch(() => {
-        if (!isMounted) return;
-        setSchedules([]);
-        setPatients([]);
-      })
-      .finally(() => {
-        if (isMounted) setIsLoading(false);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    const id = setTimeout(() => void loadSchedulePage(currentPage));
+    return () => clearTimeout(id);
+  }, [currentPage, loadSchedulePage]);
 
   const summaryStats = useMemo(() => {
-    const active = schedules.filter((schedule) => schedule.status === "Aktif").length;
-    const completed = schedules.filter((schedule) => schedule.status === "Selesai").length;
-    const reminders = schedules.filter((schedule) => schedule.reminderEnabled).length;
-
     return [
-      { label: "Jadwal Obat Aktif", value: String(active), tone: "safe" as const, color: "pine" as const, icon: CalendarClock },
-      { label: "Total Obat Selesai", value: String(completed), tone: "safe" as const, color: "leaf" as const, icon: CheckCircle2 },
-      { label: "Reminder Obat Aktif", value: String(reminders), tone: "neutral" as const, color: "lime" as const, icon: BellRing },
+      { label: "Jadwal Obat Aktif", value: String(scheduleSummary.active), tone: "safe" as const, color: "pine" as const, icon: CalendarClock },
+      { label: "Total Obat Selesai", value: String(scheduleSummary.completed), tone: "safe" as const, color: "leaf" as const, icon: CheckCircle2 },
+      { label: "Reminder Obat Aktif", value: String(scheduleSummary.reminders), tone: "neutral" as const, color: "lime" as const, icon: BellRing },
     ];
-  }, [schedules]);
+  }, [scheduleSummary]);
 
-  const filteredSchedules = useMemo(() => {
-    const query = deferredSearch.trim().toLowerCase();
-    return schedules.filter((schedule) => {
-      const matchesSearch = !query || [schedule.patientName, schedule.medicineName, schedule.dose, schedule.frequency, schedule.instructions ?? ""].some((value) => value.toLowerCase().includes(query));
-      return matchesSearch && activeFilter === "all";
-    });
-  }, [activeFilter, deferredSearch, schedules]);
-
-  const patientGroups = useMemo(() => groupSchedulesByPatient(filteredSchedules), [filteredSchedules]);
+  const patientGroups = useMemo(() => groupSchedulesByPatient(schedules), [schedules]);
   const allPatientGroups = useMemo(() => groupSchedulesByPatient(schedules), [schedules]);
   const medicineCountByPatient = useMemo(() => Object.fromEntries(allPatientGroups.map((group) => [group.patientId, group.schedules.length])), [allPatientGroups]);
   const selectedGroup = selectedPatientId ? allPatientGroups.find((group) => group.patientId === selectedPatientId) ?? null : null;
   const addMedicinePatientGroup = addMedicinePatientId ? allPatientGroups.find((group) => group.patientId === addMedicinePatientId) ?? null : null;
-  const totalPages = Math.max(1, Math.ceil(patientGroups.length / pageSize));
-  const paginatedGroups = patientGroups.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const totalPages = Math.max(1, Math.ceil(totalPatients / pageSize));
+  const paginatedGroups = patientGroups;
 
   useEffect(() => {
-    if (!linkedPatientName) return;
-    const linkedPatientId = schedules.find((schedule) => schedule.patientName.toLowerCase() === linkedPatientName)?.patientId;
-    if (!linkedPatientId) return;
-    const openTimer = window.setTimeout(() => setSelectedPatientId(linkedPatientId), 420);
+    if (!linkedPatientId && !linkedPatientName) return;
+    const resolvedPatientId = linkedPatientId || schedules.find((schedule) => schedule.patientName.toLowerCase() === linkedPatientName)?.patientId;
+    if (!resolvedPatientId || !allPatientGroups.some((group) => group.patientId === resolvedPatientId)) return;
+    const openTimer = window.setTimeout(() => setSelectedPatientId(resolvedPatientId), 420);
     return () => window.clearTimeout(openTimer);
-  }, [linkedPatientName, schedules]);
+  }, [allPatientGroups, linkedPatientId, linkedPatientName, schedules]);
 
   const resetFilters = () => {
     setSearch("");
@@ -118,6 +157,7 @@ export function useScheduleManager(initialPatientName: string) {
     setIsAddModalOpen(false);
     setAddMedicinePatientId(null);
     resetFilters();
+    await loadSchedulePage(1, true, { search: "", activeFilter: "all" });
     showToast(values.medicines.length > 1 ? "Beberapa jadwal obat berhasil ditambahkan." : "Jadwal obat berhasil ditambahkan.");
   };
 
@@ -137,6 +177,7 @@ export function useScheduleManager(initialPatientName: string) {
     setEditingSchedule(null);
     setSelectedPatientId(returnToDetailPatientId);
     setReturnToDetailPatientId(null);
+    await loadSchedulePage(currentPage, true);
     showToast("Jadwal obat berhasil diperbarui.");
   };
 
@@ -160,6 +201,7 @@ export function useScheduleManager(initialPatientName: string) {
       try {
         const updatedSchedule = await setScheduleActiveViaApi(schedule, schedule.status === "Nonaktif", patients);
         setSchedules((currentSchedules) => currentSchedules.map((currentSchedule) => currentSchedule.id === schedule.id ? updatedSchedule : currentSchedule));
+        await loadSchedulePage(currentPage, true);
       } catch (error) {
         showError(getApiErrorMessage(error, "Gagal mengubah status jadwal obat dari API."));
         return;
@@ -179,7 +221,7 @@ export function useScheduleManager(initialPatientName: string) {
     setProcessingAction(actionKey);
     try {
       await deactivateScheduleViaApi(schedule.id);
-      setSchedules((currentSchedules) => currentSchedules.filter((currentSchedule) => currentSchedule.id !== schedule.id));
+      await loadSchedulePage(currentPage, true);
     } catch (error) {
       showError(getApiErrorMessage(error, "Gagal menghapus jadwal obat dari API."));
       return;
@@ -208,8 +250,11 @@ export function useScheduleManager(initialPatientName: string) {
     handleFilterChange,
     handleScheduleAction,
     handleSearchChange,
+    hasLoadedSchedules,
+    hasLoadedSummary,
     isAddModalOpen,
     isLoading,
+    isSummaryLoading,
     medicineCountByPatient,
     paginatedGroups,
     patientGroups,
@@ -225,6 +270,8 @@ export function useScheduleManager(initialPatientName: string) {
     setSelectedPatientId,
     summaryStats,
     totalPages,
+    totalPatients,
+    pageSize,
     getEditingScheduleValues: () => editingSchedule ? getScheduleFormValues(editingSchedule) : undefined,
   };
 }

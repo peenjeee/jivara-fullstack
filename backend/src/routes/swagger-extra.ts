@@ -25,6 +25,27 @@
  *     tags: [Auth]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *           maximum: 10
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [all, pending, active, rejected, suspended]
  *     responses:
  *       200:
  *         description: Daftar pengajuan admin berhasil diambil
@@ -234,6 +255,11 @@
  *                     severity_score: 3
  *                     risk_level: sedang
  *                     worst_category: statin
+ *                 recommendationSummary:
+ *                   safe: 54
+ *                   avoid: 7
+ *                 matchedMedicationCategories:
+ *                   ATORVASTATIN: ["statin"]
  *       404:
  *         description: Scan makanan tidak ditemukan
  */

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { ArrowUp } from "lucide-react";
 import { useIsStandalonePwa } from "@/hooks";
 
@@ -14,7 +14,6 @@ export default function BackToTopButton() {
   useEffect(() => {
     const updateVisibility = () => setIsVisible(window.scrollY > showAfter);
 
-    updateVisibility();
     window.addEventListener("scroll", updateVisibility, { passive: true });
     return () => window.removeEventListener("scroll", updateVisibility);
   }, []);
@@ -26,7 +25,7 @@ export default function BackToTopButton() {
   return (
     <AnimatePresence>
       {isVisible && (
-        <motion.button
+        <m.button
           type="button"
           aria-label="Kembali ke atas"
           onClick={scrollToTop}
@@ -39,7 +38,7 @@ export default function BackToTopButton() {
           transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
         >
           <ArrowUp size={20} strokeWidth={2.6} />
-        </motion.button>
+        </m.button>
       )}
     </AnimatePresence>
   );

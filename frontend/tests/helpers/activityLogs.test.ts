@@ -29,7 +29,7 @@ describe("activity log helpers", () => {
   it("groups logs by date descending and sorts items by time descending", () => {
     const groups = groupActivityLogsByDate([
       makeLog("old-morning", "2026-05-08T08:00:00.000Z"),
-      makeLog("new-evening", "2026-05-09T18:00:00.000Z"),
+      makeLog("new-evening", "2026-05-09T10:00:00.000Z"),
       makeLog("new-morning", "2026-05-09T07:00:00.000Z"),
     ]);
 

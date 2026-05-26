@@ -44,11 +44,104 @@ router.use(authenticateToken);
  *         schema:
  *           type: string
  *           enum: [active, inactive, all]
+ *       - in: query
+ *         name: adherenceStatus
+ *         schema:
+ *           type: string
+ *           enum: [Need Special Attention, Lagging Behind, On Ideal Schedule, Complete]
+ *         description: Filter status kepatuhan pasien yang dihitung dari adherence 30 hari/7 hari. "Complete" berarti semua jadwal obat pasien telah habis (stock ≤ 0).
+ *       - in: query
+ *         name: nurseId
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Filter pasien aktif berdasarkan perawat yang menangani.
  *     responses:
  *       200:
  *         description: Daftar pasien berhasil diambil
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: berhasil
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                         format: uuid
+ *                       fullName:
+ *                         type: string
+ *                       email:
+ *                         type: string
+ *                         format: email
+ *                       phone:
+ *                         type: string
+ *                       assignedNurseId:
+ *                         type: string
+ *                         nullable: true
+ *                         format: uuid
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *                       lastLoginAt:
+ *                         type: string
+ *                         nullable: true
+ *                         format: date-time
  */
 router.get("/", authorizeRoles("patient", "nurse", "admin"), patientController.listPatients);
+
+/**
+ * @swagger
+ * /api/v1/patients/me:
+ *   get:
+ *     summary: Ambil data pasien yang sedang login
+ *     tags: [Patients]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Data pasien login berhasil diambil
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: berhasil
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                       format: uuid
+ *                     fullName:
+ *                       type: string
+ *                     email:
+ *                       type: string
+ *                       format: email
+ *                     phone:
+ *                       type: string
+ *                     registeredAt:
+ *                       type: string
+ *                       nullable: true
+ *                       format: date-time
+ *                     lastLoginAt:
+ *                       type: string
+ *                       nullable: true
+ *                       format: date-time
+ *       403:
+ *         description: Endpoint hanya untuk role patient
+ *       404:
+ *         description: Data pasien tidak ditemukan
+ */
+router.get("/me", authorizeRoles("patient"), patientController.getCurrentPatient);
 
 /**
  * @swagger
@@ -67,6 +160,39 @@ router.get("/", authorizeRoles("patient", "nurse", "admin"), patientController.l
  *     responses:
  *       200:
  *         description: Detail pasien berhasil diambil
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: berhasil
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                       format: uuid
+ *                     fullName:
+ *                       type: string
+ *                     email:
+ *                       type: string
+ *                       format: email
+ *                     phone:
+ *                       type: string
+ *                     assignedNurseId:
+ *                       type: string
+ *                       nullable: true
+ *                       format: uuid
+ *                     registeredAt:
+ *                       type: string
+ *                       nullable: true
+ *                       format: date-time
+ *                     lastLoginAt:
+ *                       type: string
+ *                       nullable: true
+ *                       format: date-time
  *       404:
  *         description: Pasien tidak ditemukan
  */
