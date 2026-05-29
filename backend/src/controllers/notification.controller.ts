@@ -95,7 +95,7 @@ export const listNotifications = async (req: AuthRequest, res: Response) => {
 
 export const trackEvent = async (req: AuthRequest, res: Response) => {
   try {
-    const data = await notificationService.trackNotificationEvent(req.body.notificationId, req.body.eventType);
+    const data = await notificationService.trackNotificationEvent(req.body.notificationId, req.body.eventType, req.user);
     res.status(200).json({ status: "berhasil", data });
   } catch (error) {
     sendError(res, error);

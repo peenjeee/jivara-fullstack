@@ -62,7 +62,19 @@ export async function mockCommonApi(page: Page) {
   });
 
   await page.route(/\/api\/(?:v\d+\/)?audit-logs(?:\?.*)?$/, async (route) => {
-    await fulfillJson(route, { data: [] });
+    await fulfillJson(route, {
+      data: [{
+        id: "audit-critical-1",
+        userId: "JVR-01",
+        userName: "Budi Santoso",
+        userEmail: "budi@test.local",
+        action: "medication.missed",
+        resourceType: "medication_schedule",
+        resourceId: "SCH-001",
+        createdAt: "2026-05-09T08:00:00.000Z",
+      }],
+      meta: { page: 1, limit: 10, total: 1, summary: { warningCritical: 1, today: 1 } },
+    });
   });
 
   await page.route(/\/api\/(?:v\d+\/)?notifications(?:\?.*)?$/, async (route) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiErrorMessage } from "@/lib/apiErrors";
 import { clearAuditLogCache } from "@/lib/auditLogApi";
 import api from "@/lib/axios";
@@ -51,6 +51,7 @@ export function useAdminApprovals(canLoad: boolean) {
   const [loadError, setLoadError] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [rejectingUser, setRejectingUser] = useState<User | null>(null);
+  const isInitialLoad = useRef(true);
   const debouncedSearch = useDebouncedValue(search);
 
   const totalPages = Math.max(1, Math.ceil(totalApprovals / pageSize));
@@ -122,7 +123,9 @@ export function useAdminApprovals(canLoad: boolean) {
 
   useEffect(() => {
     if (!canLoad) return;
-    void Promise.resolve().then(() => loadApprovals(currentPage));
+    const forceRefresh = isInitialLoad.current;
+    isInitialLoad.current = false;
+    void Promise.resolve().then(() => loadApprovals(currentPage, forceRefresh));
   }, [canLoad, currentPage, loadApprovals]);
 
   const resetFilters = () => {

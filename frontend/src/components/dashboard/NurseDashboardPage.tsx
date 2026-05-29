@@ -19,29 +19,41 @@ export default function NurseDashboardPage() {
   const { isSplashFinished } = useSplashScreen();
   const shouldAnimate = useDashboardEntranceMotion();
   const [dashboardData, setDashboardData] = useState<NurseDashboardData>(() => nurseDashboardCache ?? emptyNurseDashboardData);
-  const [isLoading, setIsLoading] = useState(!nurseDashboardCache);
   const [hasLoadedDashboard, setHasLoadedDashboard] = useState(Boolean(nurseDashboardCache));
+  const isLoading = !hasLoadedDashboard;
 
   useEffect(() => {
     let isMounted = true;
 
-    getNurseDashboardData()
+    getNurseDashboardData({ forceRefresh: true })
       .then((data) => {
         if (!isMounted) return;
         nurseDashboardCache = data;
         setDashboardData(data);
       })
       .catch(() => {
-        if (isMounted) setDashboardData({ stats: [], patients: [] });
+        if (isMounted && !nurseDashboardCache) setDashboardData({ stats: [], patients: [] });
       })
       .finally(() => {
         if (!isMounted) return;
         setHasLoadedDashboard(true);
-        setIsLoading(false);
       });
 
+    const handleScheduleChanged = () => {
+      getNurseDashboardData({ forceRefresh: true })
+        .then((data) => {
+          nurseDashboardCache = data;
+          setDashboardData(data);
+        })
+        .catch(() => {
+          setDashboardData({ stats: [], patients: [] });
+        });
+    };
+
+    window.addEventListener("jivara:schedule-changed", handleScheduleChanged);
     return () => {
       isMounted = false;
+      window.removeEventListener("jivara:schedule-changed", handleScheduleChanged);
     };
   }, []);
 
@@ -50,13 +62,13 @@ export default function NurseDashboardPage() {
   return (
     <DashboardPageShell>
       <DashboardPageHeader id="overview" title="Ringkasan Pasien" />
-      {isLoading && !hasLoadedDashboard ? <SummaryCardsSkeleton /> : <SummaryCardGrid stats={dashboardData.stats} />}
+      {isLoading ? <SummaryCardsSkeleton /> : <SummaryCardGrid stats={dashboardData.stats} />}
 
       <m.div
         className="mt-6"
         {...getDashboardEntranceMotion(shouldAnimate, 0.4, 24)}
       >
-        {isLoading && !hasLoadedDashboard ? <TableDataSkeleton /> : <PatientTable patients={dashboardData.patients} title="Pasien Terbaru" showViewAll actions={["view"]} onAction={(_, patient) => push(`/patients/${encodeURIComponent(patient.id)}`)} />}
+        {isLoading ? <TableDataSkeleton /> : <PatientTable patients={dashboardData.patients} title="Pasien Terbaru" showViewAll actions={["view"]} onAction={(_, patient) => push(`/patients/${encodeURIComponent(patient.id)}`)} />}
       </m.div>
     </DashboardPageShell>
   );

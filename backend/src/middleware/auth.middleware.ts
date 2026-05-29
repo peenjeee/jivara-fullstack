@@ -1,6 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
+import { eq } from "drizzle-orm";
+import { db } from "../db";
+import { users } from "../db/schema";
 dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET as string;
@@ -28,7 +31,7 @@ export interface AuthRequest extends Request {
 /**
  * Middleware: Verifikasi JWT access token dari header Authorization
  */
-export const authenticateToken = (
+export const authenticateToken = async (
   req: AuthRequest,
   res: Response,
   next: NextFunction
@@ -54,7 +57,33 @@ export const authenticateToken = (
       email: string;
       role: string;
     };
-    req.user = decoded;
+
+    const userRows = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        role: users.role,
+        isActive: users.isActive,
+        accountStatus: users.accountStatus,
+      })
+      .from(users)
+      .where(eq(users.id, decoded.id))
+      .limit(1);
+
+    const currentUser = userRows[0];
+    if (!currentUser || !currentUser.isActive || currentUser.accountStatus !== "active") {
+      return res.status(401).json({
+        status: "gagal",
+        message: "Akun tidak aktif atau tidak diizinkan",
+        error_code: "ACCOUNT_INACTIVE",
+      });
+    }
+
+    req.user = {
+      id: currentUser.id,
+      email: currentUser.email,
+      role: currentUser.role,
+    };
     next();
   } catch (error: unknown) {
     const err = error as { name?: string };

@@ -94,13 +94,24 @@ describe("extended validators", () => {
   });
 
   it("accepts food uploads with imageUrl", () => {
-    const req = createRequest({ patient_id: validUuid, imageUrl: "/uploads/food.jpg" });
+    const req = createRequest({ patient_id: validUuid, imageUrl: "/uploads/food-scans/food.jpg" });
     const res = createResponse();
 
     validateFoodUpload(req, res, next);
 
     expect(req.body.patientId).toBe(validUuid);
     expectAccepted(res, next);
+  });
+
+  it("rejects food upload imageUrl outside Jivara storage", () => {
+    const req = createRequest({ patient_id: validUuid, imageUrl: "http://169.254.169.254/latest/meta-data" });
+    const res = createResponse();
+
+    validateFoodUpload(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error_code: "INVALID_IMAGE_URL" }));
+    expect(next).not.toHaveBeenCalled();
   });
 
   it("rejects food uploads without image input", () => {

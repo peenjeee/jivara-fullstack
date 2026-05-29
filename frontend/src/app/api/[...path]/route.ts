@@ -25,6 +25,13 @@ const strippedResponseHeaders = [
 const buildBackendUrl = async (request: NextRequest, context: ProxyRouteContext) => {
   const { path } = await context.params;
   const url = new URL(request.url);
+  if (path[0] === "uploads") {
+    const backendOrigin = getBackendApiUrl().replace(/\/api(?:\/v\d+)?\/?$/, "");
+    const backendUrl = new URL(`${backendOrigin}/${path.map(encodeURIComponent).join("/")}`);
+    backendUrl.search = url.search;
+    return backendUrl;
+  }
+
   const proxiedPath = path[0] === "v1" ? path.slice(1) : path;
   const backendUrl = new URL(`${getBackendApiUrl().replace(/\/$/, "")}/${proxiedPath.map(encodeURIComponent).join("/")}`);
   backendUrl.search = url.search;
@@ -72,7 +79,7 @@ const proxyRequest = async (request: NextRequest, context: ProxyRouteContext) =>
 
     response = canRetry
       ? await fetchWithTransientRetry(backendUrl, requestInit)
-      : await fetch(backendUrl, requestInit);
+      : await fetch(backendUrl, { ...requestInit, cache: "no-store" });
   } catch {
     return NextResponse.json(
       { status: "gagal", message: "Layanan sedang tidak merespons. Coba lagi beberapa saat." },

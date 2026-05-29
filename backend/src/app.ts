@@ -22,7 +22,10 @@ import nurseRoutes from './routes/nurse.routes';
 import alertRoutes from './routes/alert.routes';
 import publicStatsRoutes from './routes/public-stats.routes';
 import activityReadRoutes from './routes/activity-read.routes';
+import activityEventRoutes from './routes/activity-event.routes';
 import adminDashboardRoutes from './routes/admin-dashboard.routes';
+import { authenticateToken } from './middleware/auth.middleware';
+import { authorizeFoodScanUpload } from './middleware/upload-access.middleware';
 
 const app = express();
 const publicDir = path.resolve(process.cwd(), 'public');
@@ -58,9 +61,7 @@ const limiter = rateLimit({
   skip: (req) => process.env.NODE_ENV !== 'production'
     || req.path === '/v1/auth/login'
     || req.path === '/v1/auth/register'
-    || req.path === '/v1/auth/status'
-    || req.path.startsWith('/v1/auth/admin-approvals')
-    || req.path.startsWith('/v1/audit-logs'),
+    || req.path === '/v1/auth/status',
   message: {
     status: 'gagal',
     message: 'Terlalu banyak permintaan, silakan coba lagi nanti.',
@@ -71,10 +72,10 @@ app.use('/api', limiter);
 // Body parser dengan limit untuk mencegah payload attack
 app.use(express.json({ limit: '1mb' }));
 
-// Public access for locally stored uploaded files.
-app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads'), {
+// Locally stored uploaded food scans are protected by scan ownership.
+app.use('/uploads', authenticateToken, authorizeFoodScanUpload, express.static(path.resolve(process.cwd(), 'uploads'), {
   setHeaders: (res) => {
-    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Cross-Origin-Resource-Policy', 'same-site');
   },
 }));
 
@@ -105,6 +106,7 @@ const mountApiRoutes = (basePath: string) => {
   app.use(`${basePath}/audit-logs`, auditLogRoutes);
   app.use(`${basePath}/alerts`, alertRoutes);
   app.use(`${basePath}/activity-reads`, activityReadRoutes);
+  app.use(`${basePath}/activity-events`, activityEventRoutes);
   app.use(`${basePath}/admin-dashboard`, adminDashboardRoutes);
   app.use(basePath, foodAiRoutes);
 };

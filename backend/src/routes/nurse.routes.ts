@@ -80,6 +80,10 @@ router.use(authenticateToken);
  *                         type: boolean
  *                       assignedPatients:
  *                         type: integer
+ *                         description: Total semua pasien yang ter-assign aktif ke perawat
+ *                       handledPatients:
+ *                         type: integer
+ *                         description: Total pasien yang masih aktif ditangani dan belum complete
  *                       createdAt:
  *                         type: string
  *                         format: date-time
@@ -138,6 +142,10 @@ router.get("/", authorizeRoles("admin", "super_admin"), nurseController.listNurs
  *                       type: boolean
  *                     assignedPatients:
  *                       type: integer
+ *                       description: Total semua pasien yang ter-assign aktif ke perawat
+ *                     handledPatients:
+ *                       type: integer
+ *                       description: Total pasien yang masih aktif ditangani dan belum complete
  *                     createdAt:
  *                       type: string
  *                       format: date-time

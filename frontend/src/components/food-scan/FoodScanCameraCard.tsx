@@ -77,10 +77,10 @@ export default function FoodScanCameraCard({ cameraDevices, cameraError, cameraA
       </div>
 
       <div className="mt-6 grid min-w-0 grid-cols-1 justify-center gap-3 min-[420px]:grid-cols-2">
-        {(!isCameraEnabled || cameraError) && <Button type="button" size="sm" variant="outline" className="w-full min-w-0 px-4" icon={<Camera size={16} />} loading={isCameraStarting} onClick={onRetryCamera}>{cameraError ? "Coba Kamera" : "Aktifkan Kamera"}</Button>}
+        {(!isCameraEnabled || cameraError) && <Button type="button" size="sm" variant="outline" className="w-full min-w-0 px-4" icon={<Camera size={16} />} loading={isCameraStarting} disabled={isScanning} onClick={onRetryCamera}>{cameraError ? "Coba Kamera" : "Aktifkan Kamera"}</Button>}
         {isCameraEnabled && !cameraError && <Button type="button" size="sm" className="w-full min-w-0 px-4" icon={<ScanLine size={16} />} loading={isScanning} disabled={!isCameraReady} onClick={onScan}>Scan Sekarang</Button>}
         <input ref={fileInputRef} type="file" className="sr-only" accept="image/jpeg,image/png,image/webp" aria-label="Upload gambar makanan" onChange={handleUploadChange} />
-        <Button type="button" size="sm" variant="outline" className="w-full min-w-0 px-4" icon={<ImagePlus size={16} />} loading={isScanning} onClick={() => fileInputRef.current?.click()}>Upload Gambar</Button>
+        <Button type="button" size="sm" variant="outline" className="w-full min-w-0 px-4" icon={<ImagePlus size={16} />} loading={isScanning} disabled={isScanning} onClick={() => fileInputRef.current?.click()}>Upload Gambar</Button>
       </div>
 
       {isCameraEnabled && cameraDevices.length > 1 && (

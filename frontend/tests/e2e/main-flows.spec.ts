@@ -32,5 +32,5 @@ test("activity log critical filter flow", async ({ context, page }) => {
   await gotoApp(page, "/activity-log");
   await page.getByRole("button", { name: "Kritis" }).click();
 
-  await expect(page.getByText("Budi belum minum obat.")).toBeVisible();
+  await expect(page.getByText("Budi Santoso menjalankan Medication Missed pada Medication Schedule (SCH-001).")).toBeVisible();
 });

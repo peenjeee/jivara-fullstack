@@ -18,7 +18,7 @@ router.use(authenticateToken);
  * /api/v1/admin-dashboard:
  *   get:
  *     summary: Ambil data ringkas dashboard admin
- *     description: Mengembalikan summary card, 5 perawat yang memiliki pasien perlu perhatian, 5 pasien berisiko, dan 5 notifikasi prioritas terbaru.
+ *     description: Mengembalikan summary card, 5 perawat yang perlu tindak lanjut (perawat nonaktif yang masih menangani pasien aktif atau perawat dengan pasien berisiko), 5 pasien berisiko, dan 5 notifikasi prioritas terbaru.
  *     tags: [Admin Dashboard]
  *     security:
  *       - bearerAuth: []
@@ -48,9 +48,14 @@ router.use(authenticateToken);
  *                         totalActiveSchedules:
  *                           type: integer
  *                           example: 19
+ *                         inactiveNurseReassignCount:
+ *                           type: integer
+ *                           description: Jumlah perawat nonaktif yang masih memiliki pasien non-Complete dan perlu reassign.
+ *                           example: 1
  *                     nurseFollowUps:
  *                       type: array
  *                       maxItems: 5
+ *                       description: Perawat nonaktif dengan pasien aktif diprioritaskan agar admin dapat melakukan reassign.
  *                       items:
  *                         type: object
  *                         properties:
@@ -139,7 +144,7 @@ router.use(authenticateToken);
  * /api/v1/admin-dashboard/nurse-summary:
  *   get:
  *     summary: Ambil ringkasan dashboard nurse
- *     description: Mengembalikan angka ringkas untuk dashboard nurse. Total pasien aktif, total notifikasi peringatan/kritis, dan kepatuhan keseluruhan dihitung dari seluruh pasien yang dapat diakses nurse.
+ *     description: Mengembalikan angka ringkas untuk dashboard nurse. Total pasien menghitung seluruh pasien yang dapat diakses nurse, termasuk aktif dan nonaktif. Notifikasi peringatan/kritis dan kepatuhan keseluruhan dihitung dari data pasien yang dapat diakses nurse.
  *     tags: [Admin Dashboard]
  *     security:
  *       - bearerAuth: []

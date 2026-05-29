@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useReducer } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { m } from "motion/react";
 import { AlertTriangle, Bell, CheckCheck, ClipboardList, type LucideIcon } from "lucide-react";
@@ -13,17 +13,16 @@ import { FoodScanDetailModal } from "@/components/food-scan";
 import { getActivityDateKey } from "@/helpers/activityLogs";
 import { activityMatchesNurse } from "@/helpers/nurses";
 import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
-import { getActivityReadIdsFromApi, markActivitiesReadViaApi } from "@/lib/activityReadApi";
+import { getActivityReadIdsFromApi, markActivitiesReadViaApi, markAllUnreadViaApi } from "@/lib/activityReadApi";
 import { getAuditActivityPageFromApi } from "@/lib/auditLogApi";
 import { isDateInRange } from "@/lib/dateRange";
 import type { ActivityCategory, ActivityLogRecord } from "@/lib/mocks/activityLogs";
-import { getNotificationActivityPageFromApi } from "@/lib/notificationActivitiesApi";
 import { getNursesFromApi } from "@/lib/nurseApi";
-import { getPatientsFromApi } from "@/lib/patientApi";
 import { showToast } from "@/lib/swal";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { useActivityLogStore } from "@/store/activityLog";
 import { useNurseStore } from "@/store/nurses";
+import { useAuthStore } from "@/store/auth";
 import ActivityDetailModal from "./ActivityDetailModal";
 import ActivityFeed from "./ActivityFeed";
 import ActivityToolbar, { type ActivityQuickFilter } from "./ActivityToolbar";
@@ -33,11 +32,6 @@ const loadBatchSize = serverPageSize;
 
 const getAuditSeverityFilter = (quickFilter: ActivityQuickFilter) => {
   if (quickFilter === "critical" || quickFilter === "warning" || quickFilter === "success" || quickFilter === "info") return quickFilter;
-  return undefined;
-};
-
-const getNotificationSeverityFilter = (quickFilter: ActivityQuickFilter) => {
-  if (quickFilter === "critical" || quickFilter === "warning" || quickFilter === "success") return quickFilter;
   return undefined;
 };
 
@@ -77,6 +71,14 @@ type ActivityLogPageState = {
   summaryServerTodayTotal: number | null;
 };
 
+type ActivityLogPageAction =
+  | { readonly type: "patch"; readonly payload: Partial<ActivityLogPageState> }
+  | { readonly type: "set-filters"; readonly payload: Partial<ActivityLogPageState> }
+  | { readonly type: "reset-filters" }
+  | { readonly type: "increase-visible-count" }
+  | { readonly type: "mark-summary-read"; readonly activityId: string }
+  | { readonly type: "mark-all-summary-read" };
+
 type ActivityLogViewCache = Pick<ActivityLogPageState,
   | "activities"
   | "search"
@@ -94,15 +96,7 @@ type ActivityLogViewCache = Pick<ActivityLogPageState,
   | "summaryServerActivityTotal"
   | "summaryServerWarningCriticalTotal"
   | "summaryServerTodayTotal"
->;
-
-type ActivityLogPageAction =
-  | { type: "patch"; payload: Partial<ActivityLogPageState> }
-  | { type: "set-filters"; payload: Partial<Pick<ActivityLogPageState, "search" | "quickFilter" | "category" | "nurseId" | "date">> }
-  | { type: "reset-filters" }
-  | { type: "increase-visible-count" }
-  | { type: "mark-summary-read"; activityId: string }
-  | { type: "mark-all-summary-read" };
+> & { cachedUserId: string | null; cachedAuditUserRole?: string; cachedReadOnly?: boolean };
 
 let activityLogPageViewCache: ActivityLogViewCache | null = null;
 
@@ -136,37 +130,41 @@ function activityLogPageReducer(state: ActivityLogPageState, action: ActivityLog
   }
 }
 
-function createInitialState(initialPatientName: string, initialCategory?: string): ActivityLogPageState {
+function createInitialState(initialPatientName: string, initialCategory: string | undefined, currentUserId: string | undefined, auditUserRole: string | undefined, readOnly: boolean): ActivityLogPageState {
+  const cacheIsValid = activityLogPageViewCache
+    && activityLogPageViewCache.cachedUserId === (currentUserId ?? null)
+    && activityLogPageViewCache.cachedAuditUserRole === auditUserRole
+    && activityLogPageViewCache.cachedReadOnly === readOnly;
   return {
-    activities: activityLogPageViewCache?.activities ?? [],
-    search: activityLogPageViewCache?.search ?? initialPatientName,
-    quickFilter: activityLogPageViewCache?.quickFilter ?? "all",
-    category: activityLogPageViewCache?.category ?? (isActivityCategory(initialCategory) ? initialCategory : "all"),
-    nurseId: activityLogPageViewCache?.nurseId ?? "all",
-    date: activityLogPageViewCache?.date ?? "",
-    visibleCount: activityLogPageViewCache?.visibleCount ?? loadBatchSize,
+    activities: cacheIsValid ? (activityLogPageViewCache?.activities ?? []) : [],
+    search: cacheIsValid ? (activityLogPageViewCache?.search ?? initialPatientName) : initialPatientName,
+    quickFilter: cacheIsValid ? (activityLogPageViewCache?.quickFilter ?? "all") : "all",
+    category: cacheIsValid ? (activityLogPageViewCache?.category ?? (isActivityCategory(initialCategory) ? initialCategory : "all")) : (isActivityCategory(initialCategory) ? initialCategory : "all"),
+    nurseId: cacheIsValid ? (activityLogPageViewCache?.nurseId ?? "all") : "all",
+    date: cacheIsValid ? (activityLogPageViewCache?.date ?? "") : "",
+    visibleCount: cacheIsValid ? (activityLogPageViewCache?.visibleCount ?? loadBatchSize) : loadBatchSize,
     selectedActivity: null,
     selectedFoodScanId: null,
-    patientAssignments: activityLogPageViewCache?.patientAssignments ?? {},
-    summaryActivities: activityLogPageViewCache?.summaryActivities ?? [],
-    isLoading: !activityLogPageViewCache,
-    isSummaryLoading: !activityLogPageViewCache,
-    hasLoadedActivities: Boolean(activityLogPageViewCache),
-    hasLoadedSummary: Boolean(activityLogPageViewCache),
-    activityPage: activityLogPageViewCache?.activityPage ?? 1,
+    patientAssignments: cacheIsValid ? (activityLogPageViewCache?.patientAssignments ?? {}) : {},
+    summaryActivities: cacheIsValid ? (activityLogPageViewCache?.summaryActivities ?? []) : [],
+    isLoading: !cacheIsValid,
+    isSummaryLoading: !cacheIsValid,
+    hasLoadedActivities: Boolean(cacheIsValid),
+    hasLoadedSummary: Boolean(cacheIsValid),
+    activityPage: cacheIsValid ? (activityLogPageViewCache?.activityPage ?? 1) : 1,
     isLoadingMore: false,
     processingActivityId: null,
     isMarkingAllRead: false,
-    serverActivityTotal: activityLogPageViewCache?.serverActivityTotal ?? null,
-    serverWarningCriticalTotal: activityLogPageViewCache?.serverWarningCriticalTotal ?? null,
-    serverTodayTotal: activityLogPageViewCache?.serverTodayTotal ?? null,
-    summaryServerActivityTotal: activityLogPageViewCache?.summaryServerActivityTotal ?? null,
-    summaryServerWarningCriticalTotal: activityLogPageViewCache?.summaryServerWarningCriticalTotal ?? null,
-    summaryServerTodayTotal: activityLogPageViewCache?.summaryServerTodayTotal ?? null,
+    serverActivityTotal: cacheIsValid ? (activityLogPageViewCache?.serverActivityTotal ?? null) : null,
+    serverWarningCriticalTotal: cacheIsValid ? (activityLogPageViewCache?.serverWarningCriticalTotal ?? null) : null,
+    serverTodayTotal: cacheIsValid ? (activityLogPageViewCache?.serverTodayTotal ?? null) : null,
+    summaryServerActivityTotal: cacheIsValid ? (activityLogPageViewCache?.summaryServerActivityTotal ?? null) : null,
+    summaryServerWarningCriticalTotal: cacheIsValid ? (activityLogPageViewCache?.summaryServerWarningCriticalTotal ?? null) : null,
+    summaryServerTodayTotal: cacheIsValid ? (activityLogPageViewCache?.summaryServerTodayTotal ?? null) : null,
   };
 }
 
-function createViewCache(state: ActivityLogPageState, quickFilter: ActivityQuickFilter): ActivityLogViewCache {
+function createViewCache(state: ActivityLogPageState, quickFilter: ActivityQuickFilter, currentUserId: string | undefined, auditUserRole: string | undefined, readOnly: boolean): ActivityLogViewCache {
   return {
     activities: state.activities,
     search: state.search,
@@ -184,43 +182,26 @@ function createViewCache(state: ActivityLogPageState, quickFilter: ActivityQuick
     summaryServerActivityTotal: state.summaryServerActivityTotal,
     summaryServerWarningCriticalTotal: state.summaryServerWarningCriticalTotal,
     summaryServerTodayTotal: state.summaryServerTodayTotal,
+    cachedUserId: currentUserId ?? null,
+    cachedAuditUserRole: auditUserRole,
+    cachedReadOnly: readOnly,
   };
 }
 
-async function fetchSummaryData({ readOnly, auditUserRole, todayKey }: { readOnly: boolean; auditUserRole?: string; todayKey: string }) {
-  if (readOnly) {
-    const [auditPage, notificationPage] = await Promise.all([
-      getAuditActivityPageFromApi({ page: 1, limit: serverPageSize, userRole: auditUserRole }),
-      getNotificationActivityPageFromApi({ page: 1, limit: serverPageSize }).catch(() => ({ activities: [], meta: { page: 1, limit: serverPageSize, total: 0, summary: undefined } })),
-    ]);
-    const summaryActivities = [...notificationPage.activities, ...auditPage.activities];
-    const notificationWarningCritical = notificationPage.meta.summary?.warningCritical ?? notificationPage.activities.filter((activity) => activity.severity === "Peringatan" || activity.severity === "Kritis").length;
-    const notificationToday = notificationPage.meta.summary?.today ?? notificationPage.activities.filter((activity) => getActivityDateKey(activity.timestamp) === todayKey).length;
-
-    return {
-      summaryActivities,
-      unreadCount: summaryActivities.filter((activity) => !activity.read).length,
-      summaryServerActivityTotal: auditPage.meta.total + notificationPage.meta.total,
-      summaryServerWarningCriticalTotal: (auditPage.meta.summary?.warningCritical ?? 0) + notificationWarningCritical,
-      summaryServerTodayTotal: (auditPage.meta.summary?.today ?? 0) + notificationToday,
-    };
-  }
-
-  const [readIds, auditPage, notificationPage] = await Promise.all([
-    getActivityReadIdsFromApi().catch(() => new Set<string>()),
-    getAuditActivityPageFromApi({ page: 1, limit: serverPageSize, userRole: auditUserRole }).catch(() => ({ activities: [], meta: { page: 1, limit: serverPageSize, total: 0, summary: undefined } })),
-    getNotificationActivityPageFromApi({ page: 1, limit: serverPageSize }).catch(() => ({ activities: [], meta: { page: 1, limit: serverPageSize, total: 0, summary: undefined } })),
-  ]);
-  const summaryActivities = [...notificationPage.activities, ...auditPage.activities].map((activity) => ({ ...activity, read: readIds.has(activity.id) || activity.read }));
-  const notificationWarningCritical = notificationPage.meta.summary?.warningCritical ?? notificationPage.activities.filter((activity) => activity.severity === "Peringatan" || activity.severity === "Kritis").length;
-  const notificationToday = notificationPage.meta.summary?.today ?? notificationPage.activities.filter((activity) => getActivityDateKey(activity.timestamp) === todayKey).length;
+async function fetchSummaryData({ readOnly, auditUserRole, todayKey, forceRefresh = false }: { readOnly: boolean; auditUserRole?: string; todayKey: string; forceRefresh?: boolean }) {
+  const auditPage = await getAuditActivityPageFromApi({ page: 1, limit: serverPageSize, userRole: auditUserRole, forceRefresh }).catch(() => ({ activities: [], meta: { page: 1, limit: serverPageSize, total: 0, summary: undefined } }));
+  const summaryPageActivities = auditPage.activities;
+  const readIds = !readOnly && summaryPageActivities.length > 0
+    ? await getActivityReadIdsFromApi({ activityIds: summaryPageActivities.map((activity) => activity.id), limit: summaryPageActivities.length }).catch(() => new Set<string>())
+    : new Set<string>();
+  const summaryActivities = summaryPageActivities.map((activity) => ({ ...activity, read: readIds.has(activity.id) || activity.read }));
 
   return {
     summaryActivities,
-    unreadCount: summaryActivities.filter((activity) => !activity.read).length,
-    summaryServerActivityTotal: auditPage.meta.total + notificationPage.meta.total,
-    summaryServerWarningCriticalTotal: (auditPage.meta.summary?.warningCritical ?? 0) + notificationWarningCritical,
-    summaryServerTodayTotal: (auditPage.meta.summary?.today ?? 0) + notificationToday,
+    unreadCount: readOnly ? 0 : summaryActivities.filter((activity) => !activity.read).length,
+    summaryServerActivityTotal: auditPage.meta.total,
+    summaryServerWarningCriticalTotal: auditPage.meta.summary?.warningCritical ?? auditPage.activities.filter((activity) => activity.severity === "Peringatan" || activity.severity === "Kritis").length,
+    summaryServerTodayTotal: auditPage.meta.summary?.today ?? auditPage.activities.filter((activity) => getActivityDateKey(activity.timestamp) === todayKey).length,
   };
 }
 
@@ -235,6 +216,7 @@ async function fetchActivityPageData({
   quickFilter,
   search,
   fallbackTotal,
+  forceRefresh = false,
 }: {
   page: number;
   readOnly: boolean;
@@ -246,27 +228,25 @@ async function fetchActivityPageData({
   quickFilter: ActivityQuickFilter;
   search: string;
   fallbackTotal: number;
+  forceRefresh?: boolean;
 }) {
-  const patients = showNurseFilter ? await getPatientsFromApi() : [];
-  const patientById = new Map(patients.map((patient) => [patient.id, patient]));
-  const assignments = showNurseFilter ? Object.fromEntries(patients.flatMap((patient) => patient.assignedNurseId ? [[patient.id, patient.assignedNurseId]] : [])) : {};
   const selectedNurseId = nurseId === "all" ? undefined : nurseId;
-  const [readIds, auditPage, notificationPage] = await Promise.all([
-    readOnly ? Promise.resolve(new Set<string>()) : getActivityReadIdsFromApi().catch(() => new Set<string>()),
-    getAuditActivityPageFromApi({ page, limit: serverPageSize, category, date, userRole: auditUserRole, nurseId: selectedNurseId, severity: getAuditSeverityFilter(quickFilter), search }).catch(() => ({ activities: [], meta: { page, limit: serverPageSize, total: fallbackTotal } })),
-    getNotificationActivityPageFromApi({ page, limit: serverPageSize, nurseId: selectedNurseId, category, date, severity: getNotificationSeverityFilter(quickFilter), search }).catch(() => ({ activities: [], meta: { page, limit: serverPageSize, total: 0 } })),
-  ]);
-  const notificationActivities = showNurseFilter
-    ? notificationPage.activities.map((activity) => {
-      const patient = activity.patientId ? patientById.get(activity.patientId) : undefined;
-      return { ...activity, patientName: patient?.name, patientAvatar: patient?.avatar };
-    })
-    : notificationPage.activities;
+  const auditPage = await getAuditActivityPageFromApi({ page, limit: serverPageSize, category, date, userRole: auditUserRole, nurseId: selectedNurseId, severity: getAuditSeverityFilter(quickFilter), search, forceRefresh }).catch(() => ({ activities: [], meta: { page, limit: serverPageSize, total: fallbackTotal } }));
+  const assignments: Record<string, string> = {};
   const activities: ActivityLogRecord[] = [];
 
-  for (const activity of [...notificationActivities, ...auditPage.activities]) {
+  for (const activity of auditPage.activities) {
     if (showNurseFilter && nurseId !== "all" && !activityMatchesNurse(activity, assignments, nurseId)) continue;
-    activities.push({ ...activity, read: readIds.has(activity.id) || activity.read });
+    activities.push(activity);
+  }
+
+  const readIds = !readOnly && activities.length > 0
+    ? await getActivityReadIdsFromApi({ activityIds: activities.map((activity) => activity.id), limit: serverPageSize }).catch(() => new Set<string>())
+    : new Set<string>();
+
+  for (let index = 0; index < activities.length; index += 1) {
+    const activity = activities[index];
+    activities[index] = { ...activity, read: readIds.has(activity.id) || activity.read };
   }
 
   activities.sort((first, second) => new Date(second.timestamp).getTime() - new Date(first.timestamp).getTime());
@@ -274,7 +254,7 @@ async function fetchActivityPageData({
   return {
     activities,
     assignments,
-    total: auditPage.meta.total + notificationPage.meta.total,
+    total: auditPage.meta.total,
     warningCriticalTotal: null,
     todayTotal: null,
     page,
@@ -288,12 +268,27 @@ function ActivityLogSummarySection({ isLoading, hasLoaded, summaryStats }: { isL
 
 function useActivityLogPageController({ initialPatientName = "", initialCategory, auditUserRole, readOnly = false, showNurseFilter = true }: ActivityLogPageProps) {
   const { push } = useRouter();
+  const currentUserId = useAuthStore((state) => state.user?.id);
   const setActivities = useActivityLogStore((state) => state.setActivities);
   const setActivityLogLoading = useActivityLogStore((state) => state.setLoading);
   const nurses = useNurseStore((state) => state.nurses);
   const setNurses = useNurseStore((state) => state.setNurses);
   const setUnreadActivityCount = useActivityLogStore((state) => state.setUnreadActivityCount);
-  const [state, dispatch] = useReducer(activityLogPageReducer, undefined, () => createInitialState(initialPatientName, initialCategory));
+  const [state, dispatch] = useReducer(activityLogPageReducer, undefined, () => createInitialState(initialPatientName, initialCategory, currentUserId, auditUserRole, readOnly));
+  const stateRef = useRef(state);
+  const loadingPagesRef = useRef(new Set<string>());
+  const initialQueryKey = activityLogPageViewCache?.cachedUserId === (currentUserId ?? null)
+    && activityLogPageViewCache.cachedAuditUserRole === auditUserRole
+    && activityLogPageViewCache.cachedReadOnly === readOnly
+    ? `1:${activityLogPageViewCache.nurseId}:${activityLogPageViewCache.category}:${activityLogPageViewCache.date}:${activityLogPageViewCache.quickFilter}:${activityLogPageViewCache.search}`
+    : null;
+  const loadedQueryRef = useRef<string | null>(initialQueryKey);
+  const failedQueryRef = useRef<string | null>(null);
+
+  // Sync stateRef after render, biar gak kena stale closure di async handler
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
   const debouncedSearch = useDebouncedValue(state.search);
   const todayKey = new Date().toISOString().slice(0, 10);
   const effectiveQuickFilter = readOnly && state.quickFilter === "unread" ? "all" : state.quickFilter;
@@ -316,7 +311,7 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
   useEffect(() => {
     let isMounted = true;
 
-    void fetchSummaryData({ readOnly, auditUserRole, todayKey })
+    void fetchSummaryData({ readOnly, auditUserRole, todayKey, forceRefresh: true })
       .then((summaryData) => {
         if (!isMounted) return;
         setUnreadActivityCount(summaryData.unreadCount);
@@ -352,56 +347,83 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
     };
   }, [auditUserRole, readOnly, setUnreadActivityCount, todayKey]);
 
-  useEffect(() => {
-    let isMounted = true;
+  const loadPage = useCallback(async (page: number, options: { readonly forceRefresh?: boolean } = {}) => {
+    const forceRefresh = options.forceRefresh ?? false;
+    const current = stateRef.current;
+    const pageKey = `${page}:${current.nurseId}:${current.category}:${current.date}:${effectiveQuickFilter}:${debouncedSearch}`;
+    if (!forceRefresh && page === 1 && loadedQueryRef.current === pageKey) return;
+    if (!forceRefresh && page === 1 && failedQueryRef.current === pageKey) return;
+    if (loadingPagesRef.current.has(pageKey)) return;
 
-    void fetchActivityPageData({
-      page: 1,
-      readOnly,
-      auditUserRole,
-      showNurseFilter,
-      nurseId: state.nurseId,
-      category: state.category,
-      date: state.date,
-      quickFilter: effectiveQuickFilter,
-      search: debouncedSearch,
-      fallbackTotal: state.activities.length,
-    })
-      .then((activityData) => {
-        if (!isMounted) return;
-        dispatch({
-          type: "patch",
-          payload: {
-            activities: activityData.activities,
-            patientAssignments: activityData.assignments,
-            serverActivityTotal: activityData.total,
-            serverWarningCriticalTotal: activityData.warningCriticalTotal,
-            serverTodayTotal: activityData.todayTotal,
-            activityPage: 1,
-            isLoading: false,
-            hasLoadedActivities: true,
-          },
-        });
-      })
-      .catch(() => {
-        if (!isMounted) return;
+    loadingPagesRef.current.add(pageKey);
+    dispatch({ type: "patch", payload: page === 1 ? { isLoading: true } : { isLoadingMore: true } });
+
+    try {
+      const activityData = await fetchActivityPageData({
+        page,
+        readOnly,
+        auditUserRole,
+        showNurseFilter,
+        nurseId: current.nurseId,
+        category: current.category,
+        date: current.date,
+        quickFilter: effectiveQuickFilter,
+        search: debouncedSearch,
+        fallbackTotal: current.serverActivityTotal ?? current.activities.length,
+        forceRefresh,
+      });
+
+      const visibleActivities = page === 1 ? activityData.activities : [...stateRef.current.activities, ...activityData.activities];
+      const visibleAssignments = page === 1 ? activityData.assignments : { ...stateRef.current.patientAssignments, ...activityData.assignments };
+
+      if (page === 1) {
+        loadedQueryRef.current = pageKey;
+        failedQueryRef.current = null;
+      }
+
+      dispatch({
+        type: "patch",
+        payload: {
+          activities: visibleActivities,
+          patientAssignments: visibleAssignments,
+          serverActivityTotal: activityData.total,
+          serverWarningCriticalTotal: activityData.warningCriticalTotal,
+          serverTodayTotal: activityData.todayTotal,
+          activityPage: page,
+          visibleCount: visibleActivities.length,
+        },
+      });
+    } catch {
+      if (page === 1) {
+        failedQueryRef.current = pageKey;
         dispatch({
           type: "patch",
           payload: {
             activities: [],
+            patientAssignments: {},
             serverActivityTotal: null,
             serverWarningCriticalTotal: null,
             serverTodayTotal: null,
-            isLoading: false,
-            hasLoadedActivities: true,
+            activityPage: 1,
+            visibleCount: loadBatchSize,
           },
         });
-      });
+      } else {
+        showToast("Gagal memuat aktivitas tambahan.", "error");
+      }
+    } finally {
+      loadingPagesRef.current.delete(pageKey);
+      dispatch({ type: "patch", payload: page === 1 ? { isLoading: false, hasLoadedActivities: true } : { isLoadingMore: false } });
+    }
+  }, [auditUserRole, debouncedSearch, effectiveQuickFilter, readOnly, showNurseFilter]);
 
-    return () => {
-      isMounted = false;
-    };
-  }, [auditUserRole, debouncedSearch, effectiveQuickFilter, readOnly, showNurseFilter, state.activities.length, state.category, state.date, state.nurseId, state.search]);
+  useEffect(() => {
+    const timerId = window.setTimeout(() => {
+      void loadPage(1, { forceRefresh: true });
+    }, 0);
+
+    return () => window.clearTimeout(timerId);
+  }, [loadPage, state.category, state.date, state.nurseId]);
 
   useEffect(() => {
     setActivities(state.activities);
@@ -412,8 +434,8 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
   }, [setActivityLogLoading, state.isLoading]);
 
   useEffect(() => {
-    activityLogPageViewCache = createViewCache(state, effectiveQuickFilter);
-  }, [effectiveQuickFilter, state]);
+    activityLogPageViewCache = createViewCache(state, effectiveQuickFilter, currentUserId, auditUserRole, readOnly);
+  }, [auditUserRole, currentUserId, effectiveQuickFilter, readOnly, state]);
 
   const summaryStats = useMemo(() => {
     const total = state.summaryServerActivityTotal ?? state.summaryActivities.length;
@@ -433,23 +455,21 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
   const filteredActivities = useMemo(() => {
     const query = debouncedSearch.trim().toLowerCase();
 
-    return state.activities
-      .filter((activity) => {
-        const matchesSearch = !query || [activity.title, activity.description, activity.patientName ?? "", activity.medicineName ?? "", activity.category]
-          .some((value) => value.toLowerCase().includes(query));
-        const matchesQuickFilter = effectiveQuickFilter === "all"
-          || (effectiveQuickFilter === "unread" && !activity.read)
-          || (effectiveQuickFilter === "success" && activity.severity === "Sukses")
-          || (effectiveQuickFilter === "info" && activity.severity === "Info")
-          || (effectiveQuickFilter === "critical" && activity.severity === "Kritis")
-          || (effectiveQuickFilter === "warning" && activity.severity === "Peringatan");
-        const matchesCategory = state.category === "all" || activity.category === state.category;
-        const matchesNurse = state.nurseId === "all" || activityMatchesNurse(activity, state.patientAssignments, state.nurseId);
-        const matchesDate = isDateInRange(getActivityDateKey(activity.timestamp), state.date);
+    return state.activities.filter((activity) => {
+      const matchesSearch = !query || [activity.title, activity.description, activity.patientName ?? "", activity.medicineName ?? "", activity.category]
+        .some((value) => value.toLowerCase().includes(query));
+      const matchesQuickFilter = effectiveQuickFilter === "all"
+        || (effectiveQuickFilter === "unread" && !activity.read)
+        || (effectiveQuickFilter === "success" && activity.severity === "Sukses")
+        || (effectiveQuickFilter === "info" && activity.severity === "Info")
+        || (effectiveQuickFilter === "critical" && activity.severity === "Kritis")
+        || (effectiveQuickFilter === "warning" && activity.severity === "Peringatan");
+      const matchesCategory = state.category === "all" || activity.category === state.category;
+      const matchesNurse = state.nurseId === "all" || activityMatchesNurse(activity, state.patientAssignments, state.nurseId);
+      const matchesDate = isDateInRange(getActivityDateKey(activity.timestamp), state.date);
 
-        return matchesSearch && matchesQuickFilter && matchesCategory && matchesNurse && matchesDate;
-      })
-      .sort((first, second) => new Date(second.timestamp).getTime() - new Date(first.timestamp).getTime());
+      return matchesSearch && matchesQuickFilter && matchesCategory && matchesNurse && matchesDate;
+    });
   }, [debouncedSearch, effectiveQuickFilter, state.activities, state.category, state.date, state.nurseId, state.patientAssignments]);
 
   const hasUnread = state.activities.some((activity) => !activity.read);
@@ -458,64 +478,39 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
     ? state.activityPage * serverPageSize < state.serverActivityTotal
     : undefined;
 
+  const clearFailedQuery = () => {
+    failedQueryRef.current = null;
+  };
+
   const handleSearchChange = (value: string) => {
+    clearFailedQuery();
     dispatch({ type: "set-filters", payload: { search: value } });
   };
 
   const handleQuickFilterChange = (value: ActivityQuickFilter) => {
+    clearFailedQuery();
     dispatch({ type: "set-filters", payload: { quickFilter: readOnly && value === "unread" ? "all" : value } });
   };
 
   const handleCategoryChange = (value: ActivityCategory | "all") => {
+    clearFailedQuery();
     dispatch({ type: "set-filters", payload: { category: value } });
   };
 
   const handleNurseChange = (value: string) => {
+    clearFailedQuery();
     dispatch({ type: "set-filters", payload: { nurseId: value } });
   };
 
   const handleDateChange = (value: string) => {
+    clearFailedQuery();
     dispatch({ type: "set-filters", payload: { date: value } });
   };
 
-  const handleLoadMore = async () => {
-    const nextVisibleCount = state.visibleCount + loadBatchSize;
-    dispatch({ type: "increase-visible-count" });
-    if (state.isLoadingMore || hasMoreFromServer !== true || nextVisibleCount < filteredActivities.length) return;
-
-    const nextPage = state.activityPage + 1;
-    dispatch({ type: "patch", payload: { isLoadingMore: true } });
-
-    try {
-      const activityData = await fetchActivityPageData({
-        page: nextPage,
-        readOnly,
-        auditUserRole,
-        showNurseFilter,
-        nurseId: state.nurseId,
-        category: state.category,
-        date: state.date,
-        quickFilter: effectiveQuickFilter,
-        search: debouncedSearch,
-        fallbackTotal: state.serverActivityTotal ?? state.activities.length,
-      });
-      const byId = new Map([...state.activities, ...activityData.activities].map((activity) => [activity.id, activity]));
-      dispatch({
-        type: "patch",
-        payload: {
-          activities: Array.from(byId.values()).sort((first, second) => new Date(second.timestamp).getTime() - new Date(first.timestamp).getTime()),
-          patientAssignments: activityData.assignments,
-          serverActivityTotal: activityData.total,
-          serverWarningCriticalTotal: null,
-          serverTodayTotal: null,
-          activityPage: nextPage,
-          isLoadingMore: false,
-        },
-      });
-    } catch {
-      dispatch({ type: "patch", payload: { isLoadingMore: false } });
-      showToast("Gagal memuat aktivitas tambahan.", "error");
-    }
+  const handleLoadMore = () => {
+    const current = stateRef.current;
+    if (hasMoreFromServer === false || current.isLoadingMore) return;
+    void loadPage(current.activityPage + 1);
   };
 
   const markAsRead = async (activityId: string) => {
@@ -556,11 +551,7 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
     if (readOnly) return;
     dispatch({ type: "patch", payload: { isMarkingAllRead: true } });
     try {
-      const unreadIds: string[] = [];
-      for (const activity of filteredActivities) {
-        if (!activity.read) unreadIds.push(activity.id);
-      }
-      await markActivitiesReadViaApi(unreadIds);
+      await markAllUnreadViaApi();
       dispatch({
         type: "patch",
         payload: {
@@ -630,11 +621,15 @@ export default function ActivityLogPage(props: ActivityLogPageProps) {
   const shouldAnimate = useDashboardEntranceMotion();
   const controller = useActivityLogPageController(props);
 
+  // Tombol muncul kalo ada unread di page ini ATAU backend bilang ada unread
+  const unreadBadgeCount = useActivityLogStore((state) => state.unreadActivityCount);
+  const showMarkAllButton = !props.readOnly && (controller.hasUnread || (unreadBadgeCount ?? 0) > 0);
+
   return (
     <DashboardPageShell>
       <DashboardPageHeader
         title="Log Aktivitas"
-        action={!props.readOnly && controller.hasUnread && (
+        action={showMarkAllButton && (
           <Button size="sm" icon={<CheckCheck size={16} />} onClick={controller.markAllAsRead} loading={controller.state.isMarkingAllRead}>
             Tandai Semua Dibaca
           </Button>
@@ -669,7 +664,7 @@ export default function ActivityLogPage(props: ActivityLogPageProps) {
         {controller.state.isLoading ? <ActivityDataSkeleton /> : (
           <ActivityFeed
             activities={controller.filteredActivities}
-            visibleCount={controller.state.visibleCount}
+            visibleCount={controller.filteredActivities.length}
             readOnly={props.readOnly ?? false}
             hasMore={controller.hasMoreFromServer}
             isLoadingMore={controller.state.isLoadingMore}

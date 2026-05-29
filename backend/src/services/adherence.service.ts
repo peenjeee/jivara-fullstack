@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, inArray } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, isNotNull, or } from "drizzle-orm";
 import { db } from "../db";
 import {
   foodScans,
@@ -92,15 +92,41 @@ const getOccurrenceDateTime = (day: Date, time: string) => {
   return occurrence;
 };
 
+const getScheduleOccurrenceEndDateKey = (schedule: { createdAt: Date | null; completedAt?: Date | null; stock?: number | null; isActive?: boolean | null }, latestLogDate?: Date) => {
+  const latestLogDateKey = latestLogDate ? getDateKey(latestLogDate) : null;
+  const shouldUseLatestLogAsEnd = schedule.isActive === false || Number(schedule.stock ?? 1) <= 0;
+  if (!schedule.createdAt) {
+    const completedDateKey = schedule.completedAt ? getDateKey(schedule.completedAt) : null;
+    if (!completedDateKey && shouldUseLatestLogAsEnd) return latestLogDateKey;
+    if (completedDateKey && latestLogDateKey) return completedDateKey < latestLogDateKey ? completedDateKey : latestLogDateKey;
+    return completedDateKey || latestLogDateKey;
+  }
+
+  const displayEndDate = new Date(schedule.createdAt);
+  displayEndDate.setUTCDate(displayEndDate.getUTCDate() + 30);
+  const displayEndDateKey = getDateKey(displayEndDate);
+  const completedDateKey = schedule.completedAt ? getDateKey(schedule.completedAt) : null;
+  if (!completedDateKey && shouldUseLatestLogAsEnd && latestLogDateKey) return latestLogDateKey < displayEndDateKey ? latestLogDateKey : displayEndDateKey;
+
+  const effectiveCompletedDateKey = completedDateKey && latestLogDateKey
+    ? (completedDateKey < latestLogDateKey ? completedDateKey : latestLogDateKey)
+    : completedDateKey;
+
+  if (!effectiveCompletedDateKey) return displayEndDateKey;
+  return effectiveCompletedDateKey < displayEndDateKey ? effectiveCompletedDateKey : displayEndDateKey;
+};
+
 const buildScheduledOccurrences = (
   days: number,
-  schedules: Array<{ id: string; createdAt: Date | null; scheduledTimes: unknown; frequency?: number | null }>,
+  schedules: Array<{ id: string; createdAt: Date | null; completedAt?: Date | null; stock?: number | null; isActive?: boolean | null; scheduledTimes: unknown; frequency?: number | null }>,
   logs: Array<{ scheduleId: string; scheduledTime: Date; status: string }>,
 ) => {
   const now = new Date();
   const start = getStartDate(days);
 
   const logsByScheduleDate = new Map<string, { confirmed: number; snoozed: number; missed: number }>();
+  const earliestLogDateBySchedule = new Map<string, Date>();
+  const latestLogDateBySchedule = new Map<string, Date>();
   for (const log of logs) {
     const key = `${log.scheduleId}|${getDateKey(log.scheduledTime)}`;
     const bucket = logsByScheduleDate.get(key) || { confirmed: 0, snoozed: 0, missed: 0 };
@@ -108,6 +134,11 @@ const buildScheduledOccurrences = (
     else if (log.status === "snoozed") bucket.snoozed += 1;
     else if (log.status === "missed") bucket.missed += 1;
     logsByScheduleDate.set(key, bucket);
+
+    const earliestLogDate = earliestLogDateBySchedule.get(log.scheduleId);
+    if (!earliestLogDate || earliestLogDate > log.scheduledTime) earliestLogDateBySchedule.set(log.scheduleId, log.scheduledTime);
+    const latestLogDate = latestLogDateBySchedule.get(log.scheduleId);
+    if (!latestLogDate || latestLogDate < log.scheduledTime) latestLogDateBySchedule.set(log.scheduleId, log.scheduledTime);
   }
 
   const occurrences: Array<{ scheduledTime: Date; status: string }> = [];
@@ -117,7 +148,13 @@ const buildScheduledOccurrences = (
     day.setUTCDate(start.getUTCDate() + index);
 
     for (const schedule of schedules) {
-      if (schedule.createdAt && getDateKey(day) < getDateKey(schedule.createdAt)) continue;
+      const createdDateKey = schedule.createdAt ? getDateKey(schedule.createdAt) : null;
+      const earliestLogDate = earliestLogDateBySchedule.get(schedule.id);
+      const earliestLogDateKey = earliestLogDate ? getDateKey(earliestLogDate) : null;
+      const startDateKey = createdDateKey || earliestLogDateKey;
+      if (startDateKey && getDateKey(day) < startDateKey) continue;
+      const occurrenceEndDateKey = getScheduleOccurrenceEndDateKey(schedule, latestLogDateBySchedule.get(schedule.id));
+      if (occurrenceEndDateKey && getDateKey(day) > occurrenceEndDateKey) continue;
       if (day > now) continue;
 
       for (const time of getScheduleTimes(schedule.scheduledTimes, schedule.frequency)) {
@@ -164,7 +201,7 @@ export const getAdherenceStats = async (query: AdherenceQuery, user?: AccessUser
     ? await getNurseIdForUser(user.id)
     : query.nurseId || query.nurse_id;
   const logConditions = startDate ? [gte(medicationLogs.scheduledTime, startDate)] : [];
-  const scheduleConditions = [eq(medicationSchedules.isActive, true)];
+  const scheduleConditions = [or(eq(medicationSchedules.isActive, true), isNotNull(medicationSchedules.completedAt))];
 
   if (patientId) {
     if (user) await assertCanAccessPatient(user, patientId);
@@ -196,6 +233,9 @@ export const getAdherenceStats = async (query: AdherenceQuery, user?: AccessUser
       .select({
         id: medicationSchedules.id,
         createdAt: medicationSchedules.createdAt,
+        completedAt: medicationSchedules.completedAt,
+        stock: medicationSchedules.stock,
+        isActive: medicationSchedules.isActive,
         scheduledTimes: medicationSchedules.scheduledTimes,
         frequency: medicationSchedules.frequency,
       })
@@ -263,6 +303,10 @@ const emptyAggregateStats = (period: string) => ({
   nurseMetrics: [],
 });
 
+export const __test__ = {
+  buildScheduledOccurrences,
+};
+
 export const getAggregateAdherenceStats = async (query: AdherenceQuery = {}, user?: AccessUser) => {
   const period = query.period || "all";
   const days = getPeriodDays(period);
@@ -272,7 +316,7 @@ export const getAggregateAdherenceStats = async (query: AdherenceQuery = {}, use
   if (!scope.allowed) return emptyAggregateStats(period);
 
   const patientConditions = [eq(patients.isActive, true)];
-  const scheduleConditions = [eq(medicationSchedules.isActive, true)];
+  const scheduleConditions = [or(eq(medicationSchedules.isActive, true), isNotNull(medicationSchedules.completedAt))];
   const logConditions = startDate ? [gte(medicationLogs.scheduledTime, startDate)] : [];
   const foodScanConditions = startDate ? [gte(foodScans.createdAt, startDate)] : [];
   const nurseConditions = [eq(nurses.isActive, true)];
@@ -299,6 +343,9 @@ export const getAggregateAdherenceStats = async (query: AdherenceQuery = {}, use
         id: medicationSchedules.id,
         patientId: medicationSchedules.patientId,
         createdAt: medicationSchedules.createdAt,
+        completedAt: medicationSchedules.completedAt,
+        stock: medicationSchedules.stock,
+        isActive: medicationSchedules.isActive,
         scheduledTimes: medicationSchedules.scheduledTimes,
         frequency: medicationSchedules.frequency,
       })

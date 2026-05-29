@@ -17,6 +17,7 @@ import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/
 import { getSuperAdminApprovalActivityPageFromApi, type ApprovalLogStatus } from "@/lib/auditLogApi";
 import type { ActivityLogRecord } from "@/lib/mocks/activityLogs";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
+import { useAuthStore } from "@/store/auth";
 import ActivityDetailModal from "./ActivityDetailModal";
 import ActivityFeed from "./ActivityFeed";
 
@@ -41,6 +42,7 @@ let superAdminLogViewCache: {
   totalFilteredLogCount: number;
   totalIncomingApprovalCount: number;
   totalProcessedTodayCount: number;
+  cachedUserId: string | null;
 } | null = null;
 
 interface SuperAdminActivityLogState {
@@ -68,27 +70,35 @@ function superAdminActivityLogReducer(state: SuperAdminActivityLogState, action:
 
 export default function SuperAdminActivityLogPage() {
   const shouldAnimate = useDashboardEntranceMotion();
+  const currentUserId = useAuthStore((state) => state.user?.id);
+  const cacheIsValid = superAdminLogViewCache !== null && superAdminLogViewCache.cachedUserId === (currentUserId ?? null);
+  // Invalidate cache if user changed (outside render)
+  useEffect(() => {
+    if (currentUserId && superAdminLogViewCache && superAdminLogViewCache.cachedUserId !== currentUserId) {
+      superAdminLogViewCache = null;
+    }
+  }, [currentUserId]);
   const [state, dispatch] = useReducer(superAdminActivityLogReducer, {
-    activities: superAdminLogViewCache?.activities ?? [],
-    search: superAdminLogViewCache?.search ?? "",
-    filter: superAdminLogViewCache?.filter ?? "all",
-    date: superAdminLogViewCache?.date ?? "",
+    activities: cacheIsValid ? (superAdminLogViewCache?.activities ?? []) : [],
+    search: cacheIsValid ? (superAdminLogViewCache?.search ?? "") : "",
+    filter: cacheIsValid ? (superAdminLogViewCache?.filter ?? "all") : "all",
+    date: cacheIsValid ? (superAdminLogViewCache?.date ?? "") : "",
     selectedActivity: null,
-    isLoading: !superAdminLogViewCache,
-    hasLoadedActivities: Boolean(superAdminLogViewCache),
-    hasLoadedSummary: Boolean(superAdminLogViewCache),
+    isLoading: !cacheIsValid,
+    hasLoadedActivities: cacheIsValid,
+    hasLoadedSummary: cacheIsValid,
     isLoadingMore: false,
-    activityPage: superAdminLogViewCache?.activityPage ?? 1,
-    totalAuditLogCount: superAdminLogViewCache?.totalAuditLogCount ?? 0,
-    totalFilteredLogCount: superAdminLogViewCache?.totalFilteredLogCount ?? 0,
-    totalIncomingApprovalCount: superAdminLogViewCache?.totalIncomingApprovalCount ?? 0,
-    totalProcessedTodayCount: superAdminLogViewCache?.totalProcessedTodayCount ?? 0,
+    activityPage: cacheIsValid ? (superAdminLogViewCache?.activityPage ?? 1) : 1,
+    totalAuditLogCount: cacheIsValid ? (superAdminLogViewCache?.totalAuditLogCount ?? 0) : 0,
+    totalFilteredLogCount: cacheIsValid ? (superAdminLogViewCache?.totalFilteredLogCount ?? 0) : 0,
+    totalIncomingApprovalCount: cacheIsValid ? (superAdminLogViewCache?.totalIncomingApprovalCount ?? 0) : 0,
+    totalProcessedTodayCount: cacheIsValid ? (superAdminLogViewCache?.totalProcessedTodayCount ?? 0) : 0,
   });
   const { activities, search, filter, date, selectedActivity, isLoading, hasLoadedActivities, hasLoadedSummary, isLoadingMore, activityPage, totalAuditLogCount, totalFilteredLogCount, totalIncomingApprovalCount, totalProcessedTodayCount } = state;
   const loadingPagesRef = useRef(new Set<string>());
-  const loadedQueryRef = useRef<string | null>(superAdminLogViewCache ? `${superAdminLogViewCache.activityPage}:${superAdminLogViewCache.filter}:${superAdminLogViewCache.date}:${superAdminLogViewCache.search}` : null);
+  const loadedQueryRef = useRef<string | null>(cacheIsValid ? `${superAdminLogViewCache!.activityPage}:${superAdminLogViewCache!.filter}:${superAdminLogViewCache!.date}:${superAdminLogViewCache!.search}` : null);
   const failedQueryRef = useRef<string | null>(null);
-  const loadedSummaryRef = useRef(Boolean(superAdminLogViewCache));
+  const loadedSummaryRef = useRef(cacheIsValid);
   const stateRef = useRef(state);
   const debouncedSearch = useDebouncedValue(search);
 
@@ -96,11 +106,12 @@ export default function SuperAdminActivityLogPage() {
     stateRef.current = state;
   }, [state]);
 
-  const loadPage = useCallback(async (page: number) => {
+  const loadPage = useCallback(async (page: number, options: { readonly forceRefresh?: boolean } = {}) => {
+    const forceRefresh = options.forceRefresh ?? false;
     const currentState = stateRef.current;
     const pageKey = `${page}:${currentState.filter}:${currentState.date}:${debouncedSearch}`;
-    if (page === 1 && loadedQueryRef.current === pageKey) return;
-    if (page === 1 && failedQueryRef.current === pageKey) return;
+    if (!forceRefresh && page === 1 && loadedQueryRef.current === pageKey) return;
+    if (!forceRefresh && page === 1 && failedQueryRef.current === pageKey) return;
     if (loadingPagesRef.current.has(pageKey)) return;
 
     loadingPagesRef.current.add(pageKey);
@@ -113,7 +124,7 @@ export default function SuperAdminActivityLogPage() {
         status: currentState.filter === "all" ? undefined : currentState.filter,
         date: currentState.date,
         search: debouncedSearch,
-        forceRefresh: page === 1,
+        forceRefresh: page === 1 || forceRefresh,
       });
 
       const visibleActivities = page === 1 ? response.activities : [...currentState.activities, ...response.activities];
@@ -151,6 +162,7 @@ export default function SuperAdminActivityLogPage() {
         totalFilteredLogCount: response.meta.total,
         totalIncomingApprovalCount: shouldRefreshSummary ? (response.meta.summary?.pending ?? 0) : (superAdminLogViewCache?.totalIncomingApprovalCount ?? currentState.totalIncomingApprovalCount),
         totalProcessedTodayCount: shouldRefreshSummary ? (response.meta.summary?.processedToday ?? 0) : (superAdminLogViewCache?.totalProcessedTodayCount ?? currentState.totalProcessedTodayCount),
+        cachedUserId: currentUserId ?? null,
       };
     } catch {
       if (page === 1) {
@@ -161,11 +173,11 @@ export default function SuperAdminActivityLogPage() {
       loadingPagesRef.current.delete(pageKey);
       dispatch({ type: "patch", payload: page === 1 ? { hasLoadedActivities: true, isLoading: false } : { isLoadingMore: false } });
     }
-  }, [debouncedSearch]);
+  }, [currentUserId, debouncedSearch]);
 
   useEffect(() => {
     const timerId = window.setTimeout(() => {
-      void loadPage(1);
+      void loadPage(1, { forceRefresh: true });
     }, 0);
 
     return () => window.clearTimeout(timerId);

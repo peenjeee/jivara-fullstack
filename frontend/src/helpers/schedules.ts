@@ -1,4 +1,5 @@
 import type { MedicationScheduleRecord, MedicationScheduleStatus, PatientScheduleGroup } from "@/lib/mocks/schedules";
+import type { PatientRecord } from "@/lib/mocks/patients";
 
 const defaultLowStockThreshold = 5;
 
@@ -11,7 +12,7 @@ export function getNextScheduleOrder(records: readonly MedicationScheduleRecord[
   return maxOrder + 1;
 }
 
-export function groupSchedulesByPatient(records: readonly MedicationScheduleRecord[], lowStockThreshold = defaultLowStockThreshold): PatientScheduleGroup[] {
+export function groupSchedulesByPatient(records: readonly MedicationScheduleRecord[], lowStockThreshold = defaultLowStockThreshold, patients: readonly PatientRecord[] = []): PatientScheduleGroup[] {
   const groups = new Map<string, MedicationScheduleRecord[]>();
 
   records.forEach((schedule) => {
@@ -19,22 +20,34 @@ export function groupSchedulesByPatient(records: readonly MedicationScheduleReco
     groups.set(schedule.patientId, [...currentSchedules, schedule]);
   });
 
-  return Array.from(groups.values()).map((groupSchedules) => {
+  const patientById = new Map(patients.map((patient) => [patient.id, patient]));
+  const orderedPatientIds = [
+    ...patients.map((patient) => patient.id),
+    ...Array.from(groups.keys()).filter((patientId) => !patientById.has(patientId)),
+  ];
+
+  return orderedPatientIds.map((patientId) => {
+    const groupSchedules = groups.get(patientId) ?? [];
     const [firstSchedule] = groupSchedules;
+    const patient = patientById.get(patientId);
 
     return {
-      patientId: firstSchedule.patientId,
-      patientName: firstSchedule.patientName,
-      patientAvatar: firstSchedule.patientAvatar,
-      patientStatus: firstSchedule.patientStatus ?? "On Ideal Schedule",
+      patientId,
+      patientName: firstSchedule?.patientName ?? patient?.name ?? "Pasien tidak diketahui",
+      patientAvatar: firstSchedule?.patientAvatar ?? patient?.avatar ?? "PX",
+      patientStatus: firstSchedule?.patientStatus ?? patient?.status ?? "On Ideal Schedule",
       schedules: groupSchedules,
-      summaryStatus: getSummaryStatus(groupSchedules),
+      summaryStatus: groupSchedules.length > 0 ? getSummaryStatus(groupSchedules) : "Nonaktif",
       nextSchedule: getNextScheduleLabel(groupSchedules),
-      activeReminders: groupSchedules.filter((schedule) => schedule.reminderEnabled).length,
+      activeReminders: groupSchedules.filter((schedule) => isActiveMedicationSchedule(schedule) && schedule.reminderEnabled).length,
       totalMedicineStock: groupSchedules.reduce((total, schedule) => total + schedule.stock, 0),
       lowStockCount: groupSchedules.filter((schedule) => schedule.stock <= lowStockThreshold).length,
     };
   });
+}
+
+export function isActiveMedicationSchedule(schedule: MedicationScheduleRecord) {
+  return schedule.status !== "Selesai" && schedule.status !== "Nonaktif";
 }
 
 export function getSummaryStatus(records: readonly MedicationScheduleRecord[]): MedicationScheduleStatus {
@@ -44,7 +57,7 @@ export function getSummaryStatus(records: readonly MedicationScheduleRecord[]): 
 }
 
 export function getNextScheduleLabel(records: readonly MedicationScheduleRecord[]) {
-  const activeRecords = records.filter((schedule) => schedule.status !== "Selesai" && schedule.status !== "Nonaktif");
+  const activeRecords = records.filter(isActiveMedicationSchedule);
   const candidates = (activeRecords.length > 0 ? activeRecords : records)
     .flatMap((schedule) => schedule.times.map((time) => ({ time, medicineName: schedule.medicineName })))
     .sort((first, second) => first.time.localeCompare(second.time));

@@ -6,6 +6,36 @@ const isMissing = (value: unknown) =>
 const isValidUuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
+const getAllowedImageUrlHosts = () => {
+  const values = [
+    process.env.API_URL,
+    process.env.SUPABASE_STORAGE_PUBLIC_URL,
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_PROJECT_URL,
+  ];
+
+  return values.flatMap((value) => {
+    if (!value) return [];
+    try {
+      return [new URL(value).host];
+    } catch {
+      return [];
+    }
+  });
+};
+
+const isAllowedFoodImageUrl = (value: string) => {
+  if (value.startsWith("/uploads/food-scans/")) return true;
+  if (!/^https?:\/\//i.test(value)) return false;
+
+  try {
+    const url = new URL(value);
+    return getAllowedImageUrlHosts().includes(url.host);
+  } catch {
+    return false;
+  }
+};
+
 export const validateFoodUpload = (req: Request, res: Response, next: NextFunction) => {
   const { patientId, patient_id: patientIdSnake } = req.body;
   const resolvedPatientId = patientId || patientIdSnake;
@@ -16,6 +46,10 @@ export const validateFoodUpload = (req: Request, res: Response, next: NextFuncti
 
   if (!req.file && isMissing(req.body.imageUrl)) {
     return res.status(400).json({ status: "gagal", message: "File gambar atau imageUrl wajib diisi", error_code: "VALIDATION_ERROR" });
+  }
+
+  if (!req.file && typeof req.body.imageUrl === "string" && !isAllowedFoodImageUrl(req.body.imageUrl)) {
+    return res.status(400).json({ status: "gagal", message: "imageUrl hanya boleh dari storage gambar Jivara", error_code: "INVALID_IMAGE_URL" });
   }
 
   req.body.patientId = resolvedPatientId;

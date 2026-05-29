@@ -25,6 +25,22 @@ describe("auditLogApi", () => {
     expect(activities[0]).toMatchObject({ title: "Patient Updated", category: "Kepatuhan", severity: "Peringatan", patientId: "patient-123456" });
   });
 
+  it("hides near-duplicate audit logs from the activity feed", async () => {
+    mockedGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: "first", userName: "Admin", action: "patient.created", resourceType: "patient", resourceId: "patient-123456", changes: { after: { id: "patient-123456" } }, createdAt: "2026-05-09T08:00:00.000Z" },
+          { id: "duplicate", userName: "Admin", action: "patient.created", resourceType: "patient", resourceId: "patient-123456", changes: { after: { id: "patient-123456" } }, createdAt: "2026-05-09T08:00:01.000Z" },
+          { id: "later", userName: "Admin", action: "patient.created", resourceType: "patient", resourceId: "patient-123456", changes: { after: { id: "patient-123456" } }, createdAt: "2026-05-09T08:01:00.000Z" },
+        ],
+      },
+    });
+
+    const activities = await getAuditActivitiesFromApi();
+
+    expect(activities.map((activity) => activity.id)).toEqual(["first", "later"]);
+  });
+
   it("maps nurse references from audit log changes", async () => {
     mockedGet.mockResolvedValueOnce({
       data: {

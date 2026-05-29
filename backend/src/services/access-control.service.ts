@@ -76,9 +76,12 @@ export const getAssignedPatientIdsForNurse = async (nurseId: string) => {
   const rows = await db
     .select({ patientId: patientNurseAssignments.patientId })
     .from(patientNurseAssignments)
+    .innerJoin(nurses, eq(patientNurseAssignments.nurseId, nurses.id))
+    .innerJoin(patients, eq(patientNurseAssignments.patientId, patients.id))
     .where(and(
       eq(patientNurseAssignments.nurseId, nurseId),
       eq(patientNurseAssignments.isActive, true),
+      eq(patients.organizationId, nurses.organizationId),
     ));
 
   return rows.map((row) => row.patientId);

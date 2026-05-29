@@ -15,6 +15,42 @@ const extensionByMimeType: Record<string, string> = {
   "image/webp": ".webp",
 };
 
+const hasAllowedImageSignature = async (file: Express.Multer.File) => {
+  const buffer = await fs.promises.readFile(file.path);
+
+  if (file.mimetype === "image/jpeg") {
+    return buffer.length >= 3
+      && buffer[0] === 0xff
+      && buffer[1] === 0xd8
+      && buffer[2] === 0xff;
+  }
+
+  if (file.mimetype === "image/png") {
+    return buffer.length >= 8
+      && buffer[0] === 0x89
+      && buffer[1] === 0x50
+      && buffer[2] === 0x4e
+      && buffer[3] === 0x47
+      && buffer[4] === 0x0d
+      && buffer[5] === 0x0a
+      && buffer[6] === 0x1a
+      && buffer[7] === 0x0a;
+  }
+
+  if (file.mimetype === "image/webp") {
+    return buffer.length >= 12
+      && buffer.subarray(0, 4).toString("ascii") === "RIFF"
+      && buffer.subarray(8, 12).toString("ascii") === "WEBP";
+  }
+
+  return false;
+};
+
+const deleteUploadedFile = async (file?: Express.Multer.File) => {
+  if (!file?.path) return;
+  await fs.promises.unlink(file.path).catch(() => undefined);
+};
+
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, foodScanUploadDir),
   filename: (_req, file, cb) => {
@@ -37,8 +73,19 @@ export const foodImageUpload = multer({
 });
 
 export const uploadSingleFoodImage = (req: Request, res: Response, next: NextFunction) => {
-  foodImageUpload.single("image")(req, res, (error) => {
+  foodImageUpload.single("image")(req, res, async (error) => {
     if (!error) {
+      try {
+        if (req.file && !(await hasAllowedImageSignature(req.file))) {
+          await deleteUploadedFile(req.file);
+          return res.status(400).json({ status: "gagal", message: "Isi file tidak cocok dengan format gambar", error_code: "INVALID_IMAGE_CONTENT" });
+        }
+      } catch (signatureError) {
+        await deleteUploadedFile(req.file);
+        next(signatureError);
+        return;
+      }
+
       next();
       return;
     }

@@ -161,3 +161,49 @@ export function getCalendarDays(month: Date, selectedDate: Date, schedules: read
 export function getConfirmedCount(schedules: readonly MedicationScheduleRecord[], date: Date, confirmedScheduleDates: Readonly<Record<string, readonly string[]>>) {
   return schedules.reduce((total, schedule) => total + getScheduleConfirmedDoseCount(schedule, date, confirmedScheduleDates), 0);
 }
+
+export interface AdherenceStatsForNormalization {
+  adherenceRate: number;
+  totalScheduled: number;
+  totalConfirmed?: number;
+  totalMissed?: number;
+  totalSnoozed?: number;
+  dailyBreakdown: Array<{
+    date: string;
+    scheduled: number;
+    confirmed: number;
+    missed?: number;
+    snoozed?: number;
+  }>;
+}
+
+export function normalizeAdherenceForVisibleSchedules<T extends AdherenceStatsForNormalization>(
+  adherenceStats: T,
+  schedules: readonly MedicationScheduleRecord[],
+): T {
+  if (schedules.length === 0) return adherenceStats;
+
+  const dailyBreakdown = adherenceStats.dailyBreakdown.map((day) => {
+    const date = getDateFromKey(day.date);
+    if (!date || getSchedulesForDate(schedules, date).length > 0) return day;
+    return { ...day, scheduled: 0, confirmed: 0, missed: 0, snoozed: 0 };
+  });
+  const totalScheduled = dailyBreakdown.reduce((total, day) => total + day.scheduled, 0);
+  const totalConfirmed = dailyBreakdown.reduce((total, day) => total + day.confirmed, 0);
+
+  return {
+    ...adherenceStats,
+    totalScheduled,
+    totalConfirmed,
+    totalMissed: dailyBreakdown.reduce((total, day) => total + (day.missed ?? 0), 0),
+    totalSnoozed: dailyBreakdown.reduce((total, day) => total + (day.snoozed ?? 0), 0),
+    adherenceRate: totalScheduled > 0 ? Number(((totalConfirmed / totalScheduled) * 100).toFixed(1)) : 0,
+    dailyBreakdown,
+  };
+}
+
+function getDateFromKey(dateKey: string) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+  return new Date(year, month - 1, day);
+}

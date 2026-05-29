@@ -3,6 +3,7 @@ import { auditLogs, users } from "../db/schema";
 import { and, count, desc, eq, gte, ilike, inArray, lt, notInArray, or, sql } from "drizzle-orm";
 import { AuditLogListQuery } from "../types/audit-log.types";
 import { AccessUser, getAssignedPatientIdsForNurse, getOrganizationIdForUser } from "./access-control.service";
+import { emitActivityChanged } from "./activity-event.service";
 
 type AuditChange = Record<string, unknown>;
 
@@ -15,15 +16,25 @@ interface AuditLogInput {
   ipAddress?: string | null;
 }
 
+const sensitiveAuditKeyPattern = /password|token|secret/i;
+
+export const sanitizeAuditValue = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(sanitizeAuditValue);
+  if (value instanceof Date) return value;
+  if (!value || typeof value !== "object") return value;
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, nestedValue]) => [
+      key,
+      sensitiveAuditKeyPattern.test(key) ? "[REDACTED]" : sanitizeAuditValue(nestedValue),
+    ]),
+  );
+};
+
 const sanitizeChanges = (changes?: AuditChange | null) => {
   if (!changes) return null;
 
-  const sanitized = { ...changes };
-  for (const key of Object.keys(sanitized)) {
-    if (/password|token|secret/i.test(key)) sanitized[key] = "[REDACTED]";
-  }
-
-  return sanitized;
+  return sanitizeAuditValue(changes) as AuditChange;
 };
 
 export const writeAuditLog = async ({ userId, action, resourceType, resourceId, changes, ipAddress }: AuditLogInput) => {
@@ -35,6 +46,8 @@ export const writeAuditLog = async ({ userId, action, resourceType, resourceId, 
     changes: sanitizeChanges(changes),
     ipAddress: ipAddress || null,
   });
+
+  emitActivityChanged({ reason: "audit-log-created" });
 };
 
 export const writeAuditLogAsync = (input: AuditLogInput) => {

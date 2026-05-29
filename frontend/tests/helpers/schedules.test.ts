@@ -34,6 +34,8 @@ describe("schedule helpers", () => {
     const groups = groupSchedulesByPatient([
       schedule,
       { ...schedule, id: "SCH-002", medicineName: "Amlodipine", stock: 8, times: ["07:00"], reminderEnabled: false },
+      { ...schedule, id: "SCH-003", medicineName: "Simvastatin", stock: 0, times: ["20:00"], status: "Selesai", reminderEnabled: true },
+      { ...schedule, id: "SCH-004", medicineName: "Captopril", stock: 6, times: ["21:00"], status: "Nonaktif", reminderEnabled: true },
     ], 5);
 
     expect(groups).toHaveLength(1);
@@ -41,8 +43,8 @@ describe("schedule helpers", () => {
       patientId: "JVR-001",
       nextSchedule: "07:00 - Amlodipine",
       activeReminders: 1,
-      totalMedicineStock: 12,
-      lowStockCount: 1,
+      totalMedicineStock: 18,
+      lowStockCount: 2,
     });
   });
 

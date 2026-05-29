@@ -624,7 +624,7 @@ export const listNotifications = async (query: Record<string, unknown>, user: Ac
   return result;
 };
 
-export const trackNotificationEvent = async (notificationId: string, eventType: "opened" | "clicked") => {
+export const trackNotificationEvent = async (notificationId: string, eventType: "opened" | "clicked", user?: AccessUser) => {
   const notificationRows = await db.select().from(notifications).where(eq(notifications.id, notificationId)).limit(1);
   const notification = notificationRows[0];
 
@@ -632,13 +632,15 @@ export const trackNotificationEvent = async (notificationId: string, eventType: 
     throw { status: 404, message: "Notifikasi tidak ditemukan", code: "NOTIFICATION_NOT_FOUND" };
   }
 
+  await assertCanAccessPatient(user, notification.patientId);
+
   const readAt = notification.readAt || new Date();
   await db.update(notifications).set({ readAt }).where(eq(notifications.id, notificationId));
 
   invalidateNotifCache();
 
   writeAuditLogAsync({
-    userId: null,
+    userId: user?.id || null,
     action: `notification.${eventType}`,
     resourceType: "notification",
     resourceId: notificationId,

@@ -2,6 +2,7 @@ import { activityLogs, type ActivityCategory, type ActivityLogRecord } from "@/l
 import { foodScans, type FoodScanRecord } from "@/lib/mocks/foodScans";
 import { patients, type PatientRecord } from "@/lib/mocks/patients";
 import { medicationSchedules, type MedicationScheduleRecord } from "@/lib/mocks/schedules";
+import { isActiveMedicationSchedule } from "./schedules";
 
 export type AdherenceRange = 7 | 14 | 30 | "1y" | "all";
 
@@ -59,8 +60,8 @@ export function getAdherenceTrend(patient: PatientRecord, days: number): Adheren
 
 export function getPatientSummary(data: PatientDetailData) {
   const totalMedicineCount = data.schedules.length;
-  const activeMedicineCount = data.schedules.filter((schedule) => schedule.status === "Aktif").length;
-  const activeReminderCount = data.schedules.filter((schedule) => schedule.reminderEnabled).length;
+  const activeMedicineCount = data.schedules.filter(isActiveMedicationSchedule).length;
+  const activeReminderCount = data.schedules.filter((schedule) => isActiveMedicationSchedule(schedule) && schedule.reminderEnabled).length;
   const criticalActivityCount = data.activities.filter((activity) => activity.severity === "Kritis").length;
 
   return {

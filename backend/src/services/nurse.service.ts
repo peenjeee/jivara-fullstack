@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
-import { and, count, desc, eq, ilike, or } from "drizzle-orm";
+import { and, count, desc, eq, ilike, inArray, or } from "drizzle-orm";
 import { db } from "../db";
-import { nurses, organizations, patientNurseAssignments, patients, userNotificationPreferences, users } from "../db/schema";
+import { medicationSchedules, nurses, organizations, patientNurseAssignments, patients, userNotificationPreferences, users } from "../db/schema";
 import { AUTH_CONSTANTS } from "../types/auth.types";
 import { NurseCreateDTO, NurseListQuery, NurseUpdateDTO } from "../types/nurse.types";
 import { AccessUser, ensureOrganizationIdForUser, getOrganizationIdForUser } from "./access-control.service";
@@ -9,7 +9,7 @@ import { deleteCachedByPrefix, getCached, setCached } from "./cache.service";
 import { writeAuditLogAsync } from "./audit-log.service";
 
 const NURSE_CACHE_TTL_MS = Number(process.env.NURSE_CACHE_TTL_MS || 20_000);
-const NURSE_CACHE_PREFIX = "nurse:v3:";
+const NURSE_CACHE_PREFIX = "nurse:v4:";
 
 const getNurseListCacheKey = (query: NurseListQuery, user?: AccessUser) => {
   const normalizedQuery = Object.entries(query)
@@ -40,6 +40,7 @@ type NurseListResult = {
     createdAt: Date | null;
     lastLoginAt: Date | null;
     assignedPatients: number;
+    handledPatients: number;
   }>;
   meta: { page: number; limit: number; total: number };
 };
@@ -61,6 +62,7 @@ type NurseDetailResult = {
   createdAt: Date | null;
   lastLoginAt: Date | null;
   assignedPatients: number;
+  handledPatients: number;
 };
 
 const parsePagination = (query: NurseListQuery) => {
@@ -175,7 +177,6 @@ export const listNurses = async (query: NurseListQuery, user?: AccessUser): Prom
 
   const assignmentConditions = [
     eq(patientNurseAssignments.isActive, true),
-    eq(patients.isActive, true),
     or(...rows.map((row) => eq(patientNurseAssignments.nurseId, row.id))),
   ];
   if (organizationId) assignmentConditions.push(eq(patients.organizationId, organizationId));
@@ -189,6 +190,38 @@ export const listNurses = async (query: NurseListQuery, user?: AccessUser): Prom
     : [];
 
   const assignmentMap = new Map<string, Set<string>>();
+  const assignedPatientIds = [...new Set(assignments.map((assignment) => assignment.patientId))];
+  const patientStateRows = assignedPatientIds.length > 0
+    ? await db
+      .select({ id: patients.id, isActive: patients.isActive })
+      .from(patients)
+      .where(inArray(patients.id, assignedPatientIds))
+    : [];
+  const medicationStateRows = assignedPatientIds.length > 0
+    ? await db
+      .select({
+        patientId: medicationSchedules.patientId,
+        stock: medicationSchedules.stock,
+        isActive: medicationSchedules.isActive,
+      })
+      .from(medicationSchedules)
+      .where(inArray(medicationSchedules.patientId, assignedPatientIds))
+    : [];
+  const patientActiveById = new Map(patientStateRows.map((patient) => [patient.id, patient.isActive !== false]));
+  const schedulesByPatientId = new Map<string, Array<{ stock: number | null; isActive: boolean | null }>>();
+  for (const schedule of medicationStateRows) {
+    const schedules = schedulesByPatientId.get(schedule.patientId) ?? [];
+    schedules.push({ stock: schedule.stock, isActive: schedule.isActive });
+    schedulesByPatientId.set(schedule.patientId, schedules);
+  }
+  const isHandledPatient = (patientId: string) => {
+    if (patientActiveById.get(patientId) === false) return false;
+    const schedules = schedulesByPatientId.get(patientId) ?? [];
+    const isMedicationComplete = schedules.length > 0
+      && schedules.every((schedule) => schedule.isActive === false || (schedule.stock ?? 0) <= 0);
+    return !isMedicationComplete;
+  };
+
   assignments.forEach((assignment) => {
     const patientIds = assignmentMap.get(assignment.nurseId) ?? new Set<string>();
     patientIds.add(assignment.patientId);
@@ -196,7 +229,14 @@ export const listNurses = async (query: NurseListQuery, user?: AccessUser): Prom
   });
 
   const result = {
-    data: rows.map((row) => ({ ...row, assignedPatients: assignmentMap.get(row.id)?.size || 0 })),
+    data: rows.map((row) => {
+      const assignedPatientSet = assignmentMap.get(row.id) ?? new Set<string>();
+      return {
+        ...row,
+        assignedPatients: assignedPatientSet.size,
+        handledPatients: [...assignedPatientSet].filter(isHandledPatient).length,
+      };
+    }),
     meta: { page, limit, total: totalRows[0]?.total || 0 },
   };
 
@@ -214,17 +254,42 @@ export const getNurseById = async (nurseId: string, user?: AccessUser): Promise<
   const assignmentConditions = [
     eq(patientNurseAssignments.nurseId, nurseId),
     eq(patientNurseAssignments.isActive, true),
-    eq(patients.isActive, true),
   ];
   if (organizationId) assignmentConditions.push(eq(patients.organizationId, organizationId));
 
   const assignedRows = await db
-    .select({ patientId: patientNurseAssignments.patientId })
+    .select({ patientId: patientNurseAssignments.patientId, patientIsActive: patients.isActive })
     .from(patientNurseAssignments)
     .innerJoin(patients, eq(patientNurseAssignments.patientId, patients.id))
     .where(and(...assignmentConditions));
 
-  const result = { ...nurse, assignedPatients: new Set(assignedRows.map((row) => row.patientId)).size };
+  const assignedPatientIds = [...new Set(assignedRows.map((row) => row.patientId))];
+  const medicationStateRows = assignedPatientIds.length > 0
+    ? await db
+      .select({
+        patientId: medicationSchedules.patientId,
+        stock: medicationSchedules.stock,
+        isActive: medicationSchedules.isActive,
+      })
+      .from(medicationSchedules)
+      .where(inArray(medicationSchedules.patientId, assignedPatientIds))
+    : [];
+  const schedulesByPatientId = new Map<string, Array<{ stock: number | null; isActive: boolean | null }>>();
+  for (const schedule of medicationStateRows) {
+    const schedules = schedulesByPatientId.get(schedule.patientId) ?? [];
+    schedules.push({ stock: schedule.stock, isActive: schedule.isActive });
+    schedulesByPatientId.set(schedule.patientId, schedules);
+  }
+  const patientActiveById = new Map(assignedRows.map((row) => [row.patientId, row.patientIsActive !== false]));
+  const handledPatients = assignedPatientIds.filter((patientId) => {
+    if (patientActiveById.get(patientId) === false) return false;
+    const schedules = schedulesByPatientId.get(patientId) ?? [];
+    const isMedicationComplete = schedules.length > 0
+      && schedules.every((schedule) => schedule.isActive === false || (schedule.stock ?? 0) <= 0);
+    return !isMedicationComplete;
+  }).length;
+
+  const result = { ...nurse, assignedPatients: assignedPatientIds.length, handledPatients };
   setCached(cacheKey, result, NURSE_CACHE_TTL_MS);
   return result;
 };
@@ -354,6 +419,8 @@ export const deactivateNurse = async (nurseId: string, user?: AccessUser) => {
   await db.transaction(async (tx) => {
     await tx.update(nurses).set({ isActive: false }).where(eq(nurses.id, nurseId));
     await tx.update(users).set({ isActive: false, updatedAt: new Date() }).where(eq(users.id, existing.userId));
+
+    // Nonaktifkan semua penugasan aktif perawat ini
     await tx
       .update(patientNurseAssignments)
       .set({ isActive: false })
@@ -361,6 +428,7 @@ export const deactivateNurse = async (nurseId: string, user?: AccessUser) => {
         eq(patientNurseAssignments.nurseId, nurseId),
         eq(patientNurseAssignments.isActive, true),
       ));
+    // Catatan: isActive pasien tidak diubah — dicek saat login via patientNurseAssignments
   });
 
   invalidateNurseCache();

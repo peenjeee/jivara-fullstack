@@ -2,6 +2,7 @@ import api from "@/lib/axios";
 import type { ActivityLogRecord } from "@/lib/mocks/activityLogs";
 import type { PatientRecord } from "@/lib/mocks/patients";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
+import { normalizeAdherenceForVisibleSchedules } from "@/helpers/patientSchedule";
 import { getFoodScansPageFromApi } from "@/lib/foodScanApi";
 import { clearPatientsCache, getCurrentPatientFromApi } from "@/lib/patientApi";
 import { getSchedulesForPatientsFromApi } from "@/lib/scheduleApi";
@@ -21,11 +22,16 @@ export interface PatientAdherenceDayResponse {
   date: string;
   scheduled: number;
   confirmed: number;
+  missed?: number;
+  snoozed?: number;
 }
 
 export interface PatientAdherenceStatsResponse {
   adherenceRate: number;
   totalScheduled: number;
+  totalConfirmed?: number;
+  totalMissed?: number;
+  totalSnoozed?: number;
   dailyBreakdown: PatientAdherenceDayResponse[];
 }
 
@@ -36,6 +42,14 @@ interface PaginatedResponse<T> {
     limit?: number;
     total?: number;
   };
+}
+
+interface AdherenceStatsApiResponse extends PatientAdherenceStatsResponse {
+  patientId?: string | null;
+  patientName?: string | null;
+  period?: string;
+  trend?: string;
+  reminderResponseRate?: number;
 }
 
 export interface PatientDashboardData {
@@ -112,7 +126,11 @@ const getPatientScheduleBaseData = async (scheduleLimit?: number) => {
   };
 };
 
-const getPatientDashboardBaseData = async (): Promise<PatientDashboardOverviewData> => {
+const getPatientDashboardBaseData = async (options: { forceRefresh?: boolean } = {}): Promise<PatientDashboardOverviewData> => {
+  if (options.forceRefresh) {
+    dashboardOverviewCache = null;
+    dashboardOverviewRequest = null;
+  }
   const now = Date.now();
   if (dashboardOverviewCache && dashboardOverviewCache.expiresAt > now) return dashboardOverviewCache.data;
   if (dashboardOverviewRequest) return dashboardOverviewRequest;
@@ -122,13 +140,15 @@ const getPatientDashboardBaseData = async (): Promise<PatientDashboardOverviewDa
 
     const [schedules, adherenceResponse] = await Promise.all([
       getSchedulesForPatientsFromApi([patient]),
-      api.get<{ data: PatientAdherenceStatsResponse }>("/adherence", { params: { patient_id: patient.id, period: "1y" } }),
+      api.get<{ data: AdherenceStatsApiResponse }>("/adherence", { params: { patient_id: patient.id, period: "all" } }),
     ]);
+    const patientSchedules = schedules.filter((schedule) => schedule.patientId === patient.id);
+    const adherenceStats = normalizeAdherenceForVisibleSchedules(adherenceResponse.data.data, patientSchedules);
 
     const result = {
-      patient,
-      schedules: schedules.filter((schedule) => schedule.patientId === patient.id),
-      adherenceStats: adherenceResponse.data.data,
+      patient: { ...patient, adherence: Math.round(adherenceStats.adherenceRate) },
+      schedules: patientSchedules,
+      adherenceStats,
     };
     dashboardOverviewCache = { data: result, expiresAt: Date.now() + dashboardCacheTtl };
     return result;
@@ -139,23 +159,31 @@ const getPatientDashboardBaseData = async (): Promise<PatientDashboardOverviewDa
   return dashboardOverviewRequest;
 };
 
-export const getPatientDashboardOverviewData = async (): Promise<PatientDashboardOverviewData> => {
+export const getPatientDashboardOverviewData = async (options: { forceRefresh?: boolean } = {}): Promise<PatientDashboardOverviewData> => {
+  if (options.forceRefresh) {
+    dashboardCache = null;
+    dashboardRequest = null;
+  }
   const now = Date.now();
-  if (dashboardCache && dashboardCache.expiresAt > now) {
+  if (!options.forceRefresh && dashboardCache && dashboardCache.expiresAt > now) {
     const { patient, schedules, adherenceStats } = dashboardCache.data;
     return { patient, schedules, adherenceStats };
   }
 
-  return getPatientDashboardBaseData();
+  return getPatientDashboardBaseData(options);
 };
 
-export const getPatientDashboardData = async (): Promise<PatientDashboardData> => {
+export const getPatientDashboardData = async (options: { forceRefresh?: boolean } = {}): Promise<PatientDashboardData> => {
+  if (options.forceRefresh) {
+    dashboardCache = null;
+    dashboardRequest = null;
+  }
   const now = Date.now();
-  if (dashboardCache && dashboardCache.expiresAt > now) return dashboardCache.data;
+  if (!options.forceRefresh && dashboardCache && dashboardCache.expiresAt > now) return dashboardCache.data;
   if (dashboardRequest) return dashboardRequest;
 
   dashboardRequest = (async () => {
-    const baseData = await getPatientDashboardBaseData();
+    const baseData = await getPatientDashboardBaseData(options);
 
     const logResponse = await api.get<PaginatedResponse<MedicationLogResponse>>("/medication-logs", { params: { patient_id: baseData.patient.id, limit: 10 } });
 
@@ -174,6 +202,10 @@ export const getPatientDashboardData = async (): Promise<PatientDashboardData> =
 
 const getMedicationLogsForMonth = async (patientId: string, monthDate: Date) => {
   const { startDate, endDate } = getMonthLogRange(monthDate);
+  return getMedicationLogsForRange(patientId, startDate, endDate);
+};
+
+const getMedicationLogsForRange = async (patientId: string, startDate: string, endDate: string) => {
   const params = {
     patient_id: patientId,
     start_date: startDate,
@@ -250,20 +282,28 @@ const applyCompletedScheduleEndDates = (
   }, {});
 
   return schedules.map((schedule) => {
-    if (schedule.status !== "Selesai" || schedule.endDate) return schedule;
+    if (schedule.status !== "Selesai") return schedule;
+
+    const latestLogDate = latestLogDateBySchedule[schedule.id];
+    if (!latestLogDate) return schedule.endDate ? schedule : { ...schedule, endDate: schedule.startDate };
+    const endDate = schedule.endDate && schedule.endDate < latestLogDate ? schedule.endDate : latestLogDate;
 
     return {
       ...schedule,
-      endDate: latestLogDateBySchedule[schedule.id] ?? schedule.startDate,
+      endDate,
     };
   });
 };
 
-export const getPatientScheduleData = async (monthDate = new Date()): Promise<PatientScheduleData> => {
+export const getPatientScheduleData = async (monthDate = new Date(), options: { forceRefresh?: boolean } = {}): Promise<PatientScheduleData> => {
   const now = Date.now();
   const { cacheKey } = getMonthLogRange(monthDate);
+  if (options.forceRefresh) {
+    patientScheduleCache.delete(cacheKey);
+    patientScheduleRequests.delete(cacheKey);
+  }
   const cached = patientScheduleCache.get(cacheKey);
-  if (cached && cached.expiresAt > now) return cached.data;
+  if (!options.forceRefresh && cached && cached.expiresAt > now) return cached.data;
   const activeRequest = patientScheduleRequests.get(cacheKey);
   if (activeRequest) return activeRequest;
 
@@ -310,9 +350,13 @@ export const getCompletedScheduleDates = (logs: readonly MedicationLogResponse[]
   };
 }, {});
 
-export const getPatientActivityLogData = async (monthDate = new Date()): Promise<PatientActivityLogData> => {
+export const getPatientActivityLogData = async (monthDate = new Date(), options: { forceRefresh?: boolean } = {}): Promise<PatientActivityLogData> => {
   const now = Date.now();
   const { cacheKey } = getMonthLogRange(monthDate);
+  if (options.forceRefresh) {
+    activitiesCache.delete(cacheKey);
+    activitiesRequests.delete(cacheKey);
+  }
   const cached = activitiesCache.get(cacheKey);
   if (cached && cached.expiresAt > now) return cached.data;
   const activeRequest = activitiesRequests.get(cacheKey);
@@ -344,19 +388,19 @@ export const getPatientActivityLogData = async (monthDate = new Date()): Promise
       read: false,
     }));
 
-    const scanActivities: ActivityLogRecord[] = scans.map((scan) => ({
+    const scanActivities: ActivityLogRecord[] = scans.flatMap((scan) => (scan.hasDetectedFood ? [{
       id: `food-scan-${scan.id}`,
       title: scan.risk === "High Risk" ? "Scan makanan berisiko" : "Scan makanan selesai",
       description: scan.result,
-      category: "Scan Makanan",
-      severity: scan.risk === "High Risk" ? "Peringatan" : "Sukses",
+      category: "Scan Makanan" as const,
+      severity: scan.risk === "High Risk" ? "Peringatan" as const : "Sukses" as const,
       timestamp: scan.scannedAt,
       patientId: scan.patientId,
       patientName: data.patient.name,
       patientAvatar: data.patient.avatar,
       scanId: scan.id,
       read: false,
-    }));
+    }] : []));
 
     const activities = [...medicationActivities, ...scanActivities]
       .sort((first, second) => Date.parse(second.timestamp) - Date.parse(first.timestamp));

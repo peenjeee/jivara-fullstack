@@ -35,9 +35,15 @@ export default function ScheduleDetailModal({ group, readOnly = false, processin
           </m.div>
 
           <div className="space-y-4">
-            {group.schedules.map((schedule, index) => (
-              <MedicineDetail key={`schedule-detail-${schedule.id}-${index}`} schedule={schedule} index={index} readOnly={readOnly} processingAction={processingAction} onAction={onAction} />
-            ))}
+            {group.schedules.length > 0 ? (
+              group.schedules.map((schedule, index) => (
+                <MedicineDetail key={`schedule-detail-${schedule.id}-${index}`} schedule={schedule} index={index} readOnly={readOnly} processingAction={processingAction} onAction={onAction} />
+              ))
+            ) : (
+              <div className="rounded-3xl bg-surface p-5 text-sm font-bold leading-6 text-muted">
+                Belum ada jadwal obat untuk pasien ini.
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -61,7 +67,7 @@ function MedicineDetail({ schedule, index, readOnly, processingAction, onAction 
           </div>
           <p className="mt-1 text-sm font-bold text-muted">{schedule.dose} - {schedule.medicineForm}</p>
         </div>
-        {!readOnly && <ScheduleActions schedule={schedule} actions={["edit", "toggle", "delete"]} processingAction={processingAction} onAction={onAction} />}
+        {!readOnly && <ScheduleActions schedule={schedule} actions={["edit", "toggle"]} processingAction={processingAction} onAction={onAction} />}
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">

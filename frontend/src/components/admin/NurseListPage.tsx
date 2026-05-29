@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { m } from "motion/react";
-import { Edit3, Eye, Power, Plus, Trash2 } from "lucide-react";
+import { Edit3, Eye, Power, Plus } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
 import Button from "@/components/ui/Button";
 import FilterPills from "@/components/ui/FilterPills";
 import IconActionButton from "@/components/ui/IconActionButton";
-import { TableDataSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
+import { ButtonSkeleton, TableDataSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
 import SearchField from "@/components/ui/SearchField";
 import ToolbarCard from "@/components/ui/ToolbarCard";
 import PatientPagination from "@/components/patients/PatientPagination";
@@ -18,8 +18,8 @@ import { getNurseInitials } from "@/helpers/nurses";
 import { getDashboardRole, isOperationalAdminRole } from "@/components/dashboard/navigation";
 import { getApiErrorMessage } from "@/lib/apiErrors";
 import type { NurseRecord, NurseStatus } from "@/lib/mocks/nurses";
-import { createNurseViaApi, deactivateNurseViaApi, getNursesPageFromApi, updateNurseViaApi } from "@/lib/nurseApi";
-import { showConfirm, showError, showToast, showWarning } from "@/lib/swal";
+import { createNurseViaApi, getNursesPageFromApi, updateNurseViaApi } from "@/lib/nurseApi";
+import { showConfirm, showError, showToast } from "@/lib/swal";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { useNurseStore, type NurseFormValues } from "@/store/nurses";
 import { useAuthStore } from "@/store/auth";
@@ -103,19 +103,18 @@ export default function NurseListPage() {
 
   const loadNursePage = useCallback(async (page: number, forceRefresh = false) => {
     if (!hasAuthHydrated || (dashboardRole !== "admin" && dashboardRole !== "nurse")) return;
-    const currentState = stateRef.current;
 
     const canUseVisibleCache = !forceRefresh
       && nurseListViewCache?.currentPage === page
       && nurseListViewCache.search === debouncedSearch
-      && nurseListViewCache.filter === currentState.filter;
+      && nurseListViewCache.filter === filter;
     dispatch({ type: "patch", payload: { isLoading: !canUseVisibleCache } });
     try {
       const result = await getNursesPageFromApi({
         page,
         limit: pageSize,
         search: debouncedSearch,
-        status: getNurseStatusQuery(currentState.filter),
+        status: getNurseStatusQuery(filter),
         forceRefresh,
       });
       dispatch({ type: "patch", payload: { pageNurses: result.nurses, totalNurses: result.meta.total } });
@@ -124,7 +123,7 @@ export default function NurseListPage() {
         pageNurses: result.nurses,
         totalNurses: result.meta.total,
         search: debouncedSearch,
-        filter: currentState.filter,
+        filter,
         currentPage: page,
       };
     } catch {
@@ -133,10 +132,14 @@ export default function NurseListPage() {
     } finally {
       dispatch({ type: "patch", payload: { hasLoadedNurses: true, isLoading: false } });
     }
-  }, [dashboardRole, debouncedSearch, hasAuthHydrated, setNurses]);
+  }, [dashboardRole, debouncedSearch, filter, hasAuthHydrated, setNurses]);
+
+  const isInitialLoad = useRef(true);
 
   useEffect(() => {
-    void loadNursePage(currentPage);
+    const forceRefresh = isInitialLoad.current;
+    isInitialLoad.current = false;
+    void loadNursePage(currentPage, forceRefresh);
   }, [currentPage, loadNursePage]);
 
   const totalPages = Math.max(1, Math.ceil(totalNurses / pageSize));
@@ -148,7 +151,7 @@ export default function NurseListPage() {
     try {
       await createNurseViaApi(values);
     } catch (error) {
-      showError(getApiErrorMessage(error, "Gagal menambahkan perawat dari API."));
+      showError(getApiErrorMessage(error, "Gagal menambahkan perawat."));
       return;
     }
 
@@ -164,7 +167,7 @@ export default function NurseListPage() {
       await updateNurseViaApi(editingNurse.id, values);
       await loadNursePage(currentPage, true);
     } catch (error) {
-      showError(getApiErrorMessage(error, "Gagal memperbarui perawat dari API."));
+      showError(getApiErrorMessage(error, "Gagal memperbarui perawat."));
       return;
     }
 
@@ -193,41 +196,13 @@ export default function NurseListPage() {
       setNurses(nurses.map((item) => item.id === nurse.id ? { ...updatedNurse, temporaryPassword: item.temporaryPassword } : item));
       await loadNursePage(currentPage, true);
     } catch (error) {
-      showError(getApiErrorMessage(error, "Gagal mengubah status perawat dari API."));
+      showError(getApiErrorMessage(error, "Gagal mengubah status perawat."));
       return;
     } finally {
       dispatch({ type: "patch", payload: { processingAction: null } });
     }
 
     showToast(`Status perawat menjadi ${nextStatus}.`);
-  };
-
-  const handleDelete = async (nurse: NurseRecord) => {
-    const actionKey = `delete-${nurse.id}`;
-    if (processingAction) return;
-    const assignedCount = nurse.assignedPatients ?? 0;
-    if (assignedCount > 0) {
-      showWarning(`${nurse.fullName} masih menangani ${assignedCount} pasien. Reassign pasien terlebih dahulu sebelum menghapus perawat.`, "Tidak Bisa Dihapus");
-      return;
-    }
-
-    const result = await showConfirm("Hapus perawat?", `Data ${nurse.fullName} akan dihapus dari daftar perawat.`, "Ya, Hapus");
-    if (!result.isConfirmed) return;
-
-    dispatch({ type: "patch", payload: { processingAction: actionKey } });
-    try {
-      await deactivateNurseViaApi(nurse.id);
-      dispatch({ type: "patch", payload: { pageNurses: stateRef.current.pageNurses.map((item) => item.id === nurse.id ? { ...item, status: "Nonaktif" } : item) } });
-      setNurses(nurses.map((item) => item.id === nurse.id ? { ...item, status: "Nonaktif" } : item));
-      await loadNursePage(currentPage, true);
-    } catch (error) {
-      showError(getApiErrorMessage(error, "Gagal menonaktifkan perawat dari API."));
-      return;
-    } finally {
-      dispatch({ type: "patch", payload: { processingAction: null } });
-    }
-
-    showToast("Perawat berhasil dihapus.");
   };
 
   const resetFilters = () => {
@@ -238,7 +213,7 @@ export default function NurseListPage() {
     <DashboardPageShell>
       <DashboardPageHeader
         title="Daftar Perawat"
-        action={<Button size="sm" icon={<Plus size={16} />} onClick={() => dispatch({ type: "patch", payload: { isModalOpen: true } })}>Tambah Perawat</Button>}
+        action={isLoading && !hasLoadedNurses ? <ButtonSkeleton /> : <Button size="sm" icon={<Plus size={16} />} onClick={() => dispatch({ type: "patch", payload: { isModalOpen: true } })}>Tambah Perawat</Button>}
       />
 
       <m.div className="mt-6" {...getDashboardEntranceMotion(shouldAnimate, 0.1, 20)}>
@@ -268,14 +243,15 @@ export default function NurseListPage() {
             <tbody className="divide-y divide-line">
               {paginatedNurses.map((nurse, index) => {
                 const assignedCount = nurse.assignedPatients ?? 0;
+                const handledCount = nurse.handledPatients ?? assignedCount;
                 return (
                   <tr key={`nurse-row-${nurse.id}-${index}`} className="transition-colors hover:bg-surface/60">
                     <td className="px-5 py-4"><NurseIdentity nurse={nurse} /></td>
                     <td className="px-5 py-4 text-sm font-bold text-muted"><span className="block text-text-main">{nurse.email}</span>{nurse.phone}</td>
                     <td className="px-5 py-4 text-sm font-bold text-muted">{nurse.gender}</td>
-                    <td className="px-5 py-4 text-sm font-extrabold text-text-main">{assignedCount}</td>
+                    <td className="px-5 py-4 text-sm font-extrabold text-text-main">{handledCount}/{assignedCount}</td>
                      <td className="px-5 py-4"><NurseStatusBadge status={nurse.status} /></td>
-                     <td className="px-5 py-4"><NurseActions nurse={nurse} processingAction={processingAction} onView={() => push(`/nurses/${encodeURIComponent(nurse.id)}`)} onEdit={() => dispatch({ type: "patch", payload: { editingNurse: nurse } })} onToggle={() => handleToggleStatus(nurse)} onDelete={() => handleDelete(nurse)} /></td>
+                      <td className="px-5 py-4"><NurseActions nurse={nurse} processingAction={processingAction} onView={() => push(`/nurses/${encodeURIComponent(nurse.id)}`)} onEdit={() => dispatch({ type: "patch", payload: { editingNurse: nurse } })} onToggle={() => handleToggleStatus(nurse)} /></td>
                   </tr>
                 );
               })}
@@ -293,16 +269,17 @@ export default function NurseListPage() {
         <div className="divide-y divide-line sm:hidden">
           {paginatedNurses.map((nurse, index) => {
             const assignedCount = nurse.assignedPatients ?? 0;
+            const handledCount = nurse.handledPatients ?? assignedCount;
             return (
               <article key={`nurse-card-${nurse.id}-${index}`} className="p-5">
                 <div className="flex items-start justify-between gap-4">
                   <NurseIdentity nurse={nurse} />
-                  <NurseActions nurse={nurse} processingAction={processingAction} onView={() => push(`/nurses/${encodeURIComponent(nurse.id)}`)} onEdit={() => dispatch({ type: "patch", payload: { editingNurse: nurse } })} onToggle={() => handleToggleStatus(nurse)} onDelete={() => handleDelete(nurse)} />
+                  <NurseActions nurse={nurse} processingAction={processingAction} onView={() => push(`/nurses/${encodeURIComponent(nurse.id)}`)} onEdit={() => dispatch({ type: "patch", payload: { editingNurse: nurse } })} onToggle={() => handleToggleStatus(nurse)} />
                 </div>
                 <div className="mt-4 flex flex-wrap items-center gap-2 text-xs font-extrabold text-muted">
                   <NurseStatusBadge status={nurse.status} />
                   <span>{nurse.gender}</span>
-                  <span>{assignedCount} pasien</span>
+                  <span>{handledCount}/{assignedCount} pasien</span>
                 </div>
               </article>
             );
@@ -331,18 +308,20 @@ export default function NurseListPage() {
 }
 
 function NurseIdentity({ nurse }: { readonly nurse: NurseRecord }) {
+  const lastVisit = nurse.lastVisit ?? "Belum pernah login";
+
   return (
     <div className="flex items-center gap-4">
       <span className="flex size-[42px] shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-extrabold text-primary">{getNurseInitials(nurse.fullName)}</span>
       <div className="min-w-0">
         <p className="break-words font-extrabold leading-tight text-text-main">{nurse.fullName}</p>
-        <p className="mt-0.5 text-sm font-semibold text-muted">Bergabung {nurse.joinedAt}</p>
+        <p className="mt-0.5 text-sm font-semibold text-muted">Kunjungan terakhir: {lastVisit}</p>
       </div>
     </div>
   );
 }
 
-function NurseActions({ nurse, processingAction, onView, onEdit, onToggle, onDelete }: { readonly nurse: NurseRecord; readonly processingAction: string | null; readonly onView: () => void; readonly onEdit: () => void; readonly onToggle: () => void; readonly onDelete: () => void }) {
+function NurseActions({ nurse, processingAction, onView, onEdit, onToggle }: { readonly nurse: NurseRecord; readonly processingAction: string | null; readonly onView: () => void; readonly onEdit: () => void; readonly onToggle: () => void }) {
   const isProcessing = Boolean(processingAction);
 
   return (
@@ -350,7 +329,6 @@ function NurseActions({ nurse, processingAction, onView, onEdit, onToggle, onDel
       <IconActionButton label={`Lihat detail ${nurse.fullName}`} tone="primary" size="sm" disabled={isProcessing} onClick={onView}><Eye size={16} /></IconActionButton>
       <IconActionButton label={`Edit ${nurse.fullName}`} tone="warning" size="sm" disabled={isProcessing} onClick={onEdit}><Edit3 size={16} /></IconActionButton>
       <IconActionButton label={`${nurse.status === "Aktif" ? "Nonaktifkan" : "Aktifkan"} ${nurse.fullName}`} tone="blue" size="sm" loading={processingAction === `toggle-${nurse.id}`} disabled={isProcessing} onClick={onToggle}><Power size={16} /></IconActionButton>
-      <IconActionButton label={`Hapus ${nurse.fullName}`} tone="delete" size="sm" loading={processingAction === `delete-${nurse.id}`} disabled={isProcessing} onClick={onDelete}><Trash2 size={16} /></IconActionButton>
     </div>
   );
 }

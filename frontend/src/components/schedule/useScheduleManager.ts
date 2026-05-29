@@ -6,8 +6,9 @@ import { groupSchedulesByPatient } from "@/helpers/schedules";
 import { getApiErrorMessage } from "@/lib/apiErrors";
 import type { PatientRecord } from "@/lib/mocks/patients";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
-import { createSchedulesViaApi, deactivateScheduleViaApi, getSchedulePatientGroupsPageFromApi, setScheduleActiveViaApi, updateScheduleViaApi } from "@/lib/scheduleApi";
-import { showConfirm, showError, showToast } from "@/lib/swal";
+import { getPatientsFromApi } from "@/lib/patientApi";
+import { createSchedulesViaApi, getSchedulePatientGroupsPageFromApi, setScheduleActiveViaApi, updateScheduleViaApi } from "@/lib/scheduleApi";
+import { showError, showToast } from "@/lib/swal";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import type { ScheduleAction } from "./ScheduleActions";
 import { getScheduleFormValues, type ScheduleFormValues } from "./scheduleFormUtils";
@@ -35,6 +36,7 @@ export function useScheduleManager({ initialPatientId = "", initialPatientName =
   const linkedPatientName = initialPatientName.trim().toLowerCase();
   const [schedules, setSchedules] = useState<MedicationScheduleRecord[]>(() => scheduleManagerViewCache?.schedules ?? []);
   const [patients, setPatients] = useState<PatientRecord[]>(() => scheduleManagerViewCache?.patients ?? []);
+  const [scheduleFormPatients, setScheduleFormPatients] = useState<PatientRecord[]>(() => scheduleManagerViewCache?.patients ?? []);
   const [totalPatients, setTotalPatients] = useState(() => scheduleManagerViewCache?.totalPatients ?? 0);
   const [scheduleSummary, setScheduleSummary] = useState(() => scheduleManagerViewCache?.scheduleSummary ?? defaultScheduleSummary);
   const [search, setSearch] = useState(() => scheduleManagerViewCache?.search ?? "");
@@ -53,9 +55,20 @@ export function useScheduleManager({ initialPatientId = "", initialPatientName =
   const [processingAction, setProcessingAction] = useState<string | null>(null);
   const debouncedSearch = useDebouncedValue(search);
 
+  const ensureScheduleFormPatients = useCallback(async () => {
+    try {
+      const allPatients = await getPatientsFromApi();
+      setScheduleFormPatients(allPatients);
+    } catch {
+      // Current page patients are still available as a fallback for locked patient flows.
+    }
+  }, []);
+
   const loadSchedulePage = useCallback(async (page: number, forceRefresh = false, overrides?: { search?: string; activeFilter?: ScheduleFilter }) => {
     const nextSearch = overrides?.search ?? debouncedSearch;
     const nextFilter = overrides?.activeFilter ?? activeFilter;
+    const status = nextFilter === "Nonaktif" ? "inactive" : nextFilter === "all" ? "all" : "active";
+    const adherenceStatus = nextFilter === "all" || nextFilter === "Nonaktif" ? undefined : nextFilter;
     const canUseVisibleCache = !forceRefresh
       && scheduleManagerViewCache?.currentPage === page
       && scheduleManagerViewCache.search === nextSearch
@@ -66,7 +79,8 @@ export function useScheduleManager({ initialPatientId = "", initialPatientName =
         page,
         limit: pageSize,
         search: nextSearch,
-        adherenceStatus: nextFilter === "all" ? undefined : nextFilter,
+        status,
+        adherenceStatus,
         forceRefresh,
       });
       setPatients(schedulePage.patients);
@@ -103,7 +117,7 @@ export function useScheduleManager({ initialPatientId = "", initialPatientName =
   }, [activeFilter, debouncedSearch]);
 
   useEffect(() => {
-    const id = setTimeout(() => void loadSchedulePage(currentPage));
+    const id = setTimeout(() => void loadSchedulePage(currentPage, true));
     return () => clearTimeout(id);
   }, [currentPage, loadSchedulePage]);
 
@@ -115,8 +129,8 @@ export function useScheduleManager({ initialPatientId = "", initialPatientName =
     ];
   }, [scheduleSummary]);
 
-  const patientGroups = useMemo(() => groupSchedulesByPatient(schedules), [schedules]);
-  const allPatientGroups = useMemo(() => groupSchedulesByPatient(schedules), [schedules]);
+  const patientGroups = useMemo(() => groupSchedulesByPatient(schedules, undefined, patients), [patients, schedules]);
+  const allPatientGroups = useMemo(() => groupSchedulesByPatient(schedules, undefined, patients), [patients, schedules]);
   const medicineCountByPatient = useMemo(() => Object.fromEntries(allPatientGroups.map((group) => [group.patientId, group.schedules.length])), [allPatientGroups]);
   const selectedGroup = selectedPatientId ? allPatientGroups.find((group) => group.patientId === selectedPatientId) ?? null : null;
   const addMedicinePatientGroup = addMedicinePatientId ? allPatientGroups.find((group) => group.patientId === addMedicinePatientId) ?? null : null;
@@ -146,11 +160,13 @@ export function useScheduleManager({ initialPatientId = "", initialPatientName =
   };
 
   const handleAddSchedule = async (values: ScheduleFormValues) => {
+    const formPatients = scheduleFormPatients.length > 0 ? scheduleFormPatients : patients;
+
     try {
-      const createdSchedules = await createSchedulesViaApi(values.patientId, values.medicines, patients);
+      const createdSchedules = await createSchedulesViaApi(values.patientId, values.medicines, formPatients);
       setSchedules((currentSchedules) => [...createdSchedules, ...currentSchedules]);
     } catch (error) {
-      showError(getApiErrorMessage(error, "Gagal menambahkan jadwal obat dari API."));
+      showError(getApiErrorMessage(error, "Gagal menambahkan jadwal obat."));
       return;
     }
 
@@ -170,7 +186,7 @@ export function useScheduleManager({ initialPatientId = "", initialPatientName =
       const updatedSchedule = await updateScheduleViaApi(editingSchedule.id, values.patientId, medicine, patients);
       setSchedules((currentSchedules) => currentSchedules.map((schedule) => schedule.id === editingSchedule.id ? updatedSchedule : schedule));
     } catch (error) {
-      showError(getApiErrorMessage(error, "Gagal memperbarui jadwal obat dari API."));
+      showError(getApiErrorMessage(error, "Gagal memperbarui jadwal obat."));
       return;
     }
 
@@ -203,7 +219,7 @@ export function useScheduleManager({ initialPatientId = "", initialPatientName =
         setSchedules((currentSchedules) => currentSchedules.map((currentSchedule) => currentSchedule.id === schedule.id ? updatedSchedule : currentSchedule));
         await loadSchedulePage(currentPage, true);
       } catch (error) {
-        showError(getApiErrorMessage(error, "Gagal mengubah status jadwal obat dari API."));
+        showError(getApiErrorMessage(error, "Gagal mengubah status jadwal obat."));
         return;
       } finally {
         setProcessingAction(null);
@@ -211,25 +227,11 @@ export function useScheduleManager({ initialPatientId = "", initialPatientName =
       showToast(schedule.status === "Nonaktif" ? "Jadwal berhasil diaktifkan." : "Jadwal berhasil dinonaktifkan.");
       return;
     }
-    if (action !== "delete") return;
-    const actionKey = `delete-${schedule.id}`;
-    if (processingAction) return;
+  };
 
-    const result = await showConfirm("Hapus jadwal obat?", `Jadwal ${schedule.medicineName} untuk ${schedule.patientName} akan dihapus.`, "Ya, Hapus");
-    if (!result.isConfirmed) return;
-
-    setProcessingAction(actionKey);
-    try {
-      await deactivateScheduleViaApi(schedule.id);
-      await loadSchedulePage(currentPage, true);
-    } catch (error) {
-      showError(getApiErrorMessage(error, "Gagal menghapus jadwal obat dari API."));
-      return;
-    } finally {
-      setProcessingAction(null);
-    }
-
-    showToast("Jadwal obat berhasil dihapus.");
+  const openAddScheduleModal = () => {
+    setIsAddModalOpen(true);
+    void ensureScheduleFormPatients();
   };
 
   const closeEditSchedule = () => {
@@ -259,6 +261,7 @@ export function useScheduleManager({ initialPatientId = "", initialPatientName =
     paginatedGroups,
     patientGroups,
     patients,
+    scheduleFormPatients: scheduleFormPatients.length > 0 ? scheduleFormPatients : patients,
     processingAction,
     resetFilters,
     search,
@@ -266,7 +269,13 @@ export function useScheduleManager({ initialPatientId = "", initialPatientName =
     setAddMedicinePatientId,
     setCurrentPage: (page: number) => setCurrentPage(Math.min(Math.max(page, 1), totalPages)),
     setEditingSchedule,
-    setIsAddModalOpen,
+    setIsAddModalOpen: (isOpen: boolean) => {
+      if (isOpen) {
+        openAddScheduleModal();
+        return;
+      }
+      setIsAddModalOpen(false);
+    },
     setSelectedPatientId,
     summaryStats,
     totalPages,

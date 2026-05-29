@@ -124,9 +124,24 @@ describe("role dashboard and settings features", () => {
         { label: "Total Pasien", value: "12", tone: "safe", color: "leaf", icon: UserRound },
         { label: "Jadwal Aktif", value: "3", tone: "neutral", color: "lime", icon: UserRound },
       ],
-      nurseFollowUps: [],
+      nurseFollowUps: [{
+        nurse: {
+          id: "NRS-001",
+          fullName: "Ns. Luis Parisian V",
+          email: "nurse1@jivara.test",
+          phone: "6286056714045",
+          gender: "Pria",
+          status: "Nonaktif",
+          joinedAt: "",
+          temporaryPassword: false,
+          assignedPatients: 8,
+        },
+        assignedPatientCount: 8,
+        riskyPatientCount: 0,
+      }],
       riskyPatients: [],
       priorityActivities: [],
+      inactiveNurseReassignCount: 1,
     });
     vi.mocked(getSchedulesFromApi).mockResolvedValueOnce([schedule]);
     vi.mocked(getNursesFromApi).mockResolvedValueOnce([]);
@@ -139,6 +154,8 @@ describe("role dashboard and settings features", () => {
     expect(await screen.findByText("Dashboard Admin")).toBeInTheDocument();
     expect(await screen.findByText("Total Pasien")).toBeInTheDocument();
     expect(await screen.findByText("12")).toBeInTheDocument();
+    expect(await screen.findByText("1 perawat nonaktif masih menangani pasien silahkan reassign.")).toBeInTheDocument();
+    expect(await screen.findByText("8 pasien masih ditangani - silahkan reassign")).toBeInTheDocument();
 
     render(<AdminSettingsPage />);
     expect(screen.getByText("Pengaturan Admin")).toBeInTheDocument();
@@ -166,14 +183,22 @@ describe("role dashboard and settings features", () => {
   });
 
   it("renders patient dashboard summary and patient settings", async () => {
+    const completedSchedule = { ...schedule, status: "Selesai" as const, endDate: "2026-05-19" };
     vi.mocked(getPatientDashboardOverviewData).mockResolvedValueOnce({
       patient: { ...patient, name: "Pasien Budi", adherence: 82, status: "On Ideal Schedule" },
-      schedules: [schedule],
-      adherenceStats: { adherenceRate: 82, totalScheduled: 1, dailyBreakdown: [{ date: "2026-05-15", scheduled: 1, confirmed: 1 }] },
+      schedules: [completedSchedule],
+      adherenceStats: {
+        adherenceRate: 82,
+        totalScheduled: 3,
+        dailyBreakdown: [
+          { date: "2026-05-15", scheduled: 1, confirmed: 1 },
+          { date: "2026-05-20", scheduled: 2, confirmed: 0 },
+        ],
+      },
     });
     vi.mocked(getPatientDashboardData).mockResolvedValueOnce({
       patient: { ...patient, name: "Pasien Budi", adherence: 82, status: "On Ideal Schedule" },
-      schedules: [schedule],
+      schedules: [completedSchedule],
       medicationLogs: [],
       adherenceStats: { adherenceRate: 82, totalScheduled: 1, dailyBreakdown: [{ date: "2026-05-15", scheduled: 1, confirmed: 1 }] },
     });
@@ -183,6 +208,7 @@ describe("role dashboard and settings features", () => {
     await waitFor(() => expect(screen.getByText(/Pasien Budi/)).toBeInTheDocument());
     expect(screen.getByText("Obat Aktif Saya")).toBeInTheDocument();
     expect(screen.getByText("Kepatuhan Keseluruhan Saya")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /20 Mei 2026 - Belum ada data/i })).toBeInTheDocument();
 
     render(<PatientSettingsPage />);
     expect(screen.getByText("Profil Saya")).toBeInTheDocument();

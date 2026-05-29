@@ -128,6 +128,33 @@ export function DetailDataSkeleton({ summaryCount = 4 }: { readonly summaryCount
   );
 }
 
+export function ButtonSkeleton({ className = "" }: { readonly className?: string }) {
+  return <div className={`inline-block h-9 w-36 animate-pulse rounded-full bg-line/60 ${className}`} />;
+}
+
+export function DashboardPanelGridSkeleton() {
+  return (
+    <div className="mt-6 grid items-start gap-6 xl:grid-cols-3">
+      {Array.from({ length: 3 }).map((_, index) => (
+        <section key={`panel-skeleton-${index}`} className="rounded-[32px] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <div className="h-7 w-48 animate-pulse rounded-xl bg-line/70" />
+            <div className="h-4 w-10 animate-pulse rounded bg-line/50" />
+          </div>
+          <div className="space-y-3">
+            {Array.from({ length: 4 }).map((_, row) => (
+              <div key={`panel-skeleton-row-${index}-${row}`} className="rounded-2xl bg-surface px-4 py-3">
+                <div className="h-4 w-3/4 animate-pulse rounded-lg bg-line/70" />
+                <div className="mt-2 h-3 w-1/2 animate-pulse rounded-lg bg-line/50" />
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 export function FormDataSkeleton() {
   return (
     <div className="space-y-4">

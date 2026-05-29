@@ -33,8 +33,31 @@ describe("nurseApi", () => {
 
     const nurses = await getNursesFromApi();
 
-    expect(mockedGet).toHaveBeenCalledWith("/nurses", { params: { limit: 100 } });
+    expect(mockedGet).toHaveBeenCalledWith("/nurses", { params: { page: 1, limit: 100 } });
     expect(nurses[0]).toMatchObject({ id: nurseId, fullName: "Nina", gender: "Wanita", status: "Aktif", temporaryPassword: false });
+  });
+
+  it("loads every nurse page for full filter options", async () => {
+    const secondNurseId = "22222222-2222-4222-8222-222222222222";
+    mockedGet
+      .mockResolvedValueOnce({
+        data: {
+          data: [{ id: nurseId, fullName: "Nina", email: "nina@test.local", phone: "6281", gender: "female", isActive: true }],
+          meta: { page: 1, limit: 100, total: 101 },
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          data: [{ id: secondNurseId, fullName: "Nora", email: "nora@test.local", phone: "6282", gender: "female", isActive: true }],
+          meta: { page: 2, limit: 100, total: 101 },
+        },
+      });
+
+    const nurses = await getNursesFromApi();
+
+    expect(mockedGet).toHaveBeenNthCalledWith(1, "/nurses", { params: { page: 1, limit: 100 } });
+    expect(mockedGet).toHaveBeenNthCalledWith(2, "/nurses", { params: { page: 2, limit: 100 } });
+    expect(nurses.map((nurse) => nurse.fullName)).toEqual(["Nina", "Nora"]);
   });
 
   it("creates active nurse with API payload", async () => {
@@ -62,7 +85,7 @@ describe("nurseApi", () => {
 
     await expect(updateNurseViaApi("NURSE-001", formValues)).resolves.toMatchObject({ id: nurseId });
 
-    expect(mockedGet).toHaveBeenCalledWith("/nurses", { params: { limit: 100 } });
+    expect(mockedGet).toHaveBeenCalledWith("/nurses", { params: { page: 1, limit: 100 } });
     expect(mockedPut).toHaveBeenCalledWith(`/nurses/${nurseId}`, expect.objectContaining({ email: "nina@test.local" }));
   });
 });

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import api from "@/lib/axios";
-import { getFoodScanAnalysisFromApi, scanFoodImage } from "@/lib/foodScanApi";
+import { getFoodScanAnalysisFromApi, getFoodScansPageFromApi, scanFoodImage } from "@/lib/foodScanApi";
 
 vi.mock("@/lib/axios", () => ({
   default: {
@@ -100,6 +100,27 @@ describe("foodScanApi", () => {
     expect(analysis.analyzedMedications).toEqual(["ATORVASTATIN"]);
     expect(analysis.recommendedFoods).toEqual([{ foodName: "apel", severityScore: 0, riskLevel: "aman", worstCategory: null }]);
     expect(analysis.foodsToAvoid).toEqual([{ foodName: "gudeg", severityScore: 3, riskLevel: "sedang", worstCategory: "statin" }]);
+  });
+
+  it("treats analyzed scan summaries as detected food activities", async () => {
+    mockedGet.mockResolvedValueOnce({
+      data: {
+        data: [{
+          id: "scan-1",
+          patientId: "patient-1",
+          imageUrl: "/uploads/scan-1.jpg",
+          overallRiskLevel: "rendah",
+          modelVersion: "v1",
+          inferenceTimeMs: 120,
+          createdAt: "2026-05-09T08:00:00.000Z",
+        }],
+        meta: { page: 1, limit: 100, total: 1 },
+      },
+    });
+
+    const page = await getFoodScansPageFromApi({ patientId: "patient-1", limit: 100 });
+
+    expect(page.data[0]).toMatchObject({ id: "scan-1", hasDetectedFood: true, risk: "Low Risk" });
   });
 
   it("maps safe foods when no interactions are returned", async () => {

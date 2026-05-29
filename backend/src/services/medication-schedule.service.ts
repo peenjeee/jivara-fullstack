@@ -9,7 +9,7 @@ import {
 import { AccessUser, assertCanAccessPatient, scopedPatientFilter } from "./access-control.service";
 import { diffChanges, writeAuditLogAsync } from "./audit-log.service";
 import { deleteCachedByPrefix, getCached, setCached } from "./cache.service";
-import { listPatients } from "./patient.service";
+import { invalidatePatientCache, listPatients } from "./patient.service";
 
 const CACHE_PREFIX = "medication-schedules:";
 const CACHE_TTL_MS = Number(process.env.MEDICATION_SCHEDULE_CACHE_TTL_MS || 30_000);
@@ -50,6 +50,11 @@ const getDetailCacheKey = (id: string, user?: AccessUser) => `${CACHE_PREFIX}det
 
 export const invalidateMedicationScheduleCache = () => deleteCachedByPrefix(CACHE_PREFIX);
 
+const invalidateScheduleDependentCaches = () => {
+  invalidateMedicationScheduleCache();
+  invalidatePatientCache();
+};
+
 export const getMedicationScheduleSummaryForPatients = async (patientIds: readonly string[]) => {
   if (patientIds.length === 0) return { active: 0, completed: 0, reminders: 0 };
 
@@ -75,6 +80,8 @@ export const getMedicationScheduleSummaryForPatients = async (patientIds: readon
       .where(and(
         inArray(medicationSchedules.patientId, [...patientIds]),
         eq(medicationSchedules.reminderEnabled, true),
+        eq(medicationSchedules.isActive, true),
+        gt(medicationSchedules.stock, 0),
       )),
   ]);
 
@@ -134,16 +141,25 @@ export const listMedicationSchedulePatientGroups = async (query: MedicationSched
   const schedules = patientIds.length > 0
     ? await listMedicationSchedules({ patient_ids: patientIds.join(",") }, user)
     : [];
-  const summaryPatientPage = patientPage.meta.total > patientPage.data.length
-    ? await listPatients({
-      page: "1",
-      limit: String(Math.max(patientPage.meta.total, 1)),
-      search: query.search,
-      status: query.status || "active",
-      adherenceStatus: query.adherenceStatus,
-    }, user)
-    : patientPage;
-  const summaryPatientIds = summaryPatientPage.data.map((patient) => patient.id);
+  const summaryPatientIds = query.search || query.adherenceStatus
+    ? (patientPage.meta.total > patientPage.data.length
+      ? (await listPatients({
+        page: "1",
+        limit: String(Math.max(patientPage.meta.total, 1)),
+        search: query.search,
+        status: query.status || "active",
+        adherenceStatus: query.adherenceStatus,
+      }, user)).data.map((patient) => patient.id)
+      : patientPage.data.map((patient) => patient.id))
+    : await (async () => {
+      const summaryScopedFilter = await scopedPatientFilter(patients.id, user);
+      if (!summaryScopedFilter.scope.allowed) return [];
+      const rows = await db
+        .select({ id: patients.id })
+        .from(patients)
+        .where(summaryScopedFilter.condition ?? undefined);
+      return rows.map((patient) => patient.id);
+    })();
   const summary = await getMedicationScheduleSummaryForPatients(summaryPatientIds);
 
   return {
@@ -202,7 +218,7 @@ export const createMedicationSchedule = async (dto: MedicationScheduleCreateDTO,
     changes: { after: schedule },
   });
 
-  invalidateMedicationScheduleCache();
+  invalidateScheduleDependentCaches();
 
   return schedule;
 };
@@ -255,7 +271,7 @@ export const updateMedicationSchedule = async (id: string, dto: MedicationSchedu
     });
   }
 
-  invalidateMedicationScheduleCache();
+  invalidateScheduleDependentCaches();
 
   return schedule;
 };
@@ -276,5 +292,5 @@ export const deactivateMedicationSchedule = async (id: string, user?: AccessUser
     changes: { isActive: { from: existing.isActive, to: false } },
   });
 
-  invalidateMedicationScheduleCache();
+  invalidateScheduleDependentCaches();
 };

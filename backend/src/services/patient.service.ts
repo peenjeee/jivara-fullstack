@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { and, count, desc, eq, ilike, inArray, or } from "drizzle-orm";
+import { and, count, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import {
   foodScans,
@@ -22,7 +22,7 @@ import {
 import { getAdherenceStats } from "./adherence.service";
 import { invalidateNurseCache } from "./nurse.service";
 
-const PATIENT_CACHE_PREFIX = "patients:v2:";
+const PATIENT_CACHE_PREFIX = "patients:v4:";
 const PATIENT_CACHE_TTL_MS = Number(process.env.PATIENT_CACHE_TTL_MS || 30_000);
 
 const getPatientListCacheKey = (query: PatientListQuery, user?: AccessUser) => {
@@ -66,12 +66,12 @@ type PatientListResult = {
     diagnosis: string | null;
     emergencyContact: string | null;
     assignedNurseId: string | null;
+    assignedNurses: Array<{ id: string; name: string | null }>;
     isActive: boolean;
     createdAt: Date | null;
     lastLoginAt: Date | null;
-    adherenceRate7d: number | null;
-    adherenceRate30d: number | null;
-    totalScheduled30d: number;
+    adherenceRateAll: number | null;
+    totalScheduledAll: number;
     isMedicationComplete: boolean;
   }>;
   meta: { page: number; limit: number; total: number };
@@ -126,6 +126,10 @@ export const listPatients = async (query: PatientListQuery, user?: AccessUser): 
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
+  const orderByColumn = query.sort === "recentActivity"
+    ? sql`COALESCE(${users.lastLoginAt}, ${patients.createdAt})`
+    : patients.createdAt;
+
   const baseSelect = () => db
     .select({
       id: patients.id,
@@ -146,7 +150,7 @@ export const listPatients = async (query: PatientListQuery, user?: AccessUser): 
     .from(patients)
     .innerJoin(users, eq(patients.userId, users.id))
     .where(where)
-    .orderBy(desc(patients.createdAt));
+    .orderBy(desc(orderByColumn));
 
   const rows = query.adherenceStatus
     ? await baseSelect()
@@ -156,23 +160,29 @@ export const listPatients = async (query: PatientListQuery, user?: AccessUser): 
       .select({
         patientId: patientNurseAssignments.patientId,
         nurseId: patientNurseAssignments.nurseId,
+        nurseName: users.fullName,
       })
       .from(patientNurseAssignments)
+      .innerJoin(nurses, eq(patientNurseAssignments.nurseId, nurses.id))
+      .innerJoin(users, eq(nurses.userId, users.id))
       .where(and(
         eq(patientNurseAssignments.isActive, true),
         inArray(patientNurseAssignments.patientId, rows.map((row) => row.id)),
       ))
     : [];
   const assignmentByPatientId = new Map<string, string>();
+  const assignmentsByPatientId = new Map<string, Array<{ id: string; name: string | null }>>();
   for (const assignment of assignmentRows) {
     if (!assignmentByPatientId.has(assignment.patientId)) {
       assignmentByPatientId.set(assignment.patientId, assignment.nurseId);
     }
+    const patientNurses = assignmentsByPatientId.get(assignment.patientId) ?? [];
+    patientNurses.push({ id: assignment.nurseId, name: assignment.nurseName });
+    assignmentsByPatientId.set(assignment.patientId, patientNurses);
   }
 
   const enrichedRows = await Promise.all(rows.map(async (row) => {
-    const adherence30d = await getAdherenceStats({ patientId: row.id, period: "30d" }, user).catch(() => null);
-    const adherence7d = await getAdherenceStats({ patientId: row.id, period: "7d" }, user).catch(() => null);
+    const adherenceAll = await getAdherenceStats({ patientId: row.id, period: "all" }, user).catch(() => null);
 
     return {
       id: row.id,
@@ -187,42 +197,41 @@ export const listPatients = async (query: PatientListQuery, user?: AccessUser): 
       diagnosis: row.diagnosis,
       emergencyContact: row.emergencyContact as string | null,
       assignedNurseId: assignmentByPatientId.get(row.id) ?? null,
+      assignedNurses: assignmentsByPatientId.get(row.id) ?? [],
       isActive: row.isActive ?? true,
       createdAt: row.createdAt,
       lastLoginAt: row.lastLoginAt,
-      adherenceRate7d: adherence7d?.adherenceRate ?? null,
-      adherenceRate30d: adherence30d?.adherenceRate ?? null,
-      totalScheduled30d: adherence30d?.totalScheduled ?? 0,
+      adherenceRateAll: adherenceAll?.adherenceRate ?? null,
+      totalScheduledAll: adherenceAll?.totalScheduled ?? 0,
     };
   }));
 
   const allPatientIds = enrichedRows.map((row) => row.id);
-  const activeSchedules = allPatientIds.length > 0
+  const medicationStateRows = allPatientIds.length > 0
     ? await db
         .select({
           patientId: medicationSchedules.patientId,
           stock: medicationSchedules.stock,
+          isActive: medicationSchedules.isActive,
         })
         .from(medicationSchedules)
-        .where(and(
-          inArray(medicationSchedules.patientId, allPatientIds),
-          eq(medicationSchedules.isActive, true),
-        ))
+        .where(inArray(medicationSchedules.patientId, allPatientIds))
     : [];
-  const schedulesByPatientId = new Map<string, number[]>();
-  for (const schedule of activeSchedules) {
-    const stocks = schedulesByPatientId.get(schedule.patientId) ?? [];
-    stocks.push(schedule.stock ?? 0);
-    schedulesByPatientId.set(schedule.patientId, stocks);
+  const schedulesByPatientId = new Map<string, Array<{ stock: number | null; isActive: boolean | null }>>();
+  for (const schedule of medicationStateRows) {
+    const patientSchedules = schedulesByPatientId.get(schedule.patientId) ?? [];
+    patientSchedules.push({ stock: schedule.stock, isActive: schedule.isActive });
+    schedulesByPatientId.set(schedule.patientId, patientSchedules);
   }
   const enrichedRowsWithComplete = enrichedRows.map((row) => {
-    const stocks = schedulesByPatientId.get(row.id) ?? [];
-    const isMedicationComplete = stocks.length > 0 && stocks.every((stock) => (stock ?? 0) <= 0);
+    const patientSchedules = schedulesByPatientId.get(row.id) ?? [];
+    const isMedicationComplete = patientSchedules.length > 0
+      && patientSchedules.every((schedule) => schedule.isActive === false || (schedule.stock ?? 0) <= 0);
     return { ...row, isMedicationComplete };
   });
 
   const computeRowStatus = (row: typeof enrichedRowsWithComplete[number]) => {
-    const adherence = row.totalScheduled30d ? Math.round(row.adherenceRate30d ?? row.adherenceRate7d ?? 100) : 100;
+    const adherence = row.totalScheduledAll ? Math.round(row.adherenceRateAll ?? 100) : 100;
     return getPatientFinalStatus(adherence, row.isMedicationComplete);
   };
 
@@ -282,7 +291,7 @@ export const getPatientById = async (patientId: string, user?: AccessUser) => {
     throw { status: 404, message: "Pasien tidak ditemukan", code: "PATIENT_NOT_FOUND" };
   }
 
-  const [assignment, activeMedications, foodScanCount, interactionWarningCount, adherence7d, adherence30d] = await Promise.all([
+  const [assignment, activeMedications, medicationStateRows, foodScanCount, interactionWarningCount, adherenceAll] = await Promise.all([
     db
       .select({
         nurseId: patientNurseAssignments.nurseId,
@@ -295,7 +304,7 @@ export const getPatientById = async (patientId: string, user?: AccessUser) => {
         eq(patientNurseAssignments.patientId, patientId),
         eq(patientNurseAssignments.isActive, true),
       ))
-      .limit(1),
+      .orderBy(desc(patientNurseAssignments.assignedAt)),
     db
       .select({
         id: medicationSchedules.id,
@@ -315,6 +324,13 @@ export const getPatientById = async (patientId: string, user?: AccessUser) => {
       ))
       .orderBy(desc(medicationSchedules.createdAt)),
     db
+      .select({
+        stock: medicationSchedules.stock,
+        isActive: medicationSchedules.isActive,
+      })
+      .from(medicationSchedules)
+      .where(eq(medicationSchedules.patientId, patientId)),
+    db
       .select({ total: count() })
       .from(foodScans)
       .where(eq(foodScans.patientId, patientId)),
@@ -323,26 +339,27 @@ export const getPatientById = async (patientId: string, user?: AccessUser) => {
       .from(interactionResults)
       .innerJoin(foodScans, eq(interactionResults.scanId, foodScans.id))
       .where(eq(foodScans.patientId, patientId)),
-    getAdherenceStats({ patientId, period: "7d" }),
-    getAdherenceStats({ patientId, period: "30d" }),
+    getAdherenceStats({ patientId, period: "all" }),
   ]);
 
   const assignedNurse = assignment[0]
     ? { id: assignment[0].nurseId, name: assignment[0].nurseName }
     : null;
+  const assignedNurses = assignment.map((item) => ({ id: item.nurseId, name: item.nurseName }));
 
-  const isMedicationComplete = activeMedications.length > 0
-    && activeMedications.every((medication) => (medication.stock ?? 0) <= 0);
+  const isMedicationComplete = medicationStateRows.length > 0
+    && medicationStateRows.every((medication) => medication.isActive === false || (medication.stock ?? 0) <= 0);
 
   return {
     ...row[0],
     assignedNurseId: assignedNurse?.id || null,
     assignedNurse,
+    assignedNurses,
     activeMedications,
     activeMedicationsCount: activeMedications.length,
     isMedicationComplete,
-    adherenceRate7d: adherence7d?.adherenceRate ?? null,
-    adherenceRate30d: adherence30d?.adherenceRate ?? null,
+    adherenceRateAll: adherenceAll?.adherenceRate ?? null,
+    totalScheduledAll: adherenceAll?.totalScheduled ?? 0,
     totalFoodScans: foodScanCount[0]?.total || 0,
     totalInteractionWarnings: interactionWarningCount[0]?.total || 0,
   };
@@ -420,11 +437,11 @@ export const createPatient = async (dto: PatientCreateDTO, createdBy?: string) =
   }
 
   const createdByNurseId = createdBy ? await getNurseIdForUser(createdBy) : null;
-  const assignedNurseId = dto.assignedNurseId || createdByNurseId;
+  const assignedNurseIds = Array.from(new Set([...(dto.assignedNurseIds ?? []), ...(dto.assignedNurseId ? [dto.assignedNurseId] : []), ...(createdByNurseId ? [createdByNurseId] : [])]));
 
-  if (assignedNurseId) {
-    const nurse = await db.select({ id: nurses.id }).from(nurses).where(and(eq(nurses.id, assignedNurseId), eq(nurses.organizationId, organizationId))).limit(1);
-    if (nurse.length === 0) {
+  if (assignedNurseIds.length > 0) {
+    const nurseRows = await db.select({ id: nurses.id }).from(nurses).where(and(inArray(nurses.id, assignedNurseIds), eq(nurses.organizationId, organizationId)));
+    if (nurseRows.length !== assignedNurseIds.length) {
       throw { status: 404, message: "Perawat tidak ditemukan", code: "NURSE_NOT_FOUND" };
     }
   }
@@ -460,18 +477,19 @@ export const createPatient = async (dto: PatientCreateDTO, createdBy?: string) =
       })
       .returning();
 
-    if (assignedNurseId) {
-      await tx.insert(patientNurseAssignments).values({
+    if (assignedNurseIds.length > 0) {
+      await tx.insert(patientNurseAssignments).values(assignedNurseIds.map((nurseId) => ({
         patientId: newPatient.id,
-        nurseId: assignedNurseId,
+        nurseId,
         assignedBy: createdBy || null,
-      });
+      })));
     }
 
     return {
       ...newPatient,
       user: newUser,
-      assignedNurseId: assignedNurseId || null,
+      assignedNurseId: assignedNurseIds[0] || null,
+      assignedNurses: assignedNurseIds.map((id) => ({ id, name: null })),
     };
   }).then(async (patient) => {
     writeAuditLogAsync({
@@ -479,17 +497,7 @@ export const createPatient = async (dto: PatientCreateDTO, createdBy?: string) =
       action: "patient.created",
       resourceType: "patient",
       resourceId: patient.id,
-      changes: { after: { id: patient.id, userId: patient.userId, assignedNurseId: patient.assignedNurseId } },
-    });
-
-    return patient;
-  }).then(async (patient) => {
-    writeAuditLogAsync({
-      userId: createdBy || null,
-      action: "patient.created",
-      resourceType: "patient",
-      resourceId: patient.id,
-      changes: { after: { id: patient.id, userId: patient.userId, assignedNurseId: patient.assignedNurseId } },
+      changes: { after: { id: patient.id, userId: patient.userId, assignedNurseIds } },
     });
 
     invalidatePatientCache();
@@ -540,11 +548,12 @@ export const updatePatient = async (patientId: string, dto: PatientUpdateDTO, us
   return getPatientCoreById(patientId, user);
 };
 
-export const assignPatient = async (patientId: string, nurseId: string, assignedBy?: string) => {
+export const assignPatient = async (patientId: string, nurseIdOrIds: string | string[], assignedBy?: string) => {
   const assignedByUser = assignedBy ? await db.select({ role: users.role }).from(users).where(eq(users.id, assignedBy)).limit(1) : [];
   const isSuperAdmin = assignedByUser[0]?.role === "super_admin";
   const organizationId = assignedBy ? await getOrganizationIdForUser(assignedBy) : null;
   const patient = await getPatientCoreById(patientId, assignedBy ? { id: assignedBy, email: "", role: isSuperAdmin ? "super_admin" : "admin" } : undefined);
+  const nurseIds = Array.from(new Set(Array.isArray(nurseIdOrIds) ? nurseIdOrIds : [nurseIdOrIds]));
 
   if (!isSuperAdmin && (!organizationId || patient.organizationId !== organizationId)) {
     throw { status: 403, message: "Pasien tidak berada dalam organisasi admin", code: "FORBIDDEN" };
@@ -554,15 +563,15 @@ export const assignPatient = async (patientId: string, nurseId: string, assigned
     throw { status: 400, message: "Pasien belum terhubung ke organisasi", code: "ORGANIZATION_REQUIRED" };
   }
 
-  const nurseConditions = [eq(nurses.id, nurseId)];
+  const nurseConditions = [inArray(nurses.id, nurseIds)];
   if (isSuperAdmin) {
     nurseConditions.push(eq(nurses.organizationId, patient.organizationId!));
   } else if (organizationId) {
     nurseConditions.push(eq(nurses.organizationId, organizationId));
   }
 
-  const nurse = await db.select({ id: nurses.id }).from(nurses).where(and(...nurseConditions)).limit(1);
-  if (nurse.length === 0) {
+  const nurseRows = await db.select({ id: nurses.id }).from(nurses).where(and(...nurseConditions));
+  if (nurseRows.length !== nurseIds.length) {
     throw { status: 404, message: "Perawat tidak ditemukan", code: "NURSE_NOT_FOUND" };
   }
 
@@ -575,11 +584,11 @@ export const assignPatient = async (patientId: string, nurseId: string, assigned
         eq(patientNurseAssignments.isActive, true),
       ));
 
-    await tx.insert(patientNurseAssignments).values({
+    await tx.insert(patientNurseAssignments).values(nurseIds.map((nurseId) => ({
       patientId,
       nurseId,
       assignedBy: assignedBy || null,
-    });
+    })));
   });
 
   writeAuditLogAsync({
@@ -587,7 +596,7 @@ export const assignPatient = async (patientId: string, nurseId: string, assigned
     action: "patient.assigned",
     resourceType: "patient",
     resourceId: patientId,
-    changes: { nurseId },
+    changes: { nurseIds },
   });
 
   invalidatePatientCache();

@@ -41,11 +41,11 @@ interface PatientListResponse {
   gender?: string | null;
   address?: string | null;
   assignedNurseId?: string | null;
-  adherenceRate7d?: number | null;
-  adherenceRate30d?: number | null;
-  totalScheduled30d?: number | null;
+  adherenceRateAll?: number | null;
+  totalScheduledAll?: number | null;
   createdAt?: string | null;
   lastLoginAt?: string | null;
+  isActive?: boolean | null;
   isMedicationComplete?: boolean;
 }
 
@@ -70,6 +70,7 @@ export type SchedulePatientGroupsPage = {
 };
 
 const schedulesCacheTtl = 15_000;
+const scheduleAdherenceCacheVersion = "adherence-all-v1";
 let schedulesCache: { data: MedicationScheduleRecord[]; expiresAt: number } | null = null;
 let schedulesRequest: Promise<MedicationScheduleRecord[]> | null = null;
 const schedulePatientsCache = new Map<string, { data: MedicationScheduleRecord[]; expiresAt: number }>();
@@ -93,6 +94,13 @@ const clearScheduleRelatedCaches = async () => {
     import("./patientApi").then(({ clearPatientsCache }) => clearPatientsCache()).catch(() => undefined),
     import("./patientDashboardApi").then(({ clearPatientDashboardCache }) => clearPatientDashboardCache()).catch(() => undefined),
   ]);
+};
+
+const notifyScheduleChanged = (patientIds: readonly string[]) => {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("jivara:schedule-changed", {
+    detail: { patientIds: Array.from(new Set(patientIds)) },
+  }));
 };
 
 const getScheduledTimes = (value: unknown) => Array.isArray(value)
@@ -167,7 +175,7 @@ const formatDate = (value?: string | null, fallback = "-") => {
 
 const mapPatient = (patient: PatientListResponse): PatientRecord => {
   const name = patient.fullName || patient.user?.fullName || "-";
-  const adherence = patient.totalScheduled30d ? Math.round(patient.adherenceRate30d ?? patient.adherenceRate7d ?? 100) : 100;
+  const adherence = patient.totalScheduledAll ? Math.round(patient.adherenceRateAll ?? 100) : 100;
 
   return {
     id: patient.id,
@@ -177,7 +185,7 @@ const mapPatient = (patient: PatientListResponse): PatientRecord => {
     phone: patient.phone ?? patient.user?.phone ?? undefined,
     email: patient.email ?? patient.user?.email ?? undefined,
     address: patient.address ?? undefined,
-    status: getPatientStatus(adherence, patient.isMedicationComplete),
+    status: patient.isActive === false ? "Nonaktif" : getPatientStatus(adherence, patient.isMedicationComplete),
     lastVisit: formatDate(patient.lastLoginAt, "Belum pernah login"),
     adherence,
     avatar: getInitials(name),
@@ -242,12 +250,13 @@ export const getSchedulesForPatientsFromApi = async (
   return request;
 };
 
-export const getSchedulePatientGroupsPageFromApi = async (params: { page?: number; limit?: number; search?: string; adherenceStatus?: PatientStatus; forceRefresh?: boolean } = {}): Promise<SchedulePatientGroupsPage> => {
+export const getSchedulePatientGroupsPageFromApi = async (params: { page?: number; limit?: number; search?: string; status?: "active" | "inactive" | "all"; adherenceStatus?: PatientStatus; forceRefresh?: boolean } = {}): Promise<SchedulePatientGroupsPage> => {
   const page = params.page || 1;
   const limit = params.limit || 10;
   const search = params.search?.trim() || "";
+  const status = params.status || "active";
   const adherenceStatus = params.adherenceStatus || "";
-  const cacheKey = `${page}:${limit}:${search}:${adherenceStatus}`;
+  const cacheKey = `${scheduleAdherenceCacheVersion}:${page}:${limit}:${status}:${search}:${adherenceStatus}`;
 
   if (params.forceRefresh) {
     scheduleGroupsCache.delete(cacheKey);
@@ -261,7 +270,7 @@ export const getSchedulePatientGroupsPageFromApi = async (params: { page?: numbe
   if (activeRequest) return activeRequest;
 
   const request = api.get<SchedulePatientGroupsResponse>("/medication-schedules/patient-groups", {
-    params: { page, limit, ...(search ? { search } : {}), ...(adherenceStatus ? { adherenceStatus } : {}) },
+    params: { page, limit, status, ...(search ? { search } : {}), ...(adherenceStatus ? { adherenceStatus } : {}) },
   }).then((response) => {
     const patients = response.data.data.patients.map(mapPatient);
     const patientById = new Map(patients.map((patient) => [patient.id, patient]));
@@ -288,6 +297,7 @@ export const createSchedulesViaApi = async (patientId: string, medicines: readon
     ? await api.post<SingleScheduleResponse>("/medication-schedules", payloads[0])
     : await api.post<ScheduleListResponse>("/medication-schedules/bulk", { schedules: payloads });
   await clearScheduleRelatedCaches();
+  notifyScheduleChanged([patientId]);
   const schedules = Array.isArray(response.data.data) ? response.data.data : [response.data.data];
   return schedules.map((schedule) => mapSchedule(schedule, patientById.get(schedule.patientId)));
 };
@@ -296,6 +306,7 @@ export const updateScheduleViaApi = async (scheduleId: string, patientId: string
   const patientById = new Map(patients.map((patient) => [patient.id, patient]));
   const response = await api.put<SingleScheduleResponse>(`/medication-schedules/${encodeURIComponent(scheduleId)}`, mapMedicinePayload(patientId, medicine, medicine.status !== "Nonaktif"));
   await clearScheduleRelatedCaches();
+  notifyScheduleChanged([patientId]);
   return mapSchedule(response.data.data, patientById.get(response.data.data.patientId));
 };
 
@@ -303,10 +314,12 @@ export const setScheduleActiveViaApi = async (schedule: MedicationScheduleRecord
   const patientById = new Map(patients.map((patient) => [patient.id, patient]));
   const response = await api.put<SingleScheduleResponse>(`/medication-schedules/${encodeURIComponent(schedule.id)}`, { isActive });
   await clearScheduleRelatedCaches();
+  notifyScheduleChanged([schedule.patientId]);
   return mapSchedule(response.data.data, patientById.get(response.data.data.patientId));
 };
 
 export const deactivateScheduleViaApi = async (scheduleId: string) => {
   await api.delete(`/medication-schedules/${encodeURIComponent(scheduleId)}`);
   await clearScheduleRelatedCaches();
+  notifyScheduleChanged([]);
 };

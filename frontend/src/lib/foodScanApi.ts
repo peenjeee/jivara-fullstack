@@ -184,7 +184,10 @@ const toRisk = (riskLevel: string): FoodScanRisk => {
   return "Low Risk";
 };
 
-const getBackendImageUrl = (imageUrl: string) => imageUrl.startsWith("http") ? imageUrl : `${getBackendOrigin()}${imageUrl}`;
+const getBackendImageUrl = (imageUrl: string) => {
+  if (imageUrl.startsWith("/uploads/")) return `/api${imageUrl}`;
+  return imageUrl.startsWith("http") ? imageUrl : `${getBackendOrigin()}${imageUrl}`;
+};
 
 const mapRecommendation = (food: FoodRecommendationResponse) => ({
   foodName: food.food_name,
@@ -250,6 +253,7 @@ const mapNutritionItem = (item: NutritionItemResponse) => ({
 const mapScanDetail = (detail: FoodScanDetailResponse, patientName = "Pasien"): FoodScanAnalysis => {
   const foodName = detail.detectedItems?.map((item) => item.labelDisplay).join(", ") || "Makanan terdeteksi";
   const risk = toRisk(detail.overallRiskLevel || "rendah");
+  const analyzedMedicationCount = detail.analyzedMedicationCount ?? detail.patientMedications?.length ?? 0;
   const scan: FoodScanRecord = {
     id: detail.id,
     patientId: detail.patientId,
@@ -257,8 +261,8 @@ const mapScanDetail = (detail: FoodScanDetailResponse, patientName = "Pasien"): 
     image: getBackendImageUrl(detail.imageUrl),
     scannedAt: detail.createdAt || new Date().toISOString(),
     risk,
-    hasDetectedFood: (detail.detectedItems?.length ?? 0) > 0,
-    aiReasoning: `Model ${detail.modelVersion || "AI"} menganalisis ${foodName}${detail.inferenceTimeMs ? ` dalam ${detail.inferenceTimeMs} ms` : ""}.`,
+    hasDetectedFood: detail.detectedItems ? detail.detectedItems.length > 0 : Boolean(detail.overallRiskLevel),
+    aiReasoning: `Model ${detail.modelVersion || "AI"} menganalisis ${foodName}${detail.inferenceTimeMs ? ` dalam ${detail.inferenceTimeMs} ms` : ""}${analyzedMedicationCount > 0 ? " dan mencocokkannya dengan obat aktif pasien" : ""}.`,
     result: detail.interactions?.length ? "Ditemukan potensi interaksi obat-makanan." : "Tidak ditemukan interaksi signifikan pada makanan yang terdeteksi.",
     recommendation: detail.interactions?.[0]?.recommendation || "Ikuti jadwal obat dan pantau gejala setelah makan.",
   };
@@ -292,7 +296,7 @@ const mapScanDetail = (detail: FoodScanDetailResponse, patientName = "Pasien"): 
   return {
     scan,
     patientName,
-    analyzedMedicationCount: detail.analyzedMedicationCount ?? detail.patientMedications?.length ?? interactions.length,
+    analyzedMedicationCount,
     analyzedMedications: detail.patientMedications ?? interactions.map((interaction) => interaction.schedule.medicineName),
     schedules: interactions.map((interaction) => interaction.schedule),
     interactions,
@@ -368,6 +372,12 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
   const risk = toRisk(interactionData.overall_risk_level);
   const image = getBackendImageUrl(upload.upload_url);
   const foodName = toFoodName(detection.detected_items);
+  const analyzedMedicationCount =
+    recommendationData?.analyzed_medications_count
+    ?? interactionData.analyzed_medications_count
+    ?? recommendationData?.patient_medications?.length
+    ?? interactionData.patient_medications?.length
+    ?? 0;
   const scan: FoodScanRecord = {
     id: upload.image_id,
     patientId,
@@ -376,7 +386,7 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
     scannedAt: upload.timestamp,
     risk,
     hasDetectedFood: detection.detected_items.length > 0,
-    aiReasoning: `Model ${detection.model_version} mendeteksi ${foodName} dalam ${detection.inference_time_ms} ms dan mencocokkannya dengan obat aktif pasien.`,
+    aiReasoning: `Model ${detection.model_version} mendeteksi ${foodName} dalam ${detection.inference_time_ms} ms${analyzedMedicationCount > 0 ? " dan mencocokkannya dengan obat aktif pasien" : ""}.`,
     result: interactionData.interactions.length > 0 ? "Ditemukan potensi interaksi obat-makanan." : "Tidak ditemukan interaksi signifikan pada makanan yang terdeteksi.",
     recommendation: interactionData.overall_recommendation || interactionData.disclaimer,
   };
@@ -396,12 +406,7 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
   return {
     scan,
     patientName: patient.fullName || "Pasien",
-    analyzedMedicationCount:
-      recommendationData?.analyzed_medications_count
-      ?? interactionData.analyzed_medications_count
-      ?? recommendationData?.patient_medications?.length
-      ?? interactionData.patient_medications?.length
-      ?? interactions.length,
+    analyzedMedicationCount,
     analyzedMedications:
       recommendationData?.patient_medications
       ?? interactionData.patient_medications

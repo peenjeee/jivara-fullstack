@@ -122,7 +122,7 @@ export default function LoginForm() {
         return;
       }
 
-      showError("Login gagal. Periksa kembali email dan kata sandi Anda.");
+      showError(getApiErrorMessage(error, "Login gagal. Periksa kembali email dan kata sandi Anda."));
     } finally {
       setLoading(false);
     }

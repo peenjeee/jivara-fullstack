@@ -33,7 +33,8 @@ router.get("/public-key", notificationController.getPublicKey);
  *   post:
  *     summary: Catat event klik/open notifikasi Web Push
  *     tags: [Notifications]
- *     security: []
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -53,10 +54,14 @@ router.get("/public-key", notificationController.getPublicKey);
  *     responses:
  *       200:
  *         description: Event notifikasi berhasil dicatat
+ *       401:
+ *         description: Tidak terautentikasi
+ *       403:
+ *         description: Tidak boleh mengakses notifikasi ini
  */
-router.post("/events", validateTrackNotificationEvent, notificationController.trackEvent);
-
 router.use(authenticateToken);
+
+router.post("/events", validateTrackNotificationEvent, notificationController.trackEvent);
 
 /**
  * @swagger

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useReducer } from "react";
-import { BellRing, Pill, ShieldCheck } from "lucide-react";
+import { BellRing, Pill, ShieldCheck, UserRoundCheck } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import { PatientDashboardContentSkeleton, SummaryCardsSkeleton } from "@/components/ui/PageSkeletons";
@@ -16,7 +16,7 @@ import PatientAdherenceHeatmap from "./PatientAdherenceHeatmap";
 
 const initialPatient: PatientRecord = {
   id: "",
-  name: "-",
+  name: "...",
   age: 0,
   gender: "Pria",
   status: "On Ideal Schedule",
@@ -97,7 +97,7 @@ export default function PatientDashboardPage() {
   useEffect(() => {
     let isMounted = true;
 
-    getPatientDashboardOverviewData()
+    getPatientDashboardOverviewData({ forceRefresh: true })
       .then((data) => {
         if (!isMounted) return;
         patientDashboardCache = { patient: data.patient, schedules: data.schedules, adherenceStats: data.adherenceStats };
@@ -125,7 +125,7 @@ export default function PatientDashboardPage() {
       <DashboardPageShell>
         <DashboardPageHeader title="Dashboard Pasien" />
         <section className="mt-6 rounded-[32px] bg-white p-8 text-center shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
-          <p className="text-sm font-bold text-muted">Data dashboard pasien belum bisa dimuat dari API.</p>
+          <p className="text-sm font-bold text-muted">Data dashboard pasien belum bisa dimuat.</p>
         </section>
       </DashboardPageShell>
     );
@@ -133,7 +133,8 @@ export default function PatientDashboardPage() {
 
   const greeting = getGreeting();
   const activeSchedules = patientSchedules.filter((schedule) => schedule.status === "Aktif");
-  const heatmapAdherence = getAdherenceFromStats(adherenceStats);
+  const dashboardAdherence = Math.round(patient.adherence);
+  const assignedNurseNames = patient.assignedNurses?.flatMap((nurse) => (nurse.name ? [nurse.name] : [])) ?? [];
 
   const stats: SummaryCardItem[] = [
     {
@@ -152,12 +153,12 @@ export default function PatientDashboardPage() {
     },
     {
       label: "Kepatuhan Keseluruhan Saya",
-      value: `${heatmapAdherence}%`,
+      value: `${dashboardAdherence}%`,
       helper: patient.status,
-      tone: heatmapAdherence >= 80 ? "safe" : heatmapAdherence >= 60 ? "warning" : "critical",
+      tone: dashboardAdherence >= 80 ? "safe" : dashboardAdherence >= 60 ? "warning" : "critical",
       color: "pine",
       icon: ShieldCheck,
-      progress: heatmapAdherence,
+      progress: dashboardAdherence,
     }
   ];
 
@@ -165,11 +166,30 @@ export default function PatientDashboardPage() {
     <DashboardPageShell>
       <DashboardPageHeader title={`${greeting}, ${patient.name}`} />
       {isLoading && !hasLoadedDashboard ? <SummaryCardsSkeleton /> : <SummaryCardGrid stats={stats} />}
+      {!isLoading && hasLoadedDashboard && <PatientNurseInfoCard nurseNames={assignedNurseNames} />}
 
       <div className="mt-6 space-y-6">
-        {isLoading && !hasLoadedDashboard ? <PatientDashboardContentSkeleton /> : <PatientAdherenceHeatmap dailyBreakdown={adherenceStats.dailyBreakdown} />}
+        {isLoading && !hasLoadedDashboard ? <PatientDashboardContentSkeleton /> : <PatientAdherenceHeatmap dailyBreakdown={adherenceStats.dailyBreakdown} schedules={patientSchedules} />}
       </div>
     </DashboardPageShell>
+  );
+}
+
+function PatientNurseInfoCard({ nurseNames }: { readonly nurseNames: readonly string[] }) {
+  if (nurseNames.length === 0) return null;
+
+  return (
+    <section className="mt-6 rounded-[28px] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)] sm:p-6">
+      <div className="flex items-center gap-4">
+        <div className="flex shrink-0 items-center justify-center text-primary">
+          <UserRoundCheck size={22} aria-hidden="true" focusable="false" />
+        </div>
+          <div className="min-w-0">
+            <p className="text-xs font-extrabold uppercase tracking-[0.12em] text-muted">Perawat Saya</p>
+            <p className="mt-1 break-words text-lg font-extrabold text-text-main">{nurseNames.join(", ")}</p>
+          </div>
+      </div>
+    </section>
   );
 }
 
@@ -180,11 +200,4 @@ function getGreeting() {
   if (hour < 15) return "Selamat siang";
   if (hour < 18) return "Selamat sore";
   return "Selamat malam";
-}
-
-function getAdherenceFromStats(stats: PatientAdherenceStatsResponse) {
-  const totalScheduled = stats.dailyBreakdown.reduce((sum, day) => sum + day.scheduled, 0);
-  const totalConfirmed = stats.dailyBreakdown.reduce((sum, day) => sum + day.confirmed, 0);
-  if (totalScheduled === 0) return 100;
-  return Math.round((totalConfirmed / totalScheduled) * 100);
 }

@@ -1,5 +1,5 @@
 import { db } from "../db";
-import { organizations, patients, users, refreshTokens, userNotificationPreferences } from "../db/schema";
+import { organizations, patientNurseAssignments, patients, users, refreshTokens, userNotificationPreferences } from "../db/schema";
 import { and, count, desc, eq, ilike, or } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -256,7 +256,62 @@ export const loginUser = async (dto: LoginDTO) => {
   const foundUser = user[0];
 
   if (!foundUser.isActive) {
-    throw { status: 403, message: "Akun telah dinonaktifkan", code: "ACCOUNT_DEACTIVATED" };
+    if (foundUser.role === "nurse") {
+      throw { status: 403, message: "Akun dinonaktifkan, silahkan hubungi admin anda.", code: "NURSE_DEACTIVATED" };
+    }
+    if (foundUser.role === "patient") {
+      throw { status: 403, message: "Akun dinonaktifkan, silahkan hubungi perawat anda.", code: "PATIENT_DEACTIVATED" };
+    }
+    throw { status: 403, message: "Akun telah dinonaktifkan.", code: "ACCOUNT_DEACTIVATED" };
+  }
+
+  // Cek upstream: apakah admin di-suspend? perawat di-nonaktifkan?
+  if (foundUser.role === "nurse" && foundUser.organizationId) {
+    const [suspendedAdmin] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(
+        eq(users.organizationId, foundUser.organizationId),
+        eq(users.role, "admin"),
+        eq(users.accountStatus, "suspended"),
+      ))
+      .limit(1);
+    if (suspendedAdmin) {
+      throw { status: 403, message: "Akun dinonaktifkan, silahkan hubungi admin anda.", code: "NURSE_DEACTIVATED" };
+    }
+  }
+
+  if (foundUser.role === "patient" && foundUser.organizationId) {
+    const [patientRecord] = await db
+      .select({ id: patients.id })
+      .from(patients)
+      .where(eq(patients.userId, foundUser.id))
+      .limit(1);
+
+    if (patientRecord) {
+      const [activeAssignment] = await db
+        .select({ id: patientNurseAssignments.id })
+        .from(patientNurseAssignments)
+        .where(and(
+          eq(patientNurseAssignments.patientId, patientRecord.id),
+          eq(patientNurseAssignments.isActive, true),
+        ))
+        .limit(1);
+
+      const [suspendedAdmin] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(
+          eq(users.organizationId, foundUser.organizationId),
+          eq(users.role, "admin"),
+          eq(users.accountStatus, "suspended"),
+        ))
+        .limit(1);
+
+      if (!activeAssignment || suspendedAdmin) {
+        throw { status: 403, message: "Akun dinonaktifkan, silahkan hubungi perawat anda.", code: "PATIENT_DEACTIVATED" };
+      }
+    }
   }
 
   const isPasswordValid = await bcrypt.compare(dto.password, foundUser.password);
@@ -478,6 +533,7 @@ export const suspendActiveAdmin = async (adminId: string, suspendedBy: string | 
     throw { status: 404, message: "Admin aktif tidak ditemukan", code: "ACTIVE_ADMIN_NOT_FOUND" };
   }
 
+  // Cascade: tidak perlu mengubah isActive downstream — dicek saat login
   await writeAuditLog({
     userId: suspendedBy,
     action: "admin.suspended",
@@ -602,7 +658,64 @@ export const refreshAccessToken = async (token: string) => {
 
   if (!user[0].isActive) {
     await db.delete(refreshTokens).where(eq(refreshTokens.id, storedToken[0].id));
+    if (user[0].role === "nurse") {
+      throw { status: 403, message: "Akun dinonaktifkan, silahkan hubungi admin anda.", code: "NURSE_DEACTIVATED" };
+    }
+    if (user[0].role === "patient") {
+      throw { status: 403, message: "Akun dinonaktifkan, silahkan hubungi perawat anda.", code: "PATIENT_DEACTIVATED" };
+    }
     throw { status: 403, message: "Akun telah dinonaktifkan", code: "ACCOUNT_DEACTIVATED" };
+  }
+
+  // Cek upstream di refresh token juga
+  if (user[0].role === "nurse" && user[0].organizationId) {
+    const [suspendedAdmin] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(
+        eq(users.organizationId, user[0].organizationId),
+        eq(users.role, "admin"),
+        eq(users.accountStatus, "suspended"),
+      ))
+      .limit(1);
+    if (suspendedAdmin) {
+      await db.delete(refreshTokens).where(eq(refreshTokens.id, storedToken[0].id));
+      throw { status: 403, message: "Akun dinonaktifkan, silahkan hubungi admin anda.", code: "NURSE_DEACTIVATED" };
+    }
+  }
+
+  if (user[0].role === "patient" && user[0].organizationId) {
+    const [patientRecord] = await db
+      .select({ id: patients.id })
+      .from(patients)
+      .where(eq(patients.userId, user[0].id))
+      .limit(1);
+
+    if (patientRecord) {
+      const [activeAssignment] = await db
+        .select({ id: patientNurseAssignments.id })
+        .from(patientNurseAssignments)
+        .where(and(
+          eq(patientNurseAssignments.patientId, patientRecord.id),
+          eq(patientNurseAssignments.isActive, true),
+        ))
+        .limit(1);
+
+      const [suspendedAdmin] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(
+          eq(users.organizationId, user[0].organizationId),
+          eq(users.role, "admin"),
+          eq(users.accountStatus, "suspended"),
+        ))
+        .limit(1);
+
+      if (!activeAssignment || suspendedAdmin) {
+        await db.delete(refreshTokens).where(eq(refreshTokens.id, storedToken[0].id));
+        throw { status: 403, message: "Akun dinonaktifkan, silahkan hubungi perawat anda.", code: "PATIENT_DEACTIVATED" };
+      }
+    }
   }
 
   const accessToken = generateAccessToken({

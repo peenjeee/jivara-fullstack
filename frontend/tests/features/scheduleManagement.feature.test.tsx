@@ -80,6 +80,47 @@ describe("schedule management feature", () => {
     expect(await screen.findAllByText("Tidak ada data jadwal.")).not.toHaveLength(0);
   });
 
+  it("shows patients without medicines in the schedule list", async () => {
+    vi.mocked(getPatientsFromApi).mockResolvedValueOnce(patients);
+    vi.mocked(getSchedulePatientGroupsPageFromApi).mockResolvedValueOnce({
+      patients: [patients[0]],
+      schedules: [],
+      meta: { page: 1, limit: 10, total: 1, summary: { active: 0, completed: 0, reminders: 0 } },
+    });
+
+    render(<SchedulePage />);
+
+    expect(await screen.findAllByText("Budi Santoso")).not.toHaveLength(0);
+    expect(screen.getAllByText("0 obat")).not.toHaveLength(0);
+    expect(screen.getAllByText("0 item")).not.toHaveLength(0);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Lihat detail Budi Santoso" })[0]);
+    expect(await screen.findByText("Belum ada jadwal obat untuk pasien ini.")).toBeInTheDocument();
+  });
+
+  it("uses the full patient list in the add schedule modal", async () => {
+    const allPatients = [
+      patients[0],
+      { ...patients[0], id: "JVR-02", name: "Siti Aminah", avatar: "SA" },
+      { ...patients[0], id: "JVR-03", name: "Rina Lestari", avatar: "RL" },
+    ];
+    vi.mocked(getPatientsFromApi).mockResolvedValueOnce(allPatients);
+    vi.mocked(getSchedulePatientGroupsPageFromApi).mockResolvedValueOnce({
+      patients: [patients[0]],
+      schedules: [],
+      meta: { page: 1, limit: 10, total: 1, summary: { active: 0, completed: 0, reminders: 0 } },
+    });
+
+    render(<SchedulePage />);
+
+    expect(await screen.findAllByText("Budi Santoso")).not.toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: /Tambah Jadwal/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Pilih pasien/i }));
+
+    expect(await screen.findByRole("option", { name: "Siti Aminah" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Rina Lestari" })).toBeInTheDocument();
+  });
+
   it("opens schedule detail and toggles schedule status", async () => {
     vi.mocked(getPatientsFromApi).mockResolvedValueOnce(patients);
     vi.mocked(getSchedulePatientGroupsPageFromApi)

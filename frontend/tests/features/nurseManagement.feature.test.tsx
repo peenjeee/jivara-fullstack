@@ -1,11 +1,17 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import NurseDetailPage from "@/components/admin/NurseDetailPage";
 import NurseListPage from "@/components/admin/NurseListPage";
-import { getNursesFromApi, getNursesPageFromApi, updateNurseViaApi } from "@/lib/nurseApi";
+import { getNurseByIdFromApi, getNursesFromApi, getNursesPageFromApi, updateNurseViaApi } from "@/lib/nurseApi";
+import { getAuditActivityPageFromApi } from "@/lib/auditLogApi";
+import { getNotificationActivityPageFromApi } from "@/lib/notificationActivitiesApi";
+import { getPatientPageFromApi } from "@/lib/patientApi";
+import { getSchedulesForPatientsFromApi } from "@/lib/scheduleApi";
 import { showConfirm, showToast, showWarning } from "@/lib/swal";
 import { useAuthStore } from "@/store/auth";
 import { useNurseStore } from "@/store/nurses";
 import type { NurseRecord } from "@/lib/mocks/nurses";
+import type { PatientRecord } from "@/lib/mocks/patients";
 
 const push = vi.fn();
 const replace = vi.fn();
@@ -18,9 +24,27 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/nurseApi", () => ({
   createNurseViaApi: vi.fn(),
   deactivateNurseViaApi: vi.fn(),
+  getNurseByIdFromApi: vi.fn(),
   getNursesFromApi: vi.fn(),
   getNursesPageFromApi: vi.fn(),
   updateNurseViaApi: vi.fn(),
+}));
+
+vi.mock("@/lib/auditLogApi", () => ({
+  getAuditActivityPageFromApi: vi.fn(),
+}));
+
+vi.mock("@/lib/notificationActivitiesApi", () => ({
+  getNotificationActivityPageFromApi: vi.fn(),
+}));
+
+vi.mock("@/lib/patientApi", () => ({
+  assignPatientToNurseViaApi: vi.fn(),
+  getPatientPageFromApi: vi.fn(),
+}));
+
+vi.mock("@/lib/scheduleApi", () => ({
+  getSchedulesForPatientsFromApi: vi.fn(),
 }));
 
 vi.mock("@/lib/swal", () => ({
@@ -41,13 +65,40 @@ const nurse: NurseRecord = {
   temporaryPassword: false,
 };
 
+const inactiveNurse: NurseRecord = {
+  ...nurse,
+  fullName: "Ns. Luis Parisian V",
+  email: "nurse1@jivara.test",
+  phone: "6286056714045",
+  gender: "Pria",
+  status: "Nonaktif",
+  assignedPatients: 8,
+};
+
+const makePatient = (id: string, name: string, status: PatientRecord["status"], adherence?: number): PatientRecord => ({
+  id,
+  name,
+  age: 50,
+  gender: "Pria",
+  status,
+  lastVisit: "27 Mei 2026",
+  adherence: adherence ?? (status === "Complete" ? 7 : 100),
+  avatar: name.slice(0, 2).toUpperCase(),
+  assignedNurseId: "NRS-001",
+});
+
 describe("nurse management feature", () => {
   beforeEach(() => {
     push.mockClear();
     replace.mockClear();
+    vi.mocked(getNurseByIdFromApi).mockReset();
     vi.mocked(getNursesFromApi).mockReset();
     vi.mocked(getNursesPageFromApi).mockReset();
     vi.mocked(updateNurseViaApi).mockReset();
+    vi.mocked(getPatientPageFromApi).mockReset();
+    vi.mocked(getSchedulesForPatientsFromApi).mockReset();
+    vi.mocked(getAuditActivityPageFromApi).mockReset();
+    vi.mocked(getNotificationActivityPageFromApi).mockReset();
     vi.mocked(showConfirm).mockReset();
     vi.mocked(showToast).mockClear();
     vi.mocked(showWarning).mockClear();
@@ -82,6 +133,28 @@ describe("nurse management feature", () => {
 
     await waitFor(() => expect(updateNurseViaApi).toHaveBeenCalledWith("NRS-001", expect.objectContaining({ status: "Nonaktif" })));
     expect(showToast).toHaveBeenCalledWith("Status perawat menjadi Nonaktif.");
+  });
+
+  it("counts handled patients and average adherence with their own status rules in nurse detail", async () => {
+    const patients = [
+      makePatient("patient-1", "Rama Danadipa Putra Wijaya", "On Ideal Schedule", 100),
+      makePatient("patient-2", "Panji Ihsanudin Fajri", "Lagging Behind", 100),
+      makePatient("patient-3", "Britney Bins-Oberbrunner", "Complete", 20),
+      makePatient("patient-4", "Phillip Little", "Nonaktif", 20),
+    ];
+    vi.mocked(getNurseByIdFromApi).mockResolvedValue(inactiveNurse);
+    vi.mocked(getPatientPageFromApi).mockResolvedValue({ patients, meta: { page: 1, limit: 1000, total: 4 } });
+    vi.mocked(getSchedulesForPatientsFromApi).mockResolvedValue([]);
+    vi.mocked(getAuditActivityPageFromApi).mockResolvedValue({ activities: [], meta: { page: 1, limit: 10, total: 0 } });
+    vi.mocked(getNotificationActivityPageFromApi).mockResolvedValue({ activities: [], meta: { page: 1, limit: 10, total: 0 } });
+
+    render(<NurseDetailPage nurseId="NRS-001" />);
+
+    expect(await screen.findByText("Ns. Luis Parisian V")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText("Pasien Ditangani")[0].closest("article")).toHaveTextContent("2"));
+    expect(screen.getByText("Rata-rata Kepatuhan Pasien").closest("article")).toHaveTextContent("60%");
+    expect(screen.getByText("Perawat nonaktif ini masih memiliki 2 pasien aktif.")).toBeInTheDocument();
+    await waitFor(() => expect(getPatientPageFromApi).toHaveBeenCalledWith(expect.objectContaining({ status: "all", nurseId: "NRS-001" })));
   });
 
   it("redirects patient role away from nurse management", async () => {

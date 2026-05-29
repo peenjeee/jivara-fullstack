@@ -118,10 +118,16 @@ router.get("/", authorizeRoles("patient", "nurse", "admin"), medicationScheduleC
  *         schema:
  *           type: string
  *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [active, inactive, all]
+ *         description: Filter status aktif pasien pada halaman jadwal.
+ *       - in: query
  *         name: adherenceStatus
  *         schema:
  *           type: string
- *           enum: [Need Special Attention, Lagging Behind, On Ideal Schedule]
+ *           enum: [Need Special Attention, Lagging Behind, On Ideal Schedule, Complete]
  *     responses:
  *       200:
  *         description: Halaman jadwal per pasien berhasil diambil

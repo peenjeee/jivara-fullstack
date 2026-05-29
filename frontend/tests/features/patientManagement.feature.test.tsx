@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import PatientListPage from "@/components/patients/PatientListPage";
+import { getNursesFromApi } from "@/lib/nurseApi";
 import { deactivatePatientViaApi, getPatientPageFromApi, getPatientsFromApi } from "@/lib/patientApi";
 import { showConfirm, showError, showToast } from "@/lib/swal";
 import { useNurseStore } from "@/store/nurses";
@@ -21,6 +22,10 @@ vi.mock("@/lib/patientApi", () => ({
   updatePatientViaApi: vi.fn(),
 }));
 
+vi.mock("@/lib/nurseApi", () => ({
+  getNursesFromApi: vi.fn(),
+}));
+
 vi.mock("@/lib/swal", () => ({
   showConfirm: vi.fn(),
   showError: vi.fn(),
@@ -37,6 +42,7 @@ describe("patient management feature", () => {
     push.mockClear();
     vi.mocked(getPatientPageFromApi).mockReset();
     vi.mocked(getPatientsFromApi).mockReset();
+    vi.mocked(getNursesFromApi).mockReset();
     vi.mocked(deactivatePatientViaApi).mockReset();
     vi.mocked(showConfirm).mockReset();
     vi.mocked(showError).mockClear();
@@ -52,6 +58,7 @@ describe("patient management feature", () => {
     render(<PatientListPage />);
 
     expect(await screen.findAllByText("Budi Santoso")).not.toHaveLength(0);
+    expect(getNursesFromApi).not.toHaveBeenCalled();
     fireEvent.change(screen.getByPlaceholderText("Cari nama pasien ..."), { target: { value: "Ayu" } });
 
     await waitFor(() => {
@@ -70,7 +77,7 @@ describe("patient management feature", () => {
     vi.mocked(showConfirm).mockResolvedValueOnce({ isConfirmed: true, isDenied: false, isDismissed: false });
     vi.mocked(deactivatePatientViaApi).mockResolvedValueOnce(undefined);
 
-    render(<PatientListPage />);
+    render(<PatientListPage canDeletePatients />);
 
     expect(await screen.findAllByText("Budi Santoso")).not.toHaveLength(0);
     fireEvent.click(screen.getAllByRole("button", { name: "Hapus Budi Santoso" })[0]);

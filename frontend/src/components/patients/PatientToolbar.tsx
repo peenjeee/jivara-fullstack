@@ -15,6 +15,7 @@ const filters: { label: string; value: PatientFilter }[] = [
   { label: "On Ideal Schedule", value: "On Ideal Schedule" },
   { label: "Lagging Behind", value: "Lagging Behind" },
   { label: "Complete", value: "Complete" },
+  { label: "Nonaktif", value: "Nonaktif" },
 ];
 
 interface PatientToolbarProps {

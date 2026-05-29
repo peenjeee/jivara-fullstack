@@ -1,4 +1,4 @@
-export type PatientStatus = "On Ideal Schedule" | "Lagging Behind" | "Need Special Attention" | "Complete";
+export type PatientStatus = "On Ideal Schedule" | "Lagging Behind" | "Need Special Attention" | "Complete" | "Nonaktif";
 
 export interface PatientRecord {
   readonly id: string;
@@ -14,6 +14,7 @@ export interface PatientRecord {
   readonly avatar: string;
   readonly image?: string;
   readonly assignedNurseId?: string;
+  readonly assignedNurses?: readonly { readonly id: string; readonly name: string }[];
 }
 
 const formatToday = () =>

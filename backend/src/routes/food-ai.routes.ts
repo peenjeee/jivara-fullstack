@@ -31,6 +31,7 @@ const attachScanIdParam = (req: Request, _res: Response, next: NextFunction) => 
  * /api/v1/food-scans:
  *   get:
  *     summary: Ambil daftar scan makanan
+ *     description: Mengembalikan scan yang sudah selesai dianalisis. Scan upload/deteksi yang gagal atau masih pending tidak ditampilkan di log aktivitas.
  *     tags: [Food AI]
  *     security:
  *       - bearerAuth: []
@@ -111,6 +112,7 @@ router.get("/food-scans/:scanId", authorizeRoles("patient", "nurse", "admin"), f
  *                 format: uuid
  *               imageUrl:
  *                 type: string
+ *                 description: URL gambar harus berasal dari `/uploads/food-scans/...` atau host storage Jivara yang dikonfigurasi.
  *               imageSizeKb:
  *                 type: integer
  *     responses:
@@ -128,7 +130,7 @@ router.post("/food-scans", authorizeRoles("patient", "nurse", "admin"), uploadSi
  *     summary: Buat hasil deteksi makanan untuk scan
  *     description: |
  *       Backend akan memanggil endpoint YOLO/inference (`FOOD_AI_INFERENCE_URL`) dengan payload
- *       `scanId`, `patientId`, dan `imageUrl` publik hasil upload pasien.
+ *       `scanId`, `patientId`, dan `imageUrl` hasil upload pasien.
  *     tags: [Food AI]
  *     security:
  *       - bearerAuth: []

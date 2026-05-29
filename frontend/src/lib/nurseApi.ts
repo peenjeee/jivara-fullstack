@@ -15,6 +15,7 @@ interface NurseResponse {
   gender?: string | null;
   isActive?: boolean | null;
   assignedPatients?: number | null;
+  handledPatients?: number | null;
   createdAt?: string | null;
   lastLoginAt?: string | null;
 }
@@ -51,6 +52,7 @@ const mapNurse = (nurse: NurseResponse): NurseRecord => ({
   lastVisit: formatDate(nurse.lastLoginAt, "Belum pernah login"),
   temporaryPassword: false,
   assignedPatients: nurse.assignedPatients ?? 0,
+  handledPatients: nurse.handledPatients ?? nurse.assignedPatients ?? 0,
 });
 
 const mapFormValuesToPayload = (values: NurseFormValues) => ({
@@ -64,7 +66,9 @@ const mapFormValuesToPayload = (values: NurseFormValues) => ({
 
 let nursesCache: { data: NurseRecord[]; expiresAt: number } | null = null;
 let nursesRequest: Promise<NurseRecord[]> | null = null;
+const nurseListPageLimit = 100;
 const nursePageCacheTtl = 10_000;
+const nursePageCacheVersion = "nurse-counts-v2";
 const nursePageCache = new Map<string, { data: NursePage; expiresAt: number }>();
 const nursePageRequests = new Map<string, Promise<NursePage>>();
 const nurseDetailCacheTtl = 30_000;
@@ -90,14 +94,27 @@ const clearNurseRelatedCaches = async () => {
   await import("./dashboardApi").then(({ clearDashboardCache }) => clearDashboardCache()).catch(() => undefined);
 };
 
+const getNurseListPageFromApi = async (page: number): Promise<NursePage> => {
+  const response = await api.get<PaginatedResponse<NurseResponse>>("/nurses", { params: { page, limit: nurseListPageLimit } });
+  const nurses = response.data.data.map(mapNurse);
+  return {
+    nurses,
+    meta: response.data.meta ?? { page, limit: nurseListPageLimit, total: nurses.length },
+  };
+};
+
 export const getNursesFromApi = async (): Promise<NurseRecord[]> => {
   const now = Date.now();
   if (nursesCache && nursesCache.expiresAt > now) return nursesCache.data;
   if (nursesRequest) return nursesRequest;
 
-  nursesRequest = api.get<PaginatedResponse<NurseResponse>>("/nurses", { params: { limit: 100 } })
-    .then((response) => {
-      const nurses = response.data.data.map(mapNurse);
+  nursesRequest = getNurseListPageFromApi(1)
+    .then(async (firstPage) => {
+      const totalPages = Math.ceil(firstPage.meta.total / firstPage.meta.limit);
+      const remainingPages = totalPages > 1
+        ? await Promise.all(Array.from({ length: totalPages - 1 }, (_, index) => getNurseListPageFromApi(index + 2)))
+        : [];
+      const nurses = [firstPage, ...remainingPages].flatMap((page) => page.nurses);
       nursesCache = { data: nurses, expiresAt: Date.now() + 30_000 };
       return nurses;
     })
@@ -113,7 +130,7 @@ export const getNursesPageFromApi = async (params: { page?: number; limit?: numb
   const limit = params.limit || 20;
   const search = params.search?.trim() || "";
   const status = params.status || "";
-  const cacheKey = `${page}:${limit}:${search}:${status}`;
+  const cacheKey = `${nursePageCacheVersion}:${page}:${limit}:${search}:${status}`;
   if (params.forceRefresh) {
     nursePageCache.delete(cacheKey);
     nursePageRequests.delete(cacheKey);
@@ -142,10 +159,14 @@ export const getNursesPageFromApi = async (params: { page?: number; limit?: numb
   return request;
 };
 
-export const getNurseByIdFromApi = async (nurseId: string): Promise<NurseRecord> => {
+export const getNurseByIdFromApi = async (nurseId: string, options: { readonly forceRefresh?: boolean } = {}): Promise<NurseRecord> => {
+  if (options.forceRefresh) {
+    nurseDetailCache.delete(nurseId);
+    nurseDetailRequests.delete(nurseId);
+  }
   const now = Date.now();
   const cached = nurseDetailCache.get(nurseId);
-  if (cached && cached.expiresAt > now) return cached.data;
+  if (!options.forceRefresh && cached && cached.expiresAt > now) return cached.data;
   const activeRequest = nurseDetailRequests.get(nurseId);
   if (activeRequest) return activeRequest;
 

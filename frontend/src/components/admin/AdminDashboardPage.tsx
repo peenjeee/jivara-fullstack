@@ -9,7 +9,7 @@ import { ActivityCategoryBadge, ActivitySeverityBadge } from "@/components/activ
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import PatientStatusBadge from "@/components/patients/PatientStatusBadge";
-import { ActivityDataSkeleton, SummaryCardsSkeleton } from "@/components/ui/PageSkeletons";
+import { DashboardPanelGridSkeleton, SummaryCardsSkeleton } from "@/components/ui/PageSkeletons";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import type { SummaryCardItem } from "@/components/ui/SummaryCard";
 import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
@@ -24,6 +24,7 @@ interface AdminDashboardState {
   readonly nurseFollowUps: AdminDashboardData["nurseFollowUps"];
   readonly riskyPatients: AdminDashboardRiskyPatient[];
   readonly priorityActivities: ActivityLogRecord[];
+  readonly inactiveNurseReassignCount: number;
   readonly isLoading: boolean;
   readonly hasLoadedDashboard: boolean;
   readonly hasLoadError: boolean;
@@ -35,15 +36,26 @@ type AdminDashboardAction =
   | { readonly type: "finishLoading" };
 
 function createInitialAdminDashboardState(): AdminDashboardState {
-  const cachedDashboard = adminDashboardCache;
-
+  if (adminDashboardCache) {
+    return {
+      stats: adminDashboardCache.stats,
+      nurseFollowUps: adminDashboardCache.nurseFollowUps,
+      riskyPatients: adminDashboardCache.riskyPatients,
+      priorityActivities: adminDashboardCache.priorityActivities,
+      inactiveNurseReassignCount: adminDashboardCache.inactiveNurseReassignCount,
+      isLoading: false,
+      hasLoadedDashboard: true,
+      hasLoadError: false,
+    };
+  }
   return {
-    stats: cachedDashboard?.stats ?? [],
-    nurseFollowUps: cachedDashboard?.nurseFollowUps ?? [],
-    riskyPatients: cachedDashboard?.riskyPatients ?? [],
-    priorityActivities: cachedDashboard?.priorityActivities ?? [],
-    isLoading: !cachedDashboard,
-    hasLoadedDashboard: Boolean(cachedDashboard),
+    stats: [],
+    nurseFollowUps: [],
+    riskyPatients: [],
+    priorityActivities: [],
+    inactiveNurseReassignCount: 0,
+    isLoading: true,
+    hasLoadedDashboard: false,
     hasLoadError: false,
   };
 }
@@ -57,6 +69,7 @@ function adminDashboardReducer(state: AdminDashboardState, action: AdminDashboar
         nurseFollowUps: action.payload.nurseFollowUps,
         riskyPatients: action.payload.riskyPatients,
         priorityActivities: action.payload.priorityActivities,
+        inactiveNurseReassignCount: action.payload.inactiveNurseReassignCount,
         hasLoadError: false,
       };
     case "loadFailure":
@@ -66,6 +79,7 @@ function adminDashboardReducer(state: AdminDashboardState, action: AdminDashboar
         nurseFollowUps: [],
         riskyPatients: [],
         priorityActivities: [],
+        inactiveNurseReassignCount: 0,
         hasLoadError: true,
       };
     case "finishLoading":
@@ -81,7 +95,7 @@ function adminDashboardReducer(state: AdminDashboardState, action: AdminDashboar
 
 export default function AdminDashboardPage() {
   const [state, dispatch] = useReducer(adminDashboardReducer, undefined, createInitialAdminDashboardState);
-  const { stats, nurseFollowUps, riskyPatients, priorityActivities, isLoading, hasLoadedDashboard, hasLoadError } = state;
+  const { stats, nurseFollowUps, riskyPatients, priorityActivities, inactiveNurseReassignCount, isLoading, hasLoadedDashboard, hasLoadError } = state;
 
   useEffect(() => {
     let isMounted = true;
@@ -94,7 +108,7 @@ export default function AdminDashboardPage() {
       })
       .catch(() => {
         if (!isMounted) return;
-        dispatch({ type: "loadFailure" });
+        if (!adminDashboardCache) dispatch({ type: "loadFailure" });
       })
       .finally(() => {
         if (!isMounted) return;
@@ -111,20 +125,27 @@ export default function AdminDashboardPage() {
       <DashboardPageHeader title="Dashboard Admin" />
       {isLoading && !hasLoadedDashboard ? <SummaryCardsSkeleton /> : <SummaryCardGrid stats={stats} />}
 
+      {!isLoading && inactiveNurseReassignCount > 0 && (
+        <div className="mt-6 rounded-2xl bg-warning/10 px-5 py-4 text-sm font-extrabold leading-6 text-warning-dark">
+          {inactiveNurseReassignCount} perawat nonaktif masih menangani pasien silahkan reassign.
+        </div>
+      )}
+
       {!isLoading && hasLoadError && (
         <section className="mt-6 rounded-[32px] bg-white p-8 text-center shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
           <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-warning/10 text-warning-dark"><AlertTriangle size={22} /></div>
-          <p className="text-sm font-bold text-muted">Data dashboard admin belum bisa dimuat dari API.</p>
+          <p className="text-sm font-bold text-muted">Data dashboard admin belum bisa dimuat.</p>
         </section>
       )}
 
-      {!hasLoadError && <div className="mt-6 grid items-start gap-6 xl:grid-cols-3">
-        <AdminPanel title="Perawat Perlu Tindak Lanjut" href="/nurses">
-          {isLoading && !hasLoadedDashboard ? <ActivityDataSkeleton rows={5} /> : nurseFollowUps.map(({ nurse, assignedPatientCount, riskyPatientCount }) => (
+      {!hasLoadError && (isLoading && !hasLoadedDashboard ? <DashboardPanelGridSkeleton /> : (
+        <div className="mt-6 grid items-start gap-6 xl:grid-cols-3">
+          <AdminPanel title="Perawat Perlu Tindak Lanjut" href="/nurses">
+          {nurseFollowUps.map(({ nurse, assignedPatientCount, riskyPatientCount }) => (
             <Link key={`dashboard-nurse-${nurse.id}`} href={`/nurses/${encodeURIComponent(nurse.id)}`} className="flex items-center justify-between gap-4 rounded-2xl bg-surface px-4 py-3 transition-colors hover:bg-primary/5">
               <div className="min-w-0">
                 <p className="truncate text-sm font-extrabold text-text-main">{nurse.fullName}</p>
-                <p className="text-xs font-bold text-muted">{assignedPatientCount} pasien - {riskyPatientCount} perlu perhatian</p>
+                <p className="text-xs font-bold text-muted">{getNurseFollowUpMessage(nurse.status, assignedPatientCount, riskyPatientCount)}</p>
               </div>
               <NurseStatusBadge status={nurse.status} />
             </Link>
@@ -132,8 +153,8 @@ export default function AdminDashboardPage() {
           {!isLoading && nurseFollowUps.length === 0 && <EmptyInsight message="Semua perawat tidak memiliki pasien perlu tindak lanjut." />}
         </AdminPanel>
 
-        <AdminPanel title="Pasien Berisiko" href="/patients">
-          {isLoading && !hasLoadedDashboard ? <ActivityDataSkeleton rows={5} /> : riskyPatients.map((patient, index) => (
+        <AdminPanel title="Pasien Perlu Tindak Lanjut" href="/patients">
+          {riskyPatients.map((patient, index) => (
             <Link key={`dashboard-patient-${patient.id}-${index}`} href={`/patients/${encodeURIComponent(patient.id)}`} className="block rounded-2xl bg-surface px-4 py-3 transition-colors hover:bg-primary/5">
               <p className="truncate text-sm font-extrabold text-text-main">{patient.name}</p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -142,11 +163,11 @@ export default function AdminDashboardPage() {
               </div>
             </Link>
           ))}
-          {!isLoading && riskyPatients.length === 0 && <EmptyInsight message="Tidak ada pasien yang berisiko." />}
+          {!isLoading && riskyPatients.length === 0 && <EmptyInsight message="Tidak ada pasien yang perlu tindak lanjut." />}
         </AdminPanel>
 
         <AdminPanel title="Aktivitas Prioritas" href="/activity-log">
-          {isLoading && !hasLoadedDashboard ? <ActivityDataSkeleton rows={5} /> : priorityActivities.map((activity, index) => (
+          {priorityActivities.map((activity, index) => (
             <div key={`${activity.category}-${activity.id}-${index}`} className="rounded-2xl bg-surface px-4 py-3">
               <p className="truncate text-sm font-extrabold text-text-main">{activity.title}</p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -157,7 +178,8 @@ export default function AdminDashboardPage() {
           ))}
           {!isLoading && priorityActivities.length === 0 && <EmptyInsight message="Tidak ada aktivitas prioritas." />}
         </AdminPanel>
-      </div>}
+      </div>
+      ))}
     </DashboardPageShell>
   );
 }
@@ -178,4 +200,12 @@ function AdminPanel({ title, href, children }: { readonly title: string; readonl
 
 function EmptyInsight({ message }: { readonly message: string }) {
   return <div className="rounded-2xl bg-surface px-4 py-5 text-sm font-bold leading-6 text-muted">{message}</div>;
+}
+
+function getNurseFollowUpMessage(status: "Aktif" | "Nonaktif", assignedPatientCount: number, riskyPatientCount: number) {
+  if (status === "Nonaktif" && assignedPatientCount > 0) {
+    return `${assignedPatientCount} pasien masih ditangani - silahkan reassign`;
+  }
+
+  return `${assignedPatientCount} pasien - ${riskyPatientCount} perlu perhatian`;
 }

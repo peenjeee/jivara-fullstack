@@ -59,7 +59,7 @@ export default function PatientSchedulePage() {
   useEffect(() => {
     let isMounted = true;
 
-    getPatientScheduleData(visibleMonth)
+    getPatientScheduleData(visibleMonth, { forceRefresh: true })
       .then((data) => {
         if (!isMounted) return;
         const nextConfirmedScheduleDates = getConfirmedScheduleDates(data.medicationLogs);
@@ -139,7 +139,7 @@ export default function PatientSchedulePage() {
 
     try {
       await confirmMedicationScheduleViaApi(schedule, selectedDate, doseWindow.doseIndex);
-      const refreshedData = await getPatientScheduleData(visibleMonth);
+      const refreshedData = await getPatientScheduleData(visibleMonth, { forceRefresh: true });
       const nextConfirmedScheduleDates = getConfirmedScheduleDates(refreshedData.medicationLogs);
       setScheduleContext({ patientId: refreshedData.patient.id, confirmedScheduleDates: nextConfirmedScheduleDates });
       dispatch({ type: "patch", payload: { patientSchedules: refreshedData.schedules } });

@@ -239,7 +239,7 @@ export const createMedicationLog = async (dto: MedicationLogCreateDTO, user?: Ac
 
     if (dto.status === "confirmed") {
       const willCompleteSchedule = Number(schedule.stock ?? 0) <= 1;
-      const completedAt = confirmedAt || scheduledTime || new Date();
+      const completedAt = scheduledTime;
       const [updatedSchedule] = await tx
         .update(medicationSchedules)
         .set({

@@ -95,11 +95,6 @@ function setHardeningHeaders(response: NextResponse) {
   response.headers.set('Cross-Origin-Resource-Policy', 'same-origin');
 }
 
-function setLogoutResponseHeaders(response: NextResponse) {
-  response.headers.set('Cache-Control', 'no-store, max-age=0');
-  response.headers.set('Clear-Site-Data', '"cache"');
-}
-
 function expireAuthCookies(response: NextResponse) {
   for (const name of authCookieNames) {
     response.cookies.set(name, '', {
@@ -171,7 +166,7 @@ export async function proxy(request: NextRequest) {
     const response = NextResponse.redirect(new URL('/login', request.url));
     response.headers.set('Content-Security-Policy', contentSecurityPolicy);
     setHardeningHeaders(response);
-    setLogoutResponseHeaders(response);
+    response.headers.set('Cache-Control', 'no-store, max-age=0');
     supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
     expireAuthCookies(response);
     setLogoutMarker(response);

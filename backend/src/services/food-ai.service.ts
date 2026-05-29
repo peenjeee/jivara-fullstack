@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, lt } from "drizzle-orm";
+import { and, count, desc, eq, gt, gte, isNotNull, isNull, lt } from "drizzle-orm";
 import axios from "axios";
 import { db } from "../db";
 import {
@@ -7,6 +7,7 @@ import {
   interactionResults,
   medicationSchedules,
   patients,
+  auditLogs,
 } from "../db/schema";
 import {
   FoodRecommendationDTO,
@@ -230,10 +231,6 @@ const toFoodScoreArray = (value: unknown): ReasoningFoodScore[] => (
   Array.isArray(value) ? value.filter((item): item is ReasoningFoodScore => Boolean(item && typeof item === "object" && "food_name" in item)) : []
 );
 
-const toStringArray = (value: unknown): string[] => (
-  Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
-);
-
 const toRecommendationSummary = (value: unknown): RecommendationSummary | undefined => {
   if (!value || typeof value !== "object") return undefined;
   const summary = value as Partial<RecommendationSummary>;
@@ -318,7 +315,7 @@ const getDevelopmentDetectionResult = (): FoodDetectionResult => ({
     },
   ],
   inferenceTimeMs: 1840,
-  modelVersion: "yolov11",
+  modelVersion: "AI",
 });
 
 const runFoodDetection = async (scan: typeof foodScans.$inferSelect, patientId: string): Promise<FoodDetectionResult> => {
@@ -377,9 +374,38 @@ const getActivePatientMedications = async (patientId: string) => {
     .where(and(
       eq(medicationSchedules.patientId, patientId),
       eq(medicationSchedules.isActive, true),
+      gt(medicationSchedules.stock, 0),
+      isNull(medicationSchedules.completedAt),
     ));
 
   return normalizeMedicationNames(activeMedications);
+};
+
+const writeFoodScanAuditLogOnce = async (input: {
+  userId?: string | null;
+  action: string;
+  scanId: string;
+  changes: Record<string, unknown>;
+}) => {
+  const existingLog = await db
+    .select({ id: auditLogs.id })
+    .from(auditLogs)
+    .where(and(
+      eq(auditLogs.action, input.action),
+      eq(auditLogs.resourceType, "food_scan"),
+      eq(auditLogs.resourceId, input.scanId),
+    ))
+    .limit(1);
+
+  if (existingLog.length > 0) return;
+
+  await writeAuditLog({
+    userId: input.userId || null,
+    action: input.action,
+    resourceType: "food_scan",
+    resourceId: input.scanId,
+    changes: input.changes,
+  });
 };
 
 const mapScanSummary = (scan: typeof foodScans.$inferSelect) => ({
@@ -429,6 +455,7 @@ export const listFoodScans = async (query: { page?: string; limit?: string; pati
 
   const conditions = [];
   if (scopedFilter.condition) conditions.push(scopedFilter.condition);
+  conditions.push(isNotNull(foodScans.overallRiskLevel));
   if (dateRange) {
     conditions.push(gte(foodScans.createdAt, dateRange.start));
     conditions.push(lt(foodScans.createdAt, dateRange.end));
@@ -465,11 +492,12 @@ export const getFoodScanById = async (scanId: string, user?: AccessUser) => {
       .where(and(
         eq(medicationSchedules.patientId, scan.patientId),
         eq(medicationSchedules.isActive, true),
+        gt(medicationSchedules.stock, 0),
+        isNull(medicationSchedules.completedAt),
       )),
   ]);
 
   const patientMedications = normalizeMedicationNames(activeMedications);
-  const storedPatientMedications = toStringArray(scan.recommendationPatientMedications);
   const recommendedFoods = toFoodScoreArray(scan.recommendedFoods);
   const foodsToAvoid = toFoodScoreArray(scan.foodsToAvoid);
   const recommendationSummary = toRecommendationSummary(scan.recommendationSummary);
@@ -477,8 +505,8 @@ export const getFoodScanById = async (scanId: string, user?: AccessUser) => {
     ...mapScanSummary(scan),
     detectedItems: items,
     interactions,
-    patientMedications: storedPatientMedications.length > 0 ? storedPatientMedications : patientMedications,
-    analyzedMedicationCount: scan.analyzedMedicationCount ?? (storedPatientMedications.length || patientMedications.length),
+    patientMedications,
+    analyzedMedicationCount: patientMedications.length,
     recommendedFoods,
     foodsToAvoid,
     recommendationSummary,
@@ -503,14 +531,6 @@ export const uploadFoodImage = async (dto: FoodUploadDTO, user?: AccessUser) => 
       modelVersion: "pending-food-ai-inference",
     })
     .returning();
-
-  await writeAuditLog({
-    userId: user?.id || null,
-    action: "food_scan.uploaded",
-    resourceType: "food_scan",
-    resourceId: scan.id,
-    changes: { patientId: dto.patientId, imageSizeKb: scan.imageSizeKb },
-  });
 
   deleteCachedByPrefix(FOOD_SCAN_CACHE_PREFIX);
 
@@ -555,14 +575,6 @@ export const detectFood = async (dto: FoodDetectDTO, user?: AccessUser) => {
     .update(foodScans)
     .set({ inferenceTimeMs: detectionResult.inferenceTimeMs, modelVersion: detectionResult.modelVersion })
     .where(eq(foodScans.id, scan.id));
-
-  await writeAuditLog({
-    userId: user?.id || null,
-    action: "food_scan.detected",
-    resourceType: "food_scan",
-    resourceId: scan.id,
-    changes: { patientId: dto.patientId, detectedItems: detectionResult.detectedItems.length, modelVersion: detectionResult.modelVersion },
-  });
 
   deleteCachedByPrefix(FOOD_SCAN_CACHE_PREFIX);
 
@@ -642,6 +654,20 @@ export const checkInteraction = async (dto: InteractionCheckDTO, user?: AccessUs
         : {}),
     })
     .where(eq(foodScans.id, dto.scanId));
+
+  await writeFoodScanAuditLogOnce({
+    userId: user?.id || null,
+    action: "food_scan.uploaded",
+    scanId: dto.scanId,
+    changes: { patientId: dto.patientId, finalizedAfterAnalysis: true },
+  });
+
+  await writeFoodScanAuditLogOnce({
+    userId: user?.id || null,
+    action: "food_scan.detected",
+    scanId: dto.scanId,
+    changes: { patientId: dto.patientId, detectedItems: detectedLabels.length },
+  });
 
   await writeAuditLog({
     userId: user?.id || null,

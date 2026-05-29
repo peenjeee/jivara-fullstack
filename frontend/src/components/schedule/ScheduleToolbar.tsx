@@ -15,6 +15,7 @@ const filters: { label: string; value: ScheduleFilter }[] = [
   { label: "Need Special Attention", value: "Need Special Attention" },
   { label: "On Ideal Schedule", value: "On Ideal Schedule" },
   { label: "Lagging Behind", value: "Lagging Behind" },
+  { label: "Nonaktif", value: "Nonaktif" },
 ];
 
 interface ScheduleToolbarProps {

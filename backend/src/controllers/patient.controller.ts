@@ -66,7 +66,7 @@ export const updatePatient = async (req: AuthRequest, res: Response) => {
 
 export const assignPatient = async (req: AuthRequest, res: Response) => {
   try {
-    const patient = await patientService.assignPatient(getParam(req.params.id), req.body.nurseId, req.user?.id);
+    const patient = await patientService.assignPatient(getParam(req.params.id), req.body.nurseIds ?? req.body.nurseId, req.user?.id);
     res.status(200).json({ status: "berhasil", data: patient, message: "Pasien berhasil ditugaskan ke perawat" });
   } catch (error) {
     sendError(res, error);

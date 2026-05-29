@@ -12,6 +12,7 @@ export interface NurseRecord {
   readonly lastVisit?: string;
   readonly temporaryPassword: boolean;
   readonly assignedPatients?: number;
+  readonly handledPatients?: number;
 }
 
 export type PatientNurseAssignment = Record<string, string>;

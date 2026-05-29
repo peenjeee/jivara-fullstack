@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getApiErrorMessage } from "@/lib/apiErrors";
 import type { PatientRecord } from "@/lib/mocks/patients";
-import { createPatientViaApi, deactivatePatientViaApi, getPatientPageFromApi, updatePatientViaApi } from "@/lib/patientApi";
+import { getNursesFromApi } from "@/lib/nurseApi";
+import { activatePatientViaApi, assignPatientToNursesViaApi, createPatientViaApi, deactivatePatientViaApi, getPatientPageFromApi, updatePatientViaApi } from "@/lib/patientApi";
 import { showConfirm, showError, showToast } from "@/lib/swal";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { useNurseStore } from "@/store/nurses";
@@ -20,8 +21,10 @@ let patientListViewCache: {
   currentPage: number;
 } | null = null;
 
-export function usePatientList(onViewPatient: (patientId: string) => void) {
+export function usePatientList(onViewPatient: (patientId: string) => void, options: { readonly shouldLoadNurses?: boolean } = {}) {
+  const shouldLoadNurses = options.shouldLoadNurses ?? true;
   const nurses = useNurseStore((state) => state.nurses);
+  const setNurses = useNurseStore((state) => state.setNurses);
   const [patientRecords, setPatientRecords] = useState<PatientRecord[]>(() => patientListViewCache?.patientRecords ?? []);
   const [totalPatients, setTotalPatients] = useState(() => patientListViewCache?.totalPatients ?? 0);
   const [search, setSearch] = useState(() => patientListViewCache?.search ?? "");
@@ -29,14 +32,19 @@ export function usePatientList(onViewPatient: (patientId: string) => void) {
   const [currentPage, setCurrentPage] = useState(() => patientListViewCache?.currentPage ?? 1);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingPatient, setEditingPatient] = useState<PatientRecord | null>(null);
+  const [assigningPatient, setAssigningPatient] = useState<PatientRecord | null>(null);
   const [isLoading, setIsLoading] = useState(!patientListViewCache);
   const [hasLoadedPatients, setHasLoadedPatients] = useState(Boolean(patientListViewCache));
   const [processingAction, setProcessingAction] = useState<string | null>(null);
+  const [isLoadingNurses, setIsLoadingNurses] = useState(false);
+  const isInitialLoad = useRef(true);
   const debouncedSearch = useDebouncedValue(search);
 
   const loadPatientPage = useCallback(async (page: number, forceRefresh = false, overrides?: { search?: string; activeFilter?: PatientFilter }) => {
     const nextSearch = overrides?.search ?? debouncedSearch;
     const nextFilter = overrides?.activeFilter ?? activeFilter;
+    const status = nextFilter === "Nonaktif" ? "inactive" : nextFilter === "all" ? "all" : "active";
+    const adherenceStatus = nextFilter === "all" || nextFilter === "Nonaktif" ? undefined : nextFilter;
     const canUseVisibleCache = !forceRefresh
       && patientListViewCache?.currentPage === page
       && patientListViewCache.search === nextSearch
@@ -46,9 +54,9 @@ export function usePatientList(onViewPatient: (patientId: string) => void) {
       const result = await getPatientPageFromApi({
         page,
         limit: pageSize,
-        status: "active",
+        status,
         search: nextSearch,
-        adherenceStatus: nextFilter === "all" ? undefined : nextFilter,
+        adherenceStatus,
         forceRefresh,
       });
       setPatientRecords(result.patients);
@@ -70,9 +78,33 @@ export function usePatientList(onViewPatient: (patientId: string) => void) {
   }, [activeFilter, debouncedSearch]);
 
   useEffect(() => {
-    const id = setTimeout(() => void loadPatientPage(currentPage));
+    const forceRefresh = isInitialLoad.current;
+    isInitialLoad.current = false;
+    const id = setTimeout(() => void loadPatientPage(currentPage, forceRefresh));
     return () => clearTimeout(id);
   }, [currentPage, loadPatientPage]);
+
+  useEffect(() => {
+    const handleScheduleChanged = () => {
+      void loadPatientPage(currentPage, true);
+    };
+
+    window.addEventListener("jivara:schedule-changed", handleScheduleChanged);
+    return () => window.removeEventListener("jivara:schedule-changed", handleScheduleChanged);
+  }, [currentPage, loadPatientPage]);
+
+  const ensureNursesLoaded = useCallback(async () => {
+    if (!shouldLoadNurses || nurses.length > 0 || isLoadingNurses) return;
+    setIsLoadingNurses(true);
+    try {
+      const nurseRecords = await getNursesFromApi();
+      setNurses(nurseRecords);
+    } catch {
+      // Modal can still show an empty-state if nurses cannot be loaded.
+    } finally {
+      setIsLoadingNurses(false);
+    }
+  }, [isLoadingNurses, nurses.length, setNurses, shouldLoadNurses]);
 
   const totalPages = Math.max(1, Math.ceil(totalPatients / pageSize));
   const paginatedPatients = patientRecords;
@@ -97,7 +129,7 @@ export function usePatientList(onViewPatient: (patientId: string) => void) {
     try {
       await createPatientViaApi(values);
     } catch (error) {
-      showError(getApiErrorMessage(error, "Gagal menambahkan pasien dari API."));
+      showError(getApiErrorMessage(error, "Gagal menambahkan pasien."));
       return;
     }
 
@@ -114,7 +146,7 @@ export function usePatientList(onViewPatient: (patientId: string) => void) {
       await updatePatientViaApi(editingPatient.id, values);
       await loadPatientPage(currentPage, true);
     } catch (error) {
-      showError(getApiErrorMessage(error, "Gagal memperbarui pasien dari API."));
+      showError(getApiErrorMessage(error, "Gagal memperbarui pasien."));
       return;
     }
 
@@ -125,6 +157,28 @@ export function usePatientList(onViewPatient: (patientId: string) => void) {
   const handlePatientAction = async (action: PatientAction, patient: PatientRecord) => {
     if (action === "view") onViewPatient(patient.id);
     if (action === "edit") setEditingPatient(patient);
+    if (action === "assign") {
+      setAssigningPatient(patient);
+      void ensureNursesLoaded();
+    }
+
+    if (action === "activate") {
+      const actionKey = `activate-${patient.id}`;
+      if (processingAction) return;
+
+      setProcessingAction(actionKey);
+      try {
+        await activatePatientViaApi(patient.id);
+        await loadPatientPage(currentPage, true);
+      } catch (error) {
+        showError(getApiErrorMessage(error, "Gagal mengaktifkan pasien."));
+        return;
+      } finally {
+        setProcessingAction(null);
+      }
+
+      showToast("Pasien berhasil diaktifkan.");
+    }
 
     if (action === "delete") {
       const actionKey = `delete-${patient.id}`;
@@ -137,7 +191,7 @@ export function usePatientList(onViewPatient: (patientId: string) => void) {
         await deactivatePatientViaApi(patient.id);
         await loadPatientPage(currentPage, true);
       } catch (error) {
-        showError(getApiErrorMessage(error, "Gagal menghapus pasien dari API."));
+        showError(getApiErrorMessage(error, "Gagal menghapus pasien."));
         return;
       } finally {
         setProcessingAction(null);
@@ -147,13 +201,30 @@ export function usePatientList(onViewPatient: (patientId: string) => void) {
     }
   };
 
+  const handleAssignNurses = async (nurseIds: readonly string[]) => {
+    if (!assigningPatient) return;
+
+    try {
+      await assignPatientToNursesViaApi(assigningPatient.id, nurseIds);
+      await loadPatientPage(currentPage, true);
+    } catch (error) {
+      showError(getApiErrorMessage(error, "Gagal mengatur perawat pasien."));
+      return;
+    }
+
+    setAssigningPatient(null);
+    showToast("Perawat pasien berhasil diperbarui.");
+  };
+
   return {
     activeFilter,
+    assigningPatient,
     assignedNurseByPatientId,
     currentPage,
     editingPatient,
     filteredPatients: patientRecords,
     handleAddPatient,
+    handleAssignNurses,
     handleEditPatient,
     handleFilterChange,
     handlePatientAction,
@@ -161,6 +232,8 @@ export function usePatientList(onViewPatient: (patientId: string) => void) {
     hasLoadedPatients,
     isAddModalOpen,
     isLoading,
+    isLoadingNurses,
+    nurses,
     paginatedPatients,
     pageSize,
     processingAction,
@@ -168,6 +241,7 @@ export function usePatientList(onViewPatient: (patientId: string) => void) {
     search,
     setCurrentPage: setPage,
     setEditingPatient,
+    setAssigningPatient,
     setIsAddModalOpen,
     totalPages,
     totalPatients,

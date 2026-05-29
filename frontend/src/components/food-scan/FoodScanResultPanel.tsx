@@ -34,7 +34,7 @@ export default function FoodScanResultPanel({ analysis, isScanning, result }: Fo
           <m.div key="empty" className="flex h-full min-h-[420px] flex-col items-center justify-center gap-6 text-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <ScanLine className="size-14 text-primary" />
             <h2 className="font-display text-3xl font-extrabold tracking-[-0.05em] text-text-main">Belum ada hasil scan</h2>
-            <p className="mt-6 max-w-md text-sm font-semibold leading-6 text-muted">Arahkan kamera ke makanan lalu klik “Scan Sekarang” untuk melihat hasil deteksi, analisis AI, dan rekomendasi.</p>
+            <p className="mt-6 max-w-md text-sm font-semibold leading-6 text-muted">Arahkan kamera ke makanan lalu klik “Scan Sekarang” atau upload gambar untuk melihat hasil deteksi, analisis AI, dan rekomendasi.</p>
           </m.div>
         )}
       </AnimatePresence>

@@ -29,6 +29,6 @@ export default function ScheduleRouteClient({ initialPatientId, initialPatientNa
   if (!hasAuthHydrated) return null;
   if (dashboardRole === "super_admin") return <DashboardRouteFallback title="Jadwal Obat" />;
 
-  if (isOperationalAdminRole(dashboardRole)) return <SchedulePage initialPatientId={initialPatientId} initialPatientName={initialPatientName} readOnly />;
+  if (isOperationalAdminRole(dashboardRole)) return <SchedulePage initialPatientId={initialPatientId} initialPatientName={initialPatientName} />;
   return dashboardRole === "nurse" ? <SchedulePage initialPatientId={initialPatientId} initialPatientName={initialPatientName} /> : <PatientSchedulePage />;
 }

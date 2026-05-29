@@ -49,7 +49,14 @@ export const validatePatientUpdate = (req: Request, res: Response, next: NextFun
 };
 
 export const validateAssignPatient = (req: Request, res: Response, next: NextFunction) => {
-  const { nurseId } = req.body;
+  const { nurseId, nurseIds } = req.body;
+
+  if (Array.isArray(nurseIds)) {
+    if (nurseIds.length === 0 || nurseIds.some((id) => typeof id !== "string" || !isValidUuid(id))) {
+      return res.status(400).json({ status: "gagal", message: "nurseIds wajib berisi UUID valid", error_code: "VALIDATION_ERROR" });
+    }
+    return next();
+  }
 
   if (isMissing(nurseId) || !isValidUuid(nurseId)) {
     return res.status(400).json({ status: "gagal", message: "nurseId wajib berupa UUID valid", error_code: "VALIDATION_ERROR" });

@@ -55,11 +55,25 @@ function NurseDetailPageContent({ nurseId }: NurseDetailPageProps) {
     );
   }
 
+  const isDeleteDisabled = controller.state.isDeleting
+    || controller.state.isLoadingNurse
+    || controller.state.isLoadingPatients
+    || controller.state.isLoadingPatientSummary
+    || controller.state.isLoadingActivities
+    || !controller.state.hasLoadedPatients
+    || !controller.state.hasLoadedPatientSummary
+    || !controller.state.hasLoadedActivities;
+  const isInitialDetailLoading = !controller.state.hasLoadedPatients
+    || !controller.state.hasLoadedPatientSummary
+    || !controller.state.hasLoadedActivities;
+
   return (
     <DashboardPageShell>
       <DashboardPageHeader title="Detail Perawat" />
 
-      <NurseOverviewSection nurse={controller.nurse} shouldAnimate={controller.shouldAnimate} isDeleting={controller.state.isDeleting} totalAssignedPatientCount={controller.state.totalAssignedPatientCount} onDelete={controller.handleDelete} />
+      {isInitialDetailLoading
+        ? <NurseOverviewSkeleton />
+        : <NurseOverviewSection nurse={controller.nurse} shouldAnimate={controller.shouldAnimate} isDeleting={controller.state.isDeleting} isDeleteDisabled={isDeleteDisabled} totalAssignedPatientCount={controller.state.totalAssignedPatientCount} onDelete={controller.handleDelete} />}
 
       {controller.state.isLoadingPatientSummary && !controller.state.hasLoadedPatientSummary
         ? <SummaryCardsSkeleton count={controller.isAdminView ? 3 : 4} />
@@ -101,7 +115,11 @@ function NurseDetailPageContent({ nurseId }: NurseDetailPageProps) {
   );
 }
 
-function NurseOverviewSection({ nurse, shouldAnimate, isDeleting, totalAssignedPatientCount, onDelete }: { readonly nurse: NurseRecord; readonly shouldAnimate: boolean; readonly isDeleting: boolean; readonly totalAssignedPatientCount: number; readonly onDelete: () => void }) {
+function NurseOverviewSkeleton() {
+  return <div className="mt-6 h-52 animate-pulse rounded-[32px] bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)]" />;
+}
+
+function NurseOverviewSection({ nurse, shouldAnimate, isDeleting, isDeleteDisabled, totalAssignedPatientCount, onDelete }: { readonly nurse: NurseRecord; readonly shouldAnimate: boolean; readonly isDeleting: boolean; readonly isDeleteDisabled: boolean; readonly totalAssignedPatientCount: number; readonly onDelete: () => void }) {
   return (
     <m.section className="mt-6 overflow-hidden rounded-[32px] bg-surface p-5 shadow-[0_18px_45px_rgba(15,23,42,0.08)] sm:p-7" {...getDashboardEntranceMotion(shouldAnimate, 0.08, 24)}>
       <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
@@ -116,7 +134,7 @@ function NurseOverviewSection({ nurse, shouldAnimate, isDeleting, totalAssignedP
           </div>
         </div>
 
-        <Button size="sm" variant="outline" icon={<Trash2 size={16} />} loading={isDeleting} onClick={onDelete}>Hapus</Button>
+        <Button size="sm" variant="outline" icon={<Trash2 size={16} />} loading={isDeleting} disabled={isDeleteDisabled} onClick={onDelete}>Hapus</Button>
       </div>
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -193,7 +211,7 @@ function PatientAssignmentsSection({
                   const stats = data.medicationStats[patient.id];
                   return (
                     <tr key={`nurse-detail-patient-${patient.id}-${index}`} className="transition-colors hover:bg-surface/60">
-                      <td className="px-5 py-4"><SelectionCheckbox label={`Pilih ${patient.name}`} checked={selection.selectedIds.includes(patient.id)} disabled={patient.status === "Complete"} onChange={() => onTogglePatient(patient.id)} /></td>
+                      <td className="px-5 py-4"><SelectionCheckbox label={`Pilih ${patient.name}`} checked={selection.selectedIds.includes(patient.id)} disabled={patient.status === "Complete" || patient.status === "Nonaktif"} onChange={() => onTogglePatient(patient.id)} /></td>
                       <td className="px-5 py-4"><Link href={`/patients/${encodeURIComponent(patient.id)}`} className="font-extrabold text-text-main transition-colors hover:text-primary">{patient.name}</Link></td>
                       <td className="px-5 py-4"><PatientStatusBadge status={patient.status} /></td>
                       <td className="px-5 py-4"><AdherenceBar value={patient.adherence} /></td>

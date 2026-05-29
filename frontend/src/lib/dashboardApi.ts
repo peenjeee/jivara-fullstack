@@ -4,7 +4,6 @@ import api from "@/lib/axios";
 import type { ActivityLogRecord } from "@/lib/mocks/activityLogs";
 import type { NurseRecord } from "@/lib/mocks/nurses";
 import type { PatientRecord, PatientStatus } from "@/lib/mocks/patients";
-import { getNursesFromApi } from "@/lib/nurseApi";
 
 interface PatientListResponse {
   id: string;
@@ -17,9 +16,8 @@ interface PatientListResponse {
   isActive?: boolean | null;
   createdAt?: string | null;
   lastLoginAt?: string | null;
-  adherenceRate7d?: number | null;
-  adherenceRate30d?: number | null;
-  totalScheduled30d?: number | null;
+  adherenceRateAll?: number | null;
+  totalScheduledAll?: number | null;
   isMedicationComplete?: boolean;
 }
 
@@ -30,6 +28,20 @@ interface PaginatedResponse<T> {
     summary?: {
       warningCritical?: number;
     };
+  };
+}
+
+interface NurseTotalResponse {
+  data: NurseRecord[];
+  meta?: {
+    total?: number;
+  };
+}
+
+interface PatientTotalResponse {
+  data: PatientListResponse[];
+  meta?: {
+    total?: number;
   };
 }
 
@@ -62,8 +74,9 @@ export type AdminDashboardRiskyPatient = PatientRecord & {
 interface AdminDashboardResponse {
   summary: {
     totalNurses: number;
-    totalActivePatients: number;
+    totalPatients: number;
     totalActiveSchedules: number;
+    inactiveNurseReassignCount?: number;
   };
   nurseFollowUps: Array<{
     nurse: NurseRecord;
@@ -78,6 +91,7 @@ export interface AdminDashboardData extends AdminDashboardStatsData {
   nurseFollowUps: AdminDashboardResponse["nurseFollowUps"];
   riskyPatients: AdminDashboardRiskyPatient[];
   priorityActivities: ActivityLogRecord[];
+  inactiveNurseReassignCount: number;
 }
 
 const nurseDashboardCacheTtl = 15_000;
@@ -87,7 +101,6 @@ let nurseDashboardRequest: Promise<NurseDashboardData> | null = null;
 const adminDashboardCacheTtl = 15_000;
 const adminDashboardCache = new Map<string, { data: AdminDashboardStatsData; expiresAt: number }>();
 const adminDashboardRequests = new Map<string, Promise<AdminDashboardStatsData>>();
-let fullAdminDashboardCache: { data: AdminDashboardData; expiresAt: number } | null = null;
 let fullAdminDashboardRequest: Promise<AdminDashboardData> | null = null;
 
 export const clearDashboardCache = () => {
@@ -95,7 +108,6 @@ export const clearDashboardCache = () => {
   nurseDashboardRequest = null;
   adminDashboardCache.clear();
   adminDashboardRequests.clear();
-  fullAdminDashboardCache = null;
   fullAdminDashboardRequest = null;
 };
 
@@ -143,18 +155,23 @@ const mapPatient = (patient: PatientListResponse, adherence: number, status: Pat
 });
 
 const getPatientListAdherence = (patient: PatientListResponse) => {
-  if (!patient.totalScheduled30d) return 100;
-  return Math.round(patient.adherenceRate30d ?? patient.adherenceRate7d ?? 0);
+  if (!patient.totalScheduledAll) return 100;
+  return Math.round(patient.adherenceRateAll ?? 0);
 };
 
-export const getNurseDashboardData = async (): Promise<NurseDashboardData> => {
+export const getNurseDashboardData = async (options: { readonly forceRefresh?: boolean } = {}): Promise<NurseDashboardData> => {
+  if (options.forceRefresh) {
+    nurseDashboardCache = null;
+    nurseDashboardRequest = null;
+  }
+
   const now = Date.now();
   if (nurseDashboardCache && nurseDashboardCache.expiresAt > now) return nurseDashboardCache.data;
   if (nurseDashboardRequest) return nurseDashboardRequest;
 
   nurseDashboardRequest = (async () => {
     const [patientsResponse, summaryResponse] = await Promise.all([
-      api.get<PaginatedResponse<PatientListResponse>>("/patients", { params: { limit: 5, status: "active" } }),
+      api.get<PaginatedResponse<PatientListResponse>>("/patients", { params: { limit: 5, status: "active", sort: "recentActivity" } }),
       api.get<{ data: NurseDashboardSummaryResponse }>("/admin-dashboard/nurse-summary"),
     ]);
 
@@ -194,17 +211,21 @@ export const getAdminDashboardStats = async (params: { nurseTotal?: number } = {
   if (activeRequest) return activeRequest;
 
   const request = (async () => {
-    const [response, nurses] = await Promise.all([
+    const [response, nurseResponse, patientResponse] = await Promise.all([
       api.get<{ data: AggregateAdherenceResponse }>("/adherence/aggregate"),
-      params.nurseTotal === undefined ? getNursesFromApi() : Promise.resolve([]),
+      params.nurseTotal === undefined
+        ? api.get<NurseTotalResponse>("/nurses", { params: { limit: 1, status: "all" } })
+        : Promise.resolve(null),
+      api.get<PatientTotalResponse>("/patients", { params: { limit: 1, status: "all" } }),
     ]);
     const aggregate = response.data.data;
-    const nurseTotal = params.nurseTotal ?? nurses.length;
+    const nurseTotal = params.nurseTotal ?? nurseResponse?.data.meta?.total ?? nurseResponse?.data.data.length ?? 0;
+    const patientTotal = patientResponse.data.meta?.total ?? patientResponse.data.data.length;
 
     const result: AdminDashboardStatsData = {
       stats: [
         { label: "Total Perawat Saya", value: String(nurseTotal), tone: "neutral", color: "pine", icon: UsersRound },
-        { label: "Total Pasien Saya", value: String(aggregate.totalActivePatients), tone: "safe", color: "leaf", icon: UserRound },
+        { label: "Total Pasien Saya", value: String(patientTotal), tone: "safe", color: "leaf", icon: UserRound },
         { label: "Jadwal Pasien Aktif", value: String(aggregate.totalActiveSchedules ?? aggregate.totalScheduled), tone: "neutral", color: "lime", icon: CalendarClock },
       ],
     };
@@ -219,26 +240,25 @@ export const getAdminDashboardStats = async (params: { nurseTotal?: number } = {
 };
 
 export const getAdminDashboardData = async (): Promise<AdminDashboardData> => {
-  const now = Date.now();
-  if (fullAdminDashboardCache && fullAdminDashboardCache.expiresAt > now) return fullAdminDashboardCache.data;
   if (fullAdminDashboardRequest) return fullAdminDashboardRequest;
 
   fullAdminDashboardRequest = (async () => {
     const response = await api.get<{ data: AdminDashboardResponse }>("/admin-dashboard");
     const { summary, nurseFollowUps, riskyPatients, priorityActivities } = response.data.data;
+    const inactiveNurseReassignCount = summary.inactiveNurseReassignCount ?? countInactiveNurseReassignFollowUps(nurseFollowUps);
 
     const result: AdminDashboardData = {
       stats: [
         { label: "Total Perawat Saya", value: String(summary.totalNurses), tone: "neutral", color: "pine", icon: UsersRound },
-        { label: "Total Pasien Saya", value: String(summary.totalActivePatients), tone: "safe", color: "leaf", icon: UserRound },
+        { label: "Total Pasien Saya", value: String(summary.totalPatients), tone: "safe", color: "leaf", icon: UserRound },
         { label: "Jadwal Pasien Aktif", value: String(summary.totalActiveSchedules), tone: "neutral", color: "lime", icon: CalendarClock },
       ],
       nurseFollowUps,
       riskyPatients,
       priorityActivities,
+      inactiveNurseReassignCount,
     };
 
-    fullAdminDashboardCache = { data: result, expiresAt: Date.now() + adminDashboardCacheTtl };
     return result;
   })().finally(() => {
     fullAdminDashboardRequest = null;
@@ -246,6 +266,10 @@ export const getAdminDashboardData = async (): Promise<AdminDashboardData> => {
 
   return fullAdminDashboardRequest;
 };
+
+const countInactiveNurseReassignFollowUps = (followUps: AdminDashboardResponse["nurseFollowUps"]) => (
+  followUps.filter(({ nurse, assignedPatientCount }) => nurse.status === "Nonaktif" && assignedPatientCount > 0).length
+);
 
 export const emptyNurseDashboardData: NurseDashboardData = {
   stats: [],

@@ -184,6 +184,7 @@ describe("route access control", async () => {
     ["patient creates medication log", "post", "/medication-logs", "patient"],
     ["patient snoozes medication reminder", "post", "/medication-logs/snooze", "patient"],
     ["patient uploads food scan", "post", "/food/food-scans", "patient"],
+    ["patient tracks notification event", "post", "/notifications/events", "patient"],
     ["patient reads notification preference", "get", "/notifications/preferences", "patient"],
     ["nurse creates patient", "post", "/patients", "nurse"],
     ["nurse creates schedule", "post", "/medication-schedules", "nurse"],
@@ -203,6 +204,7 @@ describe("route access control", async () => {
 
   const forbiddenCases = [
     ["anonymous request", "get", "/patients", undefined, 401],
+    ["anonymous notification event", "post", "/notifications/events", undefined, 401],
     ["patient creating patients", "post", "/patients", "patient", 403],
     ["patient managing nurses", "get", "/nurses", "patient", 403],
     ["patient reading prescriptions", "get", "/prescriptions", "patient", 403],

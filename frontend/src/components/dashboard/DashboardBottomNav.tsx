@@ -3,23 +3,19 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { m } from "motion/react";
-import { getUnreadActivityCount } from "@/helpers/activityLogs";
 import { useActivityLogStore } from "@/store/activityLog";
 import { useAuthStore } from "@/store/auth";
-import { usePatientDashboardStore } from "@/store/patientDashboard";
-import { getDashboardBottomNavItems, getDashboardRole, isAdminDashboardRole } from "./navigation";
+import { getDashboardBottomNavItems, getDashboardRole } from "./navigation";
 
 export default function DashboardBottomNav() {
   const pathname = usePathname();
   const userRole = useAuthStore((state) => state.user?.role);
-  const patientId = usePatientDashboardStore((state) => state.patientId);
   const hasAuthHydrated = useAuthStore((state) => state.hasHydrated);
   const dashboardRole = getDashboardRole(userRole);
   const globalUnreadActivityCount = useActivityLogStore((state) => state.unreadActivityCount);
   const unreadActivityCount = useActivityLogStore((state) => {
-    if (isAdminDashboardRole(dashboardRole)) return 0;
-    if (dashboardRole === "nurse" && state.unreadActivityCount !== null) return state.unreadActivityCount;
-    return getUnreadActivityCount(state.activities, dashboardRole === "patient" ? patientId ?? undefined : undefined);
+    if (dashboardRole === "super_admin" || dashboardRole === "admin") return 0;
+    return state.unreadActivityCount ?? 0;
   });
   const isActivityLogLoading = useActivityLogStore((state) => state.isLoading);
   const bottomNavItems = getDashboardBottomNavItems(dashboardRole);
@@ -40,7 +36,7 @@ export default function DashboardBottomNav() {
           const Icon = item.icon;
           const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
           const badgeCount = item.href === "/activity-log" ? unreadActivityCount : 0;
-          const isBadgeLoading = item.href === "/activity-log" && !isAdminDashboardRole(dashboardRole) && globalUnreadActivityCount === null && isActivityLogLoading;
+          const isBadgeLoading = item.href === "/activity-log" && (dashboardRole === "patient" || dashboardRole === "nurse") && globalUnreadActivityCount === null && isActivityLogLoading;
           const isFeatured = "featured" in item && item.featured;
 
           return (

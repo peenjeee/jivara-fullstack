@@ -166,6 +166,33 @@ const getAuditCategoryParam = (category?: ActivityCategory | "all"): AuditActivi
   return "administration";
 };
 
+const getAuditLogTimestamp = (createdAt?: string | null) => {
+  if (!createdAt) return 0;
+  const timestamp = new Date(createdAt).getTime();
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+};
+
+const getAuditLogSemanticKey = (log: AuditLogResponse) => [
+  log.userId ?? log.userName ?? log.userEmail ?? "system",
+  log.action,
+  log.resourceType,
+  log.resourceId ?? "",
+  JSON.stringify(log.changes ?? null),
+].join("|");
+
+const removeNearDuplicateAuditLogs = (logs: readonly AuditLogResponse[]) => {
+  const lastSeenByKey = new Map<string, number>();
+
+  return logs.filter((log) => {
+    const key = getAuditLogSemanticKey(log);
+    const timestamp = getAuditLogTimestamp(log.createdAt);
+    const previousTimestamp = lastSeenByKey.get(key);
+    lastSeenByKey.set(key, timestamp);
+
+    return previousTimestamp === undefined || Math.abs(previousTimestamp - timestamp) > 2_000;
+  });
+};
+
 const getChangeRecord = (changes: unknown) => {
   if (!changes) return {};
   if (typeof changes === "string") {
@@ -204,7 +231,7 @@ const getRelatedNurseId = (log: AuditLogResponse) => {
 
 export const getAuditActivityPageFromApi = async (params: { page?: number; limit?: number; status?: string; severityFilter?: string; category?: ActivityCategory | "all"; date?: string; userRole?: string; nurseId?: string; severity?: "success" | "info" | "critical" | "warning"; search?: string; forceRefresh?: boolean } = {}): Promise<ActivityLogPage> => {
   const { data: logs, meta } = await getAuditLogs(params);
-  const activities = logs.map((log) => ({
+  const activities = removeNearDuplicateAuditLogs(logs).map((log) => ({
     id: log.id,
     title: formatAction(log.action),
     description: getDescription(log),

@@ -49,13 +49,19 @@ router.use(authenticateToken);
  *         schema:
  *           type: string
  *           enum: [Need Special Attention, Lagging Behind, On Ideal Schedule, Complete]
- *         description: Filter status kepatuhan pasien yang dihitung dari adherence 30 hari/7 hari. "Complete" berarti semua jadwal obat pasien telah habis (stock ≤ 0).
+ *         description: Filter status kepatuhan pasien aktif yang dihitung dari adherence 30 hari/7 hari. Gunakan status=inactive untuk pasien nonaktif.
  *       - in: query
  *         name: nurseId
  *         schema:
  *           type: string
  *           format: uuid
  *         description: Filter pasien aktif berdasarkan perawat yang menangani.
+ *       - in: query
+ *         name: sort
+ *         schema:
+ *           type: string
+ *           enum: [recentActivity]
+ *         description: Gunakan recentActivity untuk mengurutkan dari lastLoginAt terbaru, fallback ke createdAt jika belum pernah login.
  *     responses:
  *       200:
  *         description: Daftar pasien berhasil diambil
@@ -266,6 +272,6 @@ router.put("/:id/assign", authorizeRoles("admin", "super_admin"), validateAssign
  *       200:
  *         description: Pasien berhasil dinonaktifkan
  */
-router.delete("/:id", authorizeRoles("admin", "super_admin"), patientController.deactivatePatient);
+router.delete("/:id", authorizeRoles("nurse", "admin", "super_admin"), patientController.deactivatePatient);
 
 export default router;

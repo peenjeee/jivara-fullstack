@@ -34,6 +34,7 @@ type NotificationActivityParams = {
   date?: string;
   severity?: "success" | "warning" | "critical";
   search?: string;
+  forceRefresh?: boolean;
 };
 
 const notificationActivityCacheTtl = 10_000;
@@ -69,6 +70,10 @@ export const getNotificationActivityPageFromApi = async (params: NotificationAct
   const search = params.search?.trim() || "";
   const cacheKey = `${page}:${limit}:${nurseId || "all"}:${category || "all"}:${params.date || ""}:${params.severity || ""}:${search}`;
   const now = Date.now();
+  if (params.forceRefresh) {
+    notificationActivityCache.delete(cacheKey);
+    notificationActivityRequests.delete(cacheKey);
+  }
   const cached = notificationActivityCache.get(cacheKey);
   if (cached && cached.expiresAt > now) return cached.data;
   const activeRequest = notificationActivityRequests.get(cacheKey);

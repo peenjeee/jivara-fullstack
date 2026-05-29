@@ -15,15 +15,11 @@ interface PublicStatsResponse {
   };
 }
 
-const getPublicStatsUrls = () => {
-  const apiUrl = process.env.NODE_ENV === "development"
-    ? "http://localhost:3001/api/v1"
-    : "https://api.jivara.web.id/api/v1";
-  const urls = [`${apiUrl}/public/stats`];
-
-  urls.push("/api/v1/public/stats");
-
-  return [...new Set(urls)];
+const getPublicStatsUrl = () => {
+  if (process.env.NODE_ENV === "development") {
+    return "http://localhost:3001/api/v1/public/stats";
+  }
+  return "/api/v1/public/stats";
 };
 
 const publicStatsCacheTtl = 60_000;
@@ -36,23 +32,23 @@ const fetchPublicStats = async () => {
   if (publicStatsRequest) return publicStatsRequest;
 
   publicStatsRequest = (async () => {
-    let lastError: unknown;
-
-    const responses = await Promise.allSettled(getPublicStatsUrls().map(async (url) => {
-      const response = await fetch(url, { cache: "no-store" });
+    try {
+      const response = await fetch(getPublicStatsUrl(), { cache: "no-store" });
       if (!response.ok) throw new Error("PUBLIC_STATS_FAILED");
-      return (await response.json()) as PublicStatsResponse;
-    }));
-
-    for (const response of responses) {
-      if (response.status === "fulfilled") {
-        publicStatsCache = { data: response.value, expiresAt: Date.now() + publicStatsCacheTtl };
-        return response.value;
-      }
-      lastError = response.reason;
+      const data = await response.json() as PublicStatsResponse;
+      publicStatsCache = { data, expiresAt: Date.now() + publicStatsCacheTtl };
+      return data;
+    } catch {
+      // fallback: try the other URL in case of proxy mismatch
+      const fallbackUrl = getPublicStatsUrl().includes("localhost")
+        ? "/api/v1/public/stats"
+        : "https://api.jivara.web.id/api/v1/public/stats";
+      const response = await fetch(fallbackUrl, { cache: "no-store" });
+      if (!response.ok) throw new Error("PUBLIC_STATS_FAILED");
+      const data = await response.json() as PublicStatsResponse;
+      publicStatsCache = { data, expiresAt: Date.now() + publicStatsCacheTtl };
+      return data;
     }
-
-    throw lastError;
   })().finally(() => {
     publicStatsRequest = null;
   });
@@ -119,7 +115,7 @@ export default function Stats() {
       {!isLoading && !hasError && <LandingSummaryGrid stats={stats} />}
       {!isLoading && hasError && (
         <div className="mx-auto mt-8 max-w-xl rounded-[28px] bg-white px-6 py-8 text-center shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
-          <p className="text-sm font-bold leading-6 text-muted">Statistik publik belum bisa dimuat dari API.</p>
+          <p className="text-sm font-bold leading-6 text-muted">Statistik publik belum bisa dimuat.</p>
         </div>
       )}
 

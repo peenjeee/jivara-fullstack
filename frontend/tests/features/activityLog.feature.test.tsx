@@ -2,9 +2,9 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ActivityLogPage, { __resetActivityLogPageViewCache } from "@/components/activity-log/ActivityLogPage";
 import { getNotificationActivityPageFromApi } from "@/lib/notificationActivitiesApi";
-import { getActivityReadIdsFromApi, markActivitiesReadViaApi } from "@/lib/activityReadApi";
+import { getActivityReadIdsFromApi, markActivitiesReadViaApi, markAllUnreadViaApi } from "@/lib/activityReadApi";
 import { getAuditActivityPageFromApi } from "@/lib/auditLogApi";
-import { getPatientsFromApi } from "@/lib/patientApi";
+import { getPatientsAssignedToNurseFromApi } from "@/lib/patientApi";
 import { showToast } from "@/lib/swal";
 import { useActivityLogStore } from "@/store/activityLog";
 import { useNurseStore } from "@/store/nurses";
@@ -28,10 +28,11 @@ vi.mock("@/lib/auditLogApi", () => ({
 vi.mock("@/lib/activityReadApi", () => ({
   getActivityReadIdsFromApi: vi.fn(),
   markActivitiesReadViaApi: vi.fn(),
+  markAllUnreadViaApi: vi.fn(),
 }));
 
 vi.mock("@/lib/patientApi", () => ({
-  getPatientsFromApi: vi.fn(),
+  getPatientsAssignedToNurseFromApi: vi.fn(),
 }));
 
 vi.mock("@/lib/axios", () => ({
@@ -74,7 +75,8 @@ describe("activity log feature", () => {
     vi.mocked(getAuditActivityPageFromApi).mockReset();
     vi.mocked(getActivityReadIdsFromApi).mockReset();
     vi.mocked(markActivitiesReadViaApi).mockReset();
-    vi.mocked(getPatientsFromApi).mockReset();
+    vi.mocked(markAllUnreadViaApi).mockReset();
+    vi.mocked(getPatientsAssignedToNurseFromApi).mockReset();
     vi.mocked(showToast).mockClear();
     useActivityLogStore.setState({ activities: [] });
     useNurseStore.setState({ nurses: [] });
@@ -84,23 +86,27 @@ describe("activity log feature", () => {
     __resetActivityLogPageViewCache();
   });
 
-  it("loads alert activities, filters critical items, and marks all as read", async () => {
-    vi.mocked(getNotificationActivityPageFromApi).mockResolvedValue(paginated([activity]));
-    vi.mocked(getAuditActivityPageFromApi).mockResolvedValue(paginated([]));
+  it("loads audit activities, filters critical items, and marks all as read", async () => {
+    vi.mocked(getNotificationActivityPageFromApi).mockResolvedValue(paginated([]));
+    vi.mocked(getAuditActivityPageFromApi).mockResolvedValue(paginated([activity]));
     vi.mocked(getActivityReadIdsFromApi).mockResolvedValue(new Set());
     vi.mocked(markActivitiesReadViaApi).mockResolvedValue(undefined);
-    vi.mocked(getPatientsFromApi).mockResolvedValue([]);
+    vi.mocked(markAllUnreadViaApi).mockResolvedValue(undefined);
+    vi.mocked(getPatientsAssignedToNurseFromApi).mockResolvedValue([]);
 
     render(<ActivityLogPage />);
 
     expect(await screen.findByText("Kepatuhan kritis")).toBeInTheDocument();
+    expect(getActivityReadIdsFromApi).toHaveBeenCalledWith({ activityIds: ["alert-1"], limit: 1 });
+    expect(getNotificationActivityPageFromApi).not.toHaveBeenCalled();
+    expect(getPatientsAssignedToNurseFromApi).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Kritis" }));
     expect(await screen.findByText("Budi belum minum obat.")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /tandai semua dibaca/i }));
 
     await waitFor(() => {
-      expect(markActivitiesReadViaApi).toHaveBeenCalledWith(["alert-1"]);
+      expect(markAllUnreadViaApi).toHaveBeenCalledOnce();
     });
     expect(showToast).toHaveBeenCalledWith("Semua aktivitas ditandai sudah dibaca.");
 
@@ -109,28 +115,49 @@ describe("activity log feature", () => {
     });
   });
 
-  it("read-only mode combines audit and alert activities", async () => {
+  it("read-only admin mode only renders audit activities", async () => {
     vi.mocked(getNotificationActivityPageFromApi).mockResolvedValue(paginated([activity]));
     vi.mocked(getAuditActivityPageFromApi).mockResolvedValue(
       paginated([{ ...activity, id: "audit-1", title: "Patient Updated", category: "Administrasi", severity: "Sukses", read: true }])
     );
     vi.mocked(getActivityReadIdsFromApi).mockResolvedValue(new Set());
-    vi.mocked(getPatientsFromApi).mockResolvedValue([]);
+    vi.mocked(getPatientsAssignedToNurseFromApi).mockResolvedValue([]);
 
-    render(<ActivityLogPage readOnly />);
+    render(<ActivityLogPage readOnly auditUserRole="admin" />);
 
-    // First check "Kepatuhan kritis" renders (it should)
-    expect(await screen.findByText("Kepatuhan kritis", {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(await screen.findByText("Patient Updated")).toBeInTheDocument();
+    expect(screen.queryByText("Kepatuhan kritis")).not.toBeInTheDocument();
 
-    // Now also verify store has both activities
     await waitFor(() => {
-      expect(useActivityLogStore.getState().activities.length).toBe(2);
-    }, { timeout: 5000 });
+      expect(useActivityLogStore.getState().activities).toHaveLength(1);
+    });
 
-    // Check for "Patient Updated" — use more flexible matcher
-    const patientUpdated = await screen.findByText((content) => content.includes("Patient"), {}, { timeout: 5000 });
-    expect(patientUpdated).toBeInTheDocument();
-
+    expect(getNotificationActivityPageFromApi).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: /tandai semua dibaca/i })).not.toBeInTheDocument();
+    expect(getActivityReadIdsFromApi).not.toHaveBeenCalled();
+  });
+
+  it("refreshes page 1 when returning to nurse activity log with cached data", async () => {
+    const oldActivity = { ...activity, id: "audit-old", title: "Patient Updated Lama", read: true };
+    const latestActivity = { ...activity, id: "audit-new", title: "Patient Updated Terbaru", read: false };
+    let auditCallCount = 0;
+
+    vi.mocked(getNotificationActivityPageFromApi).mockResolvedValue(paginated([]));
+    vi.mocked(getAuditActivityPageFromApi).mockImplementation(() => {
+      auditCallCount += 1;
+      return Promise.resolve(paginated(auditCallCount <= 2 ? [oldActivity] : [latestActivity]));
+    });
+    vi.mocked(getActivityReadIdsFromApi).mockResolvedValue(new Set());
+    vi.mocked(getPatientsAssignedToNurseFromApi).mockResolvedValue([]);
+
+    const firstRender = render(<ActivityLogPage auditUserRole="nurse" showNurseFilter={false} />);
+    expect(await screen.findByText("Patient Updated Lama")).toBeInTheDocument();
+
+    firstRender.unmount();
+    render(<ActivityLogPage auditUserRole="nurse" showNurseFilter={false} />);
+
+    expect(await screen.findByText("Patient Updated Terbaru")).toBeInTheDocument();
+    expect(screen.queryByText("Patient Updated Lama")).not.toBeInTheDocument();
+    expect(getAuditActivityPageFromApi).toHaveBeenCalledWith(expect.objectContaining({ page: 1, limit: 10, userRole: "nurse", forceRefresh: true }));
   });
 });

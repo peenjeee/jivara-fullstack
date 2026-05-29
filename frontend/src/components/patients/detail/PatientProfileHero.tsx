@@ -16,6 +16,8 @@ interface PatientProfileHeroProps {
 export default function PatientProfileHero({ patient }: PatientProfileHeroProps) {
   const shouldAnimate = useDashboardEntranceMotion();
   const scheduleHref = `/schedule?patientId=${encodeURIComponent(patient.id)}`;
+  const assignedNurseNames = patient.assignedNurses?.flatMap((nurse) => (nurse.name ? [nurse.name] : [])) ?? [];
+  const assignedNurseLabel = assignedNurseNames.length > 0 ? assignedNurseNames.join(", ") : "Belum ditugaskan";
 
   return (
     <m.section
@@ -45,12 +47,13 @@ export default function PatientProfileHero({ patient }: PatientProfileHeroProps)
           </Link>
         </div>
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
           <DetailItem label="Umur, Gender" value={`${patient.age} tahun, ${patient.gender}`} />
           <DetailItem label="Kunjungan Terakhir" value={patient.lastVisit} />
           <DetailItem label="Telepon" value={patient.phone ?? "Belum tersedia"} />
           <DetailItem label="Email" value={patient.email ?? "Belum tersedia"} />
           <DetailItem label="Alamat" value={patient.address ?? "Belum tersedia"} />
+          <DetailItem label="Ditangani Oleh" value={assignedNurseLabel} />
         </div>
       </div>
     </m.section>

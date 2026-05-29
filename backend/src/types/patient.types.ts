@@ -9,6 +9,7 @@ export interface PatientCreateDTO {
   diagnosis?: string;
   emergencyContact?: Record<string, unknown>;
   assignedNurseId?: string;
+  assignedNurseIds?: string[];
 }
 
 export interface PatientUpdateDTO {
@@ -30,4 +31,5 @@ export interface PatientListQuery {
   status?: string;
   adherenceStatus?: string;
   nurseId?: string;
+  sort?: string;
 }

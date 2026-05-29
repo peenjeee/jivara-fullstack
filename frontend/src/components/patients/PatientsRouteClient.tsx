@@ -12,13 +12,16 @@ export default function PatientsRouteClient() {
   const userRole = useAuthStore((state) => state.user?.role);
   const hasAuthHydrated = useAuthStore((state) => state.hasHydrated);
   const dashboardRole = getDashboardRole(userRole);
+  const canManagePatients = dashboardRole === "nurse" || isOperationalAdminRole(dashboardRole);
+  const canDeletePatients = dashboardRole === "nurse" || isOperationalAdminRole(dashboardRole);
+  const canAssignNurses = isOperationalAdminRole(dashboardRole);
 
   useEffect(() => {
-    if (!hasAuthHydrated || dashboardRole === "nurse" || isOperationalAdminRole(dashboardRole)) return;
+    if (!hasAuthHydrated || canManagePatients) return;
       replace("/dashboard");
-  }, [dashboardRole, hasAuthHydrated, replace]);
+  }, [canManagePatients, hasAuthHydrated, replace]);
 
-  if (!hasAuthHydrated || (dashboardRole !== "nurse" && !isOperationalAdminRole(dashboardRole))) return <DashboardRouteFallback title="Daftar Pasien" />;
+  if (!hasAuthHydrated || !canManagePatients) return <DashboardRouteFallback title="Daftar Pasien" />;
 
-  return <PatientListPage mode={isOperationalAdminRole(dashboardRole) ? "readonly" : "manage"} />;
+  return <PatientListPage mode="manage" canDeletePatients={canDeletePatients} canAssignNurses={canAssignNurses} />;
 }

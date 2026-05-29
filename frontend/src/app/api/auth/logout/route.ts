@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { clearAuthCookies, getBackendApiUrl, REFRESH_COOKIE, setLogoutCookie } from '../cookies';
 
-const LOGOUT_CLEAR_SITE_DATA = '"cache", "storage"';
+const LOGOUT_CLEAR_SITE_DATA = '"cache"';
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();

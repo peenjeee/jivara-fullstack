@@ -4,10 +4,13 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { m } from "motion/react";
 import SelectField from "@/components/ui/SelectField";
 import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
+import { getSchedulesForDate } from "@/helpers/patientSchedule";
 import type { PatientAdherenceDayResponse } from "@/lib/patientDashboardApi";
+import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
 
 interface PatientAdherenceHeatmapProps {
   readonly dailyBreakdown: readonly PatientAdherenceDayResponse[];
+  readonly schedules?: readonly MedicationScheduleRecord[];
 }
 
 interface HeatmapDay {
@@ -32,12 +35,13 @@ interface HeatmapTooltipState {
 const monthFormatter = new Intl.DateTimeFormat("id-ID", { month: "short" });
 const dateFormatter = new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "long", year: "numeric" });
 const levelClasses = ["bg-surface", "bg-primary/15", "bg-primary/30", "bg-primary/55", "bg-primary"];
+const emptySchedules: readonly MedicationScheduleRecord[] = [];
 
-export default function PatientAdherenceHeatmap({ dailyBreakdown }: PatientAdherenceHeatmapProps) {
+export default function PatientAdherenceHeatmap({ dailyBreakdown, schedules = emptySchedules }: PatientAdherenceHeatmapProps) {
   const shouldAnimate = useDashboardEntranceMotion();
   const today = useMemo(() => new Date(), []);
   const [selectedYear, setSelectedYear] = useState(() => today.getFullYear());
-  const dailyStats = useMemo(() => getDailyAdherenceStats(dailyBreakdown), [dailyBreakdown]);
+  const dailyStats = useMemo(() => getDailyAdherenceStats(dailyBreakdown, schedules), [dailyBreakdown, schedules]);
   const yearOptions = useMemo(() => getYearOptions(dailyBreakdown, today.getFullYear()), [dailyBreakdown, today]);
   const weeks = useMemo(() => getHeatmapWeeks(selectedYear, today, dailyStats), [selectedYear, today, dailyStats]);
   const monthLabels = useMemo(() => getMonthLabels(weeks, selectedYear), [weeks, selectedYear]);
@@ -302,8 +306,14 @@ function getTooltipPosition(x: number, tooltipWidth: number) {
 }
 
 
-function getDailyAdherenceStats(days: readonly PatientAdherenceDayResponse[]) {
+function getDailyAdherenceStats(days: readonly PatientAdherenceDayResponse[], schedules: readonly MedicationScheduleRecord[]) {
   return days.reduce<Map<string, { total: number; confirmed: number }>>((statsByDate, day) => {
+    const date = getDateFromKey(day.date);
+    if (date && schedules.length > 0 && getSchedulesForDate(schedules, date).length === 0) {
+      statsByDate.set(day.date, { total: 0, confirmed: 0 });
+      return statsByDate;
+    }
+
     statsByDate.set(day.date, {
       total: day.scheduled,
       confirmed: day.confirmed,
@@ -332,4 +342,10 @@ function getTooltipLabel(day: HeatmapDay) {
 
 function getDateKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function getDateFromKey(dateKey: string) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+  return new Date(year, month - 1, day);
 }

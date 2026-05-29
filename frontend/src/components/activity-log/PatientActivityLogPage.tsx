@@ -12,13 +12,14 @@ import { FoodScanDetailModal } from "@/components/food-scan";
 import PatientMedicineDetailModal from "@/components/schedule/PatientMedicineDetailModal";
 import { getDateKey } from "@/helpers/patientSchedule";
 import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
-import { getActivityReadIdsFromApi, markActivitiesReadViaApi } from "@/lib/activityReadApi";
+import { getActivityReadIdsFromApi, markActivitiesReadViaApi, markAllUnreadViaApi } from "@/lib/activityReadApi";
 import { isDateInRange } from "@/lib/dateRange";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
 import type { ActivityCategory, ActivityLogRecord } from "@/lib/mocks/activityLogs";
 import { getPatientActivityLogData } from "@/lib/patientDashboardApi";
 import { showToast } from "@/lib/swal";
 import { useActivityLogStore } from "@/store/activityLog";
+import { useAuthStore } from "@/store/auth";
 import ActivityDetailModal from "./ActivityDetailModal";
 import type { ActivityQuickFilter } from "./ActivityToolbar";
 import PatientActivityCalendar from "./PatientActivityCalendar";
@@ -35,6 +36,7 @@ let patientActivityLogViewCache: {
   date: string;
   visibleMonth: Date;
   schedules: MedicationScheduleRecord[];
+  cachedUserId: string | null;
 } | null = null;
 
 interface PatientActivityLogState {
@@ -59,27 +61,30 @@ function patientActivityLogReducer(state: PatientActivityLogState, action: Patie
 
 export default function PatientActivityLogPage({ initialCategory }: PatientActivityLogPageProps) {
   const shouldAnimate = useDashboardEntranceMotion();
+  const currentUserId = useAuthStore((state) => state.user?.id);
+  const cacheIsValid = patientActivityLogViewCache !== null && patientActivityLogViewCache.cachedUserId === (currentUserId ?? null);
+  const unreadActivityCount = useActivityLogStore((state) => state.unreadActivityCount);
   const activities = useActivityLogStore((state) => state.activities);
   const setActivities = useActivityLogStore((state) => state.setActivities);
   const setActivityLogLoading = useActivityLogStore((state) => state.setLoading);
   const markActivityAsRead = useActivityLogStore((state) => state.markAsRead);
   const markAllActivitiesAsRead = useActivityLogStore((state) => state.markAllAsRead);
   const [state, dispatch] = useReducer(patientActivityLogReducer, {
-    search: patientActivityLogViewCache?.search ?? "",
-    quickFilter: patientActivityLogViewCache?.quickFilter ?? "all",
-    category: patientActivityLogViewCache?.category ?? (isActivityCategory(initialCategory) ? initialCategory : "all"),
-    date: patientActivityLogViewCache?.date ?? "",
-    visibleMonth: patientActivityLogViewCache?.visibleMonth ?? new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+    search: cacheIsValid ? (patientActivityLogViewCache?.search ?? "") : "",
+    quickFilter: cacheIsValid ? (patientActivityLogViewCache?.quickFilter ?? "all") : "all",
+    category: cacheIsValid ? (patientActivityLogViewCache?.category ?? (isActivityCategory(initialCategory) ? initialCategory : "all")) : (isActivityCategory(initialCategory) ? initialCategory : "all"),
+    date: cacheIsValid ? (patientActivityLogViewCache?.date ?? "") : "",
+    visibleMonth: cacheIsValid ? (patientActivityLogViewCache?.visibleMonth ?? new Date(new Date().getFullYear(), new Date().getMonth(), 1)) : new Date(new Date().getFullYear(), new Date().getMonth(), 1),
     selectedActivity: null,
     selectedSchedule: null,
     selectedFoodScanId: null,
-    isLoading: !patientActivityLogViewCache,
-    hasLoadedActivities: Boolean(patientActivityLogViewCache),
+    isLoading: !cacheIsValid,
+    hasLoadedActivities: cacheIsValid,
     isMarkingAllRead: false,
   });
   const { search, quickFilter, category, date, visibleMonth, selectedActivity, selectedSchedule, selectedFoodScanId, isLoading, hasLoadedActivities, isMarkingAllRead } = state;
   const stateRef = useRef(state);
-  const schedulesRef = useRef<MedicationScheduleRecord[]>(patientActivityLogViewCache?.schedules ?? []);
+  const schedulesRef = useRef<MedicationScheduleRecord[]>(cacheIsValid ? (patientActivityLogViewCache?.schedules ?? []) : []);
   const deferredSearch = useDeferredValue(search);
   const todayKey = getDateKey(new Date());
 
@@ -100,8 +105,17 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
 
     dispatch({ type: "patch", payload: { isLoading: true } });
 
-    Promise.all([getPatientActivityLogData(visibleMonth), getActivityReadIdsFromApi().catch(() => new Set<string>())])
-      .then(([activityData, readIds]) => {
+    getPatientActivityLogData(visibleMonth, { forceRefresh: true })
+      .then(async (activityData) => {
+        const year = visibleMonth.getFullYear();
+        const month = String(visibleMonth.getMonth() + 1).padStart(2, "0");
+        const startDate = `${year}-${month}-01`;
+        const endDate = `${year}-${month}-31`;
+        
+        const readIds = await getActivityReadIdsFromApi({ startDate, endDate }).catch(() => new Set<string>());
+        return { activityData, readIds };
+      })
+      .then(({ activityData, readIds }) => {
         if (!isMounted) return;
         setActivities(activityData.activities.map((activity) => ({ ...activity, read: readIds.has(activity.id) || activity.read })));
         schedulesRef.current = activityData.schedules;
@@ -113,6 +127,7 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
           date: currentState.date,
           visibleMonth: currentState.visibleMonth,
           schedules: activityData.schedules,
+          cachedUserId: currentUserId ?? null,
         };
         dispatch({ type: "patch", payload: { hasLoadedActivities: true, isLoading: false } });
       })
@@ -126,7 +141,7 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
     return () => {
       isMounted = false;
     };
-  }, [setActivities, visibleMonth]);
+  }, [currentUserId, setActivities, visibleMonth]);
 
   useEffect(() => {
     if (!hasLoadedActivities) return;
@@ -137,8 +152,9 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
       date,
       visibleMonth,
       schedules: schedulesRef.current,
+      cachedUserId: currentUserId ?? null,
     };
-  }, [category, date, hasLoadedActivities, quickFilter, search, visibleMonth]);
+  }, [category, currentUserId, date, hasLoadedActivities, quickFilter, search, visibleMonth]);
 
   const patientActivities = useMemo(() => activities, [activities]);
 
@@ -174,6 +190,7 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
   }, [category, date, deferredSearch, patientActivities, quickFilter]);
 
   const hasUnread = patientActivities.some((activity) => !activity.read);
+  const showMarkAllButton = hasUnread || (unreadActivityCount ?? 0) > 0;
   const hasActiveFilters = Boolean(search || quickFilter !== "all" || category !== "all" || date);
 
   const resetFilters = () => {
@@ -183,11 +200,7 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
   const markAllAsRead = async () => {
     dispatch({ type: "patch", payload: { isMarkingAllRead: true } });
     try {
-      const unreadIds: string[] = [];
-      for (const activity of patientActivities) {
-        if (!activity.read) unreadIds.push(activity.id);
-      }
-      await markActivitiesReadViaApi(unreadIds);
+      await markAllUnreadViaApi();
       markAllActivitiesAsRead();
       showToast("Semua aktivitas ditandai sudah dibaca.");
     } catch {
@@ -226,7 +239,7 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
     <DashboardPageShell>
       <DashboardPageHeader
         title="Log Aktivitas"
-        action={hasUnread && (
+        action={showMarkAllButton && (
           <Button size="sm" icon={<CheckCheck size={16} />} onClick={markAllAsRead} loading={isMarkingAllRead}>
             Tandai Semua Dibaca
           </Button>

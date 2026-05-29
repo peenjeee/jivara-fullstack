@@ -7,7 +7,7 @@ import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
 import Button from "@/components/ui/Button";
 import PatientPagination from "@/components/patients/PatientPagination";
-import { SummaryCardsSkeleton, TableDataSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
+import { ButtonSkeleton, SummaryCardsSkeleton, TableDataSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import ScheduleDetailModal from "./ScheduleDetailModal";
 import ScheduleModal from "./ScheduleModal";
@@ -29,8 +29,9 @@ export default function SchedulePage({ initialPatientId = "", initialPatientName
     <DashboardPageShell>
       <DashboardPageHeader
         title="Jadwal Obat"
-        action={!readOnly && (
-            <Button size="sm" icon={<Plus size={16} />} onClick={() => schedule.setIsAddModalOpen(true)}>
+        action={!readOnly && (schedule.isLoading && !schedule.hasLoadedSchedules
+          ? <ButtonSkeleton />
+          : <Button size="sm" icon={<Plus size={16} />} onClick={() => schedule.setIsAddModalOpen(true)}>
             Tambah Jadwal
           </Button>
         )}
@@ -57,7 +58,7 @@ export default function SchedulePage({ initialPatientId = "", initialPatientName
         )}
       </m.div>
 
-      {!readOnly && <ScheduleModal isOpen={schedule.isAddModalOpen} patients={schedule.patients} medicineIndexOffsetByPatient={schedule.medicineCountByPatient} onClose={() => schedule.setIsAddModalOpen(false)} onSubmit={schedule.handleAddSchedule} />}
+      {!readOnly && <ScheduleModal isOpen={schedule.isAddModalOpen} patients={schedule.scheduleFormPatients} medicineIndexOffsetByPatient={schedule.medicineCountByPatient} onClose={() => schedule.setIsAddModalOpen(false)} onSubmit={schedule.handleAddSchedule} />}
       <ScheduleModal
         isOpen={Boolean(schedule.addMedicinePatientId)}
         patients={schedule.patients}

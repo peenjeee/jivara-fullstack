@@ -20,6 +20,8 @@ const riskTextClass: Record<FoodScanRisk, string> = {
   "High Risk": "text-danger",
 };
 
+const defaultMedicalDisclaimer = "Ini bukan nasihat medis. Selalu konsultasikan dengan dokter atau apoteker Anda.";
+
 export default function FoodScanAnalysisView({ scanId, imageSizes = "(max-width: 1280px) 100vw, 620px", analysisData }: FoodScanAnalysisViewProps) {
   const shouldAnimate = useDashboardEntranceMotion();
   const analysis = analysisData?.scan.id === scanId ? analysisData : null;
@@ -135,6 +137,9 @@ type FoodRecommendationItem = NonNullable<FoodScanAnalysis["recommendedFoods"]>[
 
 function RecommendationCard({ recommendedFoods, foodsToAvoid, safeFoods, shouldAnimate }: { readonly recommendedFoods: NonNullable<FoodScanAnalysis["recommendedFoods"]>; readonly foodsToAvoid: NonNullable<FoodScanAnalysis["foodsToAvoid"]>; readonly safeFoods: NonNullable<FoodScanAnalysis["safeFoods"]>; readonly shouldAnimate: boolean }) {
   const { safeRecommendations, avoidRecommendations } = splitRecommendationsByRisk(recommendedFoods, foodsToAvoid);
+  const showsSafeFallback = safeRecommendations.length === 0 && safeFoods.length > 0;
+  const showsAvoidSection = avoidRecommendations.length > 0 || safeRecommendations.length > 0 || showsSafeFallback;
+  const visibleSectionCount = Number(safeRecommendations.length > 0) + Number(showsSafeFallback) + Number(showsAvoidSection);
 
   if (safeRecommendations.length === 0 && avoidRecommendations.length === 0 && safeFoods.length === 0) return null;
 
@@ -147,16 +152,16 @@ function RecommendationCard({ recommendedFoods, foodsToAvoid, safeFoods, shouldA
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className={`grid gap-4 ${visibleSectionCount > 1 ? "lg:grid-cols-2" : ""}`}>
         {safeRecommendations.length > 0 && <FoodScoreList title="Makanan Aman" items={safeRecommendations} tone="safe" />}
-        {avoidRecommendations.length > 0 && <FoodScoreList title="Perlu Dibatasi" items={avoidRecommendations} tone="avoid" />}
-        {safeRecommendations.length === 0 && safeFoods.length > 0 && <SafeFoodList items={safeFoods} />}
+        {showsSafeFallback && <SafeFoodList items={safeFoods} />}
+        {showsAvoidSection && <FoodScoreList title="Perlu Dibatasi" items={avoidRecommendations} tone="avoid" emptyMessage="Tidak ada makanan yang perlu dihindari. Namun selalu konsultasikan dengan dokter atau apoteker Anda." />}
       </div>
     </m.section>
   );
 }
 
-function FoodScoreList({ title, items, tone }: { readonly title: string; readonly items: readonly FoodRecommendationItem[]; readonly tone: "safe" | "avoid" }) {
+function FoodScoreList({ title, items, tone, emptyMessage }: { readonly title: string; readonly items: readonly FoodRecommendationItem[]; readonly tone: "safe" | "avoid"; readonly emptyMessage?: string }) {
   const countClass = tone === "safe" ? "bg-leaf/10 text-leaf" : "bg-danger/10 text-danger";
   const rowClass = tone === "safe" ? "bg-leaf/10 text-leaf" : "bg-danger/10 text-danger";
 
@@ -172,6 +177,11 @@ function FoodScoreList({ title, items, tone }: { readonly title: string; readonl
         data-lenis-prevent-wheel
         data-lenis-prevent-touch
       >
+        {items.length === 0 && emptyMessage && (
+          <div className="flex h-full items-center rounded-2xl bg-white/70 px-4 py-5 text-sm font-bold leading-6 text-muted">
+            {emptyMessage}
+          </div>
+        )}
         {items.map((item) => (
           <div key={`${title}-${item.foodName}`} className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2 ${rowClass}`}>
             <span className="min-w-0 break-words text-sm font-extrabold leading-5">{formatFoodName(item.foodName)}</span>
@@ -227,7 +237,7 @@ function formatRiskLabel(value: string) {
 
 function SafeFoodList({ items }: { readonly items: NonNullable<FoodScanAnalysis["safeFoods"]> }) {
   return (
-    <div className="rounded-3xl bg-surface p-4 lg:col-span-2">
+    <div className="rounded-3xl bg-surface p-4">
       <h4 className="font-display text-xl font-extrabold tracking-[-0.04em] text-text-main">Makanan Terdeteksi Aman</h4>
       <div className="mt-3 flex flex-wrap gap-2">
         {items.map((item) => (
@@ -241,6 +251,8 @@ function SafeFoodList({ items }: { readonly items: NonNullable<FoodScanAnalysis[
 }
 
 function InteractionAnalysisCard({ interactions, analyzedMedications, safeFoods, disclaimer, shouldAnimate }: { readonly interactions: FoodScanAnalysis["interactions"]; readonly analyzedMedications: NonNullable<FoodScanAnalysis["analyzedMedications"]>; readonly safeFoods: NonNullable<FoodScanAnalysis["safeFoods"]>; readonly disclaimer?: string; readonly shouldAnimate: boolean }) {
+  const disclaimerText = disclaimer?.trim() || defaultMedicalDisclaimer;
+
   return (
     <m.section className="space-y-5" {...getDashboardEntranceMotion(shouldAnimate, 0.18, 18)}>
       <div className="mb-5 flex items-center gap-3">
@@ -285,9 +297,9 @@ function InteractionAnalysisCard({ interactions, analyzedMedications, safeFoods,
         </div>
       )}
 
-      {disclaimer && (
+      {disclaimerText && (
         <p className="mt-4 rounded-3xl bg-surface px-4 py-3 text-sm font-semibold leading-6 text-muted">
-          {disclaimer}
+          {disclaimerText}
         </p>
       )}
     </m.section>

@@ -68,7 +68,7 @@ export default function PatientTable({ patients, title, showViewAll = false, act
                   <td className="px-3 py-4 lg:px-5"><PatientStatusBadge status={patient.status} /></td>
                   <td className="px-3 py-4 text-sm font-bold text-muted lg:px-5">{patient.lastVisit}</td>
                   <td className="px-3 py-4 lg:px-5"><PatientAdherence value={patient.adherence} /></td>
-                  {showAssignedNurse && <td className="px-3 py-4 text-sm font-bold text-muted lg:px-5">{assignedNurseByPatientId?.[patient.id] ?? "Belum ditugaskan"}</td>}
+                  {showAssignedNurse && <td className="px-3 py-4 lg:px-5"><AssignedNursesText patient={patient} fallback={assignedNurseByPatientId?.[patient.id]} /></td>}
                   <td className="px-3 py-4 lg:px-5"><PatientActions patient={patient} actions={actions} processingAction={processingAction} onAction={onAction} /></td>
                 </tr>
               ))
@@ -92,7 +92,7 @@ export default function PatientTable({ patients, title, showViewAll = false, act
                 <span>{patient.lastVisit}</span>
                 <PatientStatusBadge status={patient.status} />
                 <PatientAdherence value={patient.adherence} />
-                {showAssignedNurse && <span className="col-span-2">Perawat: {assignedNurseByPatientId?.[patient.id] ?? "Belum ditugaskan"}</span>}
+                {showAssignedNurse && <span className="col-span-2"><AssignedNursesText patient={patient} fallback={assignedNurseByPatientId?.[patient.id]} prefix="Perawat: " /></span>}
               </div>
             </article>
           ))
@@ -100,6 +100,14 @@ export default function PatientTable({ patients, title, showViewAll = false, act
       </div>
     </section>
   );
+}
+
+function AssignedNursesText({ patient, fallback, prefix = "" }: { readonly patient: PatientRecord; readonly fallback?: string; readonly prefix?: string }) {
+  const names = patient.assignedNurses?.flatMap((nurse) => (nurse.name ? [nurse.name] : [])) ?? [];
+  const label = names.length > 0 ? names.join(", ") : fallback || "Belum ditugaskan";
+  const isEmpty = label === "Belum ditugaskan";
+
+  return <span className={`text-sm font-bold ${isEmpty ? "text-danger" : "text-muted"}`}>{prefix}{label}</span>;
 }
 
 function PatientIdentity({ patient }: { readonly patient: PatientRecord }) {

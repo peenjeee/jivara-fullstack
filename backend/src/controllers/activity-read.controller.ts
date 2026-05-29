@@ -14,8 +14,30 @@ const sendError = (res: Response, error: unknown) => {
 
 export const listActivityReads = async (req: AuthRequest, res: Response) => {
   try {
-    const reads = await activityReadService.listActivityReads(req.user!.id);
-    res.status(200).json({ status: "berhasil", data: reads });
+    const result = await activityReadService.listActivityReads(req.user!.id, req.query);
+    res.status(200).json({ status: "berhasil", data: result.data, meta: result.meta });
+  } catch (error) {
+    sendError(res, error);
+  }
+};
+
+export const getUnreadActivityCount = async (req: AuthRequest, res: Response) => {
+  try {
+    const data = await activityReadService.getUnreadActivityCount(req.user!);
+    res.status(200).json({ status: "berhasil", data });
+  } catch (error) {
+    sendError(res, error);
+  }
+};
+
+export const markAllUnread = async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await activityReadService.markAllUnread(req.user!);
+    res.status(200).json({
+      status: "berhasil",
+      data: result,
+      message: result.count > 0 ? `${result.count} aktivitas ditandai sudah dibaca` : "Tidak ada aktivitas yang perlu ditandai",
+    });
   } catch (error) {
     sendError(res, error);
   }

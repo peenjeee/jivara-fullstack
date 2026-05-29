@@ -7,8 +7,9 @@ import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
 import Button from "@/components/ui/Button";
-import { TableDataSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
+import { ButtonSkeleton, TableDataSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
 import AddPatientModal from "./AddPatientModal";
+import AssignPatientNursesModal from "./AssignPatientNursesModal";
 import PatientPagination from "./PatientPagination";
 import PatientTable from "./PatientTable";
 import PatientToolbar from "./PatientToolbar";
@@ -16,19 +17,31 @@ import { usePatientList } from "./usePatientList";
 
 interface PatientListPageProps {
   readonly mode?: "manage" | "readonly";
+  readonly canDeletePatients?: boolean;
+  readonly canAssignNurses?: boolean;
 }
 
-export default function PatientListPage({ mode = "manage" }: PatientListPageProps) {
+export default function PatientListPage({ mode = "manage", canDeletePatients = false, canAssignNurses = false }: PatientListPageProps) {
   const shouldAnimate = useDashboardEntranceMotion();
   const { push } = useRouter();
-  const patientList = usePatientList((patientId) => push(`/patients/${encodeURIComponent(patientId)}`));
+  const shouldLoadNurses = canAssignNurses || mode === "readonly";
+  const patientList = usePatientList((patientId) => push(`/patients/${encodeURIComponent(patientId)}`), { shouldLoadNurses });
+  const baseActions = mode === "readonly"
+    ? ["view"] as const
+    : canDeletePatients
+      ? ["view", "edit", "delete", "activate"] as const
+      : ["view", "edit"] as const;
+  const patientActions = mode !== "readonly" && canAssignNurses
+    ? [...baseActions, "assign"] as const
+    : baseActions;
 
   return (
     <DashboardPageShell>
       <DashboardPageHeader
         title="Daftar Pasien"
-        action={mode === "manage" && (
-            <Button size="sm" icon={<Plus size={16} />} onClick={() => patientList.setIsAddModalOpen(true)}>
+        action={mode === "manage" && (patientList.isLoading && !patientList.hasLoadedPatients
+          ? <ButtonSkeleton />
+          : <Button size="sm" icon={<Plus size={16} />} onClick={() => patientList.setIsAddModalOpen(true)}>
             Tambah Pasien Baru
           </Button>
         )}
@@ -54,7 +67,7 @@ export default function PatientListPage({ mode = "manage" }: PatientListPageProp
       >
         {patientList.isLoading ? <TableDataSkeleton /> : (
           <>
-            <PatientTable patients={patientList.paginatedPatients} actions={mode === "readonly" ? ["view"] : ["view", "edit", "delete"]} processingAction={patientList.processingAction} onAction={patientList.handlePatientAction} embedded emptyMessage="Tidak ada data pasien." assignedNurseByPatientId={mode === "readonly" ? patientList.assignedNurseByPatientId : undefined} />
+            <PatientTable patients={patientList.paginatedPatients} actions={patientActions} processingAction={patientList.processingAction} onAction={patientList.handlePatientAction} embedded emptyMessage="Tidak ada data pasien." assignedNurseByPatientId={mode === "readonly" ? patientList.assignedNurseByPatientId : undefined} />
             <PatientPagination currentPage={patientList.currentPage} totalPages={patientList.totalPages} totalItems={patientList.totalPatients} pageSize={patientList.pageSize} onPageChange={patientList.setCurrentPage} />
           </>
         )}
@@ -79,6 +92,7 @@ export default function PatientListPage({ mode = "manage" }: PatientListPageProp
         onClose={() => patientList.setEditingPatient(null)}
         onSubmit={patientList.handleEditPatient}
       />
+      {mode === "manage" && <AssignPatientNursesModal isOpen={Boolean(patientList.assigningPatient)} patient={patientList.assigningPatient} nurses={patientList.nurses} isLoadingNurses={patientList.isLoadingNurses} onClose={() => patientList.setAssigningPatient(null)} onSubmit={patientList.handleAssignNurses} />}
     </DashboardPageShell>
   );
 }

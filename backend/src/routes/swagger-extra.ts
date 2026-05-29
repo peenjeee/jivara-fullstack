@@ -234,7 +234,7 @@
  *                 patientId: d2945f3f-d09c-4d9f-8ed2-1b9914328746
  *                 imageUrl: https://your-project.supabase.co/storage/v1/object/public/food-scans/food-scans/2026-05-18/example.jpg
  *                 overallRiskLevel: rendah
- *                 modelVersion: yolov11-food-v1
+ *                 modelVersion: yolo11n
  *                 inferenceTimeMs: 320
  *                 createdAt: 2026-05-18T17:58:10.276Z
  *                 detectedItems:

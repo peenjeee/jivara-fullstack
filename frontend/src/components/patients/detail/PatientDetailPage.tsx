@@ -39,7 +39,7 @@ export default function PatientDetailPage({ data, patientId }: PatientDetailPage
 
     let isMounted = true;
 
-    getPatientDetailFromApi(patientId)
+    getPatientDetailFromApi(patientId, { forceRefresh: true })
       .then((nextData) => {
         if (!isMounted) return;
         patientDetailViewCache.set(cacheKey, nextData);
@@ -53,6 +53,25 @@ export default function PatientDetailPage({ data, patientId }: PatientDetailPage
       isMounted = false;
     };
   }, [cacheKey, data, patientId]);
+
+  useEffect(() => {
+    if (!patientId) return;
+
+    const handleScheduleChanged = (event: Event) => {
+      const patientIds = (event as CustomEvent<{ patientIds?: string[] }>).detail?.patientIds;
+      if (patientIds && patientIds.length > 0 && !patientIds.includes(patientId)) return;
+
+      getPatientDetailFromApi(patientId, { forceRefresh: true })
+        .then((nextData) => {
+          patientDetailViewCache.set(cacheKey, nextData);
+          setDetail({ data: nextData, loaded: true });
+        })
+        .catch(() => undefined);
+    };
+
+    window.addEventListener("jivara:schedule-changed", handleScheduleChanged);
+    return () => window.removeEventListener("jivara:schedule-changed", handleScheduleChanged);
+  }, [cacheKey, patientId]);
 
   const summary = getPatientSummary(detailData);
   const stats = [
@@ -94,7 +113,7 @@ export default function PatientDetailPage({ data, patientId }: PatientDetailPage
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.8fr)]">
         <div className="min-w-0 space-y-6">
           <PatientMedicineList schedules={detailData.schedules} />
-          <PatientAdherenceChart patient={detailData.patient} />
+          <PatientAdherenceChart patient={detailData.patient} schedules={detailData.schedules} />
         </div>
 
         <div className="min-w-0 space-y-6">

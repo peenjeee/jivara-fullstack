@@ -12,11 +12,13 @@ import { showConfirm } from "@/lib/swal";
 import { useAuthStore } from "@/store/auth";
 import type { User } from "@/types/auth";
 import { useIsStandalonePwa } from "@/hooks";
+import { useActivityBadgeSync } from "@/hooks/useActivityBadgeSync";
 import PwaTopLogoBar from "@/components/ui/PwaTopLogoBar";
 import DashboardBottomNav from "./DashboardBottomNav";
 import DashboardNavbar from "./DashboardNavbar";
 import DashboardRouteFallback from "./DashboardRouteFallback";
 import { getFallbackPathForRole, isPathAllowedForRole } from "./access";
+import { getDashboardRole } from "./navigation";
 
 interface DashboardLayoutProps {
   readonly children: ReactNode;
@@ -40,9 +42,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
   const { replace } = useRouter();
   const userRole = user?.role;
+  const dashboardRole = getDashboardRole(userRole);
 
   const isCurrentRouteAllowed = isPathAllowedForRole(pathname, userRole);
   const fallbackPath = getFallbackPathForRole(userRole);
+  useActivityBadgeSync({ enabled: hasHydrated && Boolean(user) && !isLoggingOut, role: dashboardRole });
 
   const redirectToLogin = useCallback(() => {
     replace("/login?loggedOut=1");
@@ -247,13 +251,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
       logout();
       window.localStorage.removeItem("jivara-auth-storage");
+      window.sessionStorage.setItem("jivara-logout-success", "1");
 
       try {
         await axios.post("/api/v1/auth/logout", undefined, { timeout: 5000 });
       } catch {
       }
 
-      window.sessionStorage.setItem("jivara-logout-success", "1");
       redirectToLogin();
     }
   };

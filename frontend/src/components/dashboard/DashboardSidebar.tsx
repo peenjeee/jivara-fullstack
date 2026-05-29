@@ -1,10 +1,8 @@
 import DashboardAccountActions from "./DashboardAccountActions";
 import DashboardNavItem from "./DashboardNavItem";
-import { getDashboardNavItems, isAdminDashboardRole, type DashboardNavLabel, type DashboardRole } from "./navigation";
+import { getDashboardNavItems, type DashboardNavLabel, type DashboardRole } from "./navigation";
 import Image from "next/image";
-import { getUnreadActivityCount } from "@/helpers/activityLogs";
 import { useActivityLogStore } from "@/store/activityLog";
-import { usePatientDashboardStore } from "@/store/patientDashboard";
 
 interface DashboardSidebarProps {
   readonly activeItem?: DashboardNavLabel;
@@ -14,12 +12,10 @@ interface DashboardSidebarProps {
 }
 
 export default function DashboardSidebar({ activeItem, role, onLogout, onNavigate }: DashboardSidebarProps) {
-  const patientId = usePatientDashboardStore((state) => state.patientId);
   const globalUnreadActivityCount = useActivityLogStore((state) => state.unreadActivityCount);
   const unreadActivityCount = useActivityLogStore((state) => {
-    if (isAdminDashboardRole(role)) return 0;
-    if (role === "nurse" && state.unreadActivityCount !== null) return state.unreadActivityCount;
-    return getUnreadActivityCount(state.activities, role === "patient" ? patientId ?? undefined : undefined);
+    if (role === "super_admin" || role === "admin") return 0;
+    return state.unreadActivityCount ?? 0;
   });
   const isActivityLogLoading = useActivityLogStore((state) => state.isLoading);
   const navItems = getDashboardNavItems(role);
@@ -46,7 +42,7 @@ export default function DashboardSidebar({ activeItem, role, onLogout, onNavigat
             item={item}
             isActive={activeItem === item.label}
             badgeCount={item.href === "/activity-log" ? unreadActivityCount : 0}
-            isBadgeLoading={item.href === "/activity-log" && !isAdminDashboardRole(role) && globalUnreadActivityCount === null && isActivityLogLoading}
+            isBadgeLoading={item.href === "/activity-log" && (role === "patient" || role === "nurse") && globalUnreadActivityCount === null && isActivityLogLoading}
             onSelect={() => onNavigate?.()}
           />
         ))}

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import api from "@/lib/axios";
 import {
   assignPatientToNurseViaApi,
+  clearPatientsCache,
   createPatientViaApi,
   deactivatePatientViaApi,
   getInitialPatientDetail,
@@ -52,6 +53,7 @@ describe("patientApi", () => {
     mockedPost.mockReset();
     mockedPut.mockReset();
     mockedDelete.mockReset();
+    clearPatientsCache();
   });
 
   it("maps patient list response", async () => {
@@ -60,8 +62,30 @@ describe("patientApi", () => {
 
     const patients = await getPatientsFromApi();
 
-    expect(mockedGet).toHaveBeenCalledWith("/patients", { params: { limit: 100, status: "active" } });
+    expect(mockedGet).toHaveBeenCalledWith("/patients", { params: { page: 1, limit: 100, status: "active" } });
     expect(patients[0]).toMatchObject({ id: "patient-1", name: "Budi Santoso", gender: "Pria", adherence: 100, avatar: "BS" });
+  });
+
+  it("loads every active patient page when a full list is needed", async () => {
+    mockedGet
+      .mockResolvedValueOnce({
+        data: {
+          data: [{ ...patientResponse, id: "patient-1", fullName: "Budi Santoso" }],
+          meta: { page: 1, limit: 100, total: 101 },
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          data: [{ ...patientResponse, id: "patient-2", fullName: "Siti Aminah" }],
+          meta: { page: 2, limit: 100, total: 101 },
+        },
+      });
+
+    const patients = await getPatientsFromApi();
+
+    expect(mockedGet).toHaveBeenNthCalledWith(1, "/patients", { params: { page: 1, limit: 100, status: "active" } });
+    expect(mockedGet).toHaveBeenNthCalledWith(2, "/patients", { params: { page: 2, limit: 100, status: "active" } });
+    expect(patients.map((patient) => patient.id)).toEqual(["patient-1", "patient-2"]);
   });
 
   it("loads patient detail with active medication mapping", async () => {
@@ -70,7 +94,8 @@ describe("patientApi", () => {
         data: {
           ...patientResponse,
           registeredAt: "2026-05-01T08:00:00.000Z",
-          adherenceRate30d: 66.4,
+          adherenceRateAll: 66.4,
+          totalScheduledAll: 10,
           activeMedications: [{ id: "med-1", drugName: "Metformin", dosage: "500 mg", frequency: 2, scheduledTimes: ["08:00", 10], instructions: "Sesudah makan", createdAt: "2026-05-02T08:00:00.000Z" }],
         },
       },
@@ -81,6 +106,28 @@ describe("patientApi", () => {
     expect(mockedGet).toHaveBeenCalledWith("/patients/patient-1");
     expect(detail.patient).toMatchObject({ id: "patient-1", adherence: 66, status: "Lagging Behind" });
     expect(detail.schedules[0]).toMatchObject({ id: "med-1", medicineName: "Metformin", times: ["08:00"] });
+  });
+
+  it("keeps patient detail status consistent with the patient detail response", async () => {
+    mockedGet
+      .mockResolvedValueOnce({
+        data: {
+          data: {
+            ...patientResponse,
+            registeredAt: "2026-05-01T08:00:00.000Z",
+            adherenceRateAll: 100,
+            totalScheduledAll: 2,
+            activeMedications: [],
+            activeMedicationsCount: 0,
+          },
+        },
+      })
+      .mockResolvedValueOnce({ data: { data: [] } });
+
+    const detail = await getPatientDetailFromApi("patient-1");
+
+    expect(detail.patient).toMatchObject({ id: "patient-1", adherence: 100, status: "On Ideal Schedule" });
+    expect(mockedGet).not.toHaveBeenCalledWith("/adherence", expect.anything());
   });
 
   it("creates, updates, deletes, and assigns patients", async () => {
@@ -96,7 +143,7 @@ describe("patientApi", () => {
     expect(mockedGet).not.toHaveBeenCalledWith("/patients/patient-1");
     expect(mockedPut).toHaveBeenNthCalledWith(1, "/patients/patient%2F1", expect.not.objectContaining({ password: expect.anything() }));
     expect(mockedDelete).toHaveBeenCalledWith("/patients/patient%2F1");
-    expect(mockedPut).toHaveBeenNthCalledWith(2, "/patients/patient%2F1/assign", { nurseId: "nurse-1" });
+    expect(mockedPut).toHaveBeenNthCalledWith(2, "/patients/patient%2F1/assign", { nurseIds: ["nurse-1"] });
   });
 
   it("loads patients assigned to a nurse with a server-side filter", async () => {
@@ -105,7 +152,7 @@ describe("patientApi", () => {
 
     const patients = await getPatientsAssignedToNurseFromApi("nurse-1");
 
-    expect(mockedGet).toHaveBeenCalledWith("/patients", { params: { limit: 100, status: "active", nurseId: "nurse-1" } });
+    expect(mockedGet).toHaveBeenCalledWith("/patients", { params: { page: 1, limit: 100, status: "active", nurseId: "nurse-1" } });
     expect(patients).toHaveLength(1);
     expect(patients[0]?.id).toBe("patient-1");
   });
