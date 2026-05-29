@@ -216,6 +216,54 @@ router.get("/:id", authorizeRoles("patient", "nurse", "admin"), validateMedicati
  *     tags: [Medication Schedules]
  *     security:
  *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - patientId
+ *               - drugName
+ *               - dosage
+ *               - frequency
+ *               - scheduledTimes
+ *             properties:
+ *               patientId:
+ *                 type: string
+ *                 format: uuid
+ *               drugName:
+ *                 type: string
+ *                 example: Amlodipine
+ *               dosage:
+ *                 type: string
+ *                 example: 5mg
+ *               stock:
+ *                 type: integer
+ *                 minimum: 0
+ *                 example: 30
+ *               frequency:
+ *                 type: integer
+ *                 minimum: 1
+ *                 maximum: 3
+ *                 example: 2
+ *               scheduledTimes:
+ *                 type: array
+ *                 minItems: 1
+ *                 items:
+ *                   type: string
+ *                   pattern: '^([01]\\d|2[0-3]):[0-5]\\d$'
+ *                 example: ["08:00", "20:00"]
+ *               instructions:
+ *                 type: string
+ *                 nullable: true
+ *                 example: Sesudah makan
+ *               reminderEnabled:
+ *                 type: boolean
+ *                 default: true
+ *               isActive:
+ *                 type: boolean
+ *                 default: true
  *     responses:
  *       201:
  *         description: Jadwal obat berhasil dibuat
@@ -289,6 +337,43 @@ router.post("/bulk", authorizeRoles("nurse", "admin"), validateMedicationSchedul
  *         required: true
  *         schema:
  *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               drugName:
+ *                 type: string
+ *                 example: Metformin
+ *               dosage:
+ *                 type: string
+ *                 example: 500mg
+ *               stock:
+ *                 type: integer
+ *                 minimum: 0
+ *                 example: 20
+ *               frequency:
+ *                 type: integer
+ *                 minimum: 1
+ *                 maximum: 3
+ *                 example: 2
+ *               scheduledTimes:
+ *                 type: array
+ *                 minItems: 1
+ *                 items:
+ *                   type: string
+ *                   pattern: '^([01]\\d|2[0-3]):[0-5]\\d$'
+ *                 example: ["07:00", "19:00"]
+ *               instructions:
+ *                 type: string
+ *                 nullable: true
+ *               reminderEnabled:
+ *                 type: boolean
+ *               isActive:
+ *                 type: boolean
  *     responses:
  *       200:
  *         description: Jadwal obat berhasil diperbarui
