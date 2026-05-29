@@ -1,123 +1,195 @@
 # Jivara Backend
 
-Ini adalah repositori layanan API (Backend) untuk platform Jivara. Backend ini dibangun menggunakan arsitektur modern berbasis **Node.js**, **Express.js**, dan berinteraksi dengan database **PostgreSQL** melalui **Drizzle ORM**.
+Backend Jivara adalah REST API untuk autentikasi, RBAC, manajemen pasien/perawat, jadwal obat, adherence, food scan, audit log, dan Web Push notification. Service ini dibangun dengan Express.js, TypeScript, Drizzle ORM, dan PostgreSQL/Supabase.
 
----
+## Tech Stack
 
-## Teknologi Utama
+- Node.js `>=22.13.0`
+- Express.js 5
+- TypeScript
+- PostgreSQL/Supabase
+- Drizzle ORM
+- JWT + refresh token
+- Web Push VAPID
+- Scalar API Reference
 
-- **Runtime:** Node.js (>= 22.13.0)
-- **Framework:** Express.js 5.x
-- **Database:** PostgreSQL (menggunakan **Supabase**)
-- **ORM:** Drizzle ORM
-- **Bahasa:** TypeScript
-- **Keamanan:** Helmet, Express Rate Limit, bcryptjs, JWT (JSON Web Token)
-- **Dokumentasi API:** Scalar API Reference
+## Prerequisites
 
----
+- Node.js 22 atau lebih baru
+- npm
+- PostgreSQL database, disarankan Supabase
+- Supabase Storage bucket untuk upload food scan production
+- Optional AI services untuk food detection/reasoning
 
-## Persyaratan (Prerequisites)
+## Quick Start
 
-- Node.js versi 22 atau lebih baru.
-- Database PostgreSQL yang sudah berjalan (Disarankan menggunakan **Supabase**).
+```bash
+git clone https://github.com/jivara-capstone/jivara.git
+cd jivara/backend
+npm install
+cp .env.example .env
+```
 
----
+Isi `.env` minimal:
 
-## Instalasi & Konfigurasi
+```env
+PORT=3001
+NODE_ENV=development
+API_URL=http://localhost:3001
+FRONTEND_URL=http://localhost:3000
+JWT_SECRET=replace_with_strong_secret
+DATABASE_URL=postgresql://postgres:[PASSWORD]@[HOST]:5432/postgres
+```
 
-1. **Instal Dependensi**
-   Masuk ke direktori `backend` dan jalankan:
-   ```bash
-   npm install
-   ```
+Generate VAPID key jika ingin mencoba Web Push:
 
-2. **Konfigurasi Environment**
-   Salin file contoh konfigurasi dan sesuaikan isinya:
-   ```bash
-   cp .env.example .env
-   ```
-   *Pastikan Anda mengisi variabel koneksi database (seperti `DATABASE_URL`) dan `JWT_SECRET` di dalam file `.env`.*
+```bash
+npm run vapid:generate
+```
 
-   Variabel penting tambahan:
+Lalu isi:
 
-   | Variabel | Fungsi |
-   | --- | --- |
-   | `FOOD_AI_INFERENCE_URL` | Endpoint YOLO detection yang menerima `scanId`, `patientId`, dan `imageUrl` |
-   | `FOOD_REASONING_API_URL` | Base URL AI reasoning untuk `/interaction-check`, `/nutrition`, dan `/recommend` |
-   | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Web Push Notification PWA |
-   | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_STORAGE_BUCKET` | Upload foto scan makanan ke Supabase Storage production |
-   | `SUPABASE_STORAGE_PUBLIC_URL` | Opsional, public URL/CDN bucket storage |
-   | `ENABLE_REMINDER_SCHEDULER` | Mengaktifkan scheduler reminder obat |
+```env
+VAPID_PUBLIC_KEY=...
+VAPID_PRIVATE_KEY=...
+VAPID_SUBJECT=mailto:admin@jivara.app
+```
 
-3. **Sinkronisasi Skema Database (Drizzle)**
-   Push skema yang ada di kode ke dalam database PostgreSQL Anda:
-   ```bash
-   npm run db:push
-   ```
+## Environment Variables
 
-4. **Menjalankan Seeder (Opsional)**
-   Untuk mengisi database dengan data awal (dummy/mock data):
-   ```bash
-   npm run seed
-   ```
+| Variable | Required | Description |
+| --- | --- | --- |
+| `PORT` | No | Local server port, default `3001` |
+| `NODE_ENV` | Yes | `development` atau `production` |
+| `API_URL` | Yes | Public backend origin, contoh `http://localhost:3001` atau `https://api.jivara.web.id` |
+| `FRONTEND_URL` | Yes | Allowed frontend origin, contoh `http://localhost:3000` |
+| `JWT_SECRET` | Yes | Secret untuk access token |
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `FOOD_AI_INFERENCE_URL` | Optional | Endpoint YOLO food detection |
+| `FOOD_AI_TIMEOUT_MS` | Optional | Timeout inference service |
+| `FOOD_AI_ALLOW_LOCAL_FALLBACK` | Optional | `true` hanya untuk local fallback |
+| `FOOD_REASONING_API_URL` | Optional | Base URL AI reasoning service |
+| `FOOD_REASONING_TIMEOUT_MS` | Optional | Timeout reasoning service |
+| `VAPID_PUBLIC_KEY` | Required for push | Public key Web Push |
+| `VAPID_PRIVATE_KEY` | Required for push | Private key Web Push |
+| `VAPID_SUBJECT` | Required for push | Mailto/contact VAPID subject |
+| `ENABLE_REMINDER_SCHEDULER` | Optional | Enable medication reminder scheduler |
+| `REMINDER_SCHEDULER_INTERVAL_MS` | Optional | Scheduler interval, default `60000` |
+| `REMINDER_LOOKBACK_MINUTES` | Optional | Reminder lookback window |
+| `SUPABASE_URL` | Optional local, recommended production | Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Optional local, recommended production | Service role for Storage upload |
+| `SUPABASE_STORAGE_BUCKET` | Optional local, recommended production | Food scan bucket name |
+| `SUPABASE_STORAGE_PUBLIC_URL` | Optional | Public/CDN bucket URL override |
 
----
+Do not commit `.env` or service role keys.
 
-## Menjalankan Server Lokal
+## Database Setup
 
-Untuk tahap pengembangan (development), jalankan:
+Push the Drizzle schema:
+
+```bash
+npm run db:push
+```
+
+If `drizzle-kit push` fails in your environment, apply SQL files in `backend/drizzle/` in numeric order to the target PostgreSQL database.
+
+Optional seed data:
+
+```bash
+npm run seed
+```
+
+Seed demo credentials:
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Super Admin | `superadmin@jivara.test` | `Demo12345` |
+| Admin | `admin@jivara.test` | `Demo12345` |
+| Nurse | `nurse1@jivara.test` | `Demo12345` |
+| Patient | `patient1@jivara.test` | `Demo12345` |
+
+## Run Locally
+
 ```bash
 npm run dev
 ```
 
-Server secara default akan berjalan di `http://localhost:3001`.
+The API runs on `http://localhost:3001` by default.
 
----
+Useful URLs:
 
-## Menjalankan Perintah
+- API root: `http://localhost:3001/`
+- API docs: `http://localhost:3001/api-docs`
+- OpenAPI JSON: `http://localhost:3001/openapi.json`
+- Versioned API prefix: `http://localhost:3001/api/v1`
 
-| Perintah |
-| --- |
-| `npm run dev` |
-| `npm run build` |
-| `npm start` |
-| `npm run db:push` |
-| `npm run seed` |
-| `npm run backfill:patient-assignments` |
-| `npm run vapid:generate` |
-| `npm run lint` |
+## Scripts
 
----
-
-## Endpoint Penting
-
-Dokumentasi interaktif tersedia melalui Scalar API Reference di `/api-docs` saat server berjalan. OpenAPI JSON tersedia di `/openapi.json`. Endpoint yang perlu diperhatikan untuk integrasi terbaru:
-
-API utama tersedia dengan prefix versioning `/api/v1`.
-
-| Endpoint | Fungsi |
+| Command | Description |
 | --- | --- |
-| `PATCH /api/v1/auth/me` | Menyimpan perubahan profil user saat ini |
-| `PUT /api/v1/auth/change-password` | Ganti password normal dengan verifikasi password lama |
-| `GET /api/v1/notifications/preferences` | Membaca status push notification pasien |
-| `PATCH /api/v1/notifications/preferences` | Enable/disable push notification pasien |
-| `POST /api/v1/notifications/events` | Tracking klik/open Web Push dari service worker |
-| `GET /api/v1/notifications/analytics` | Open rate, CTR, dan rata-rata TTO notifikasi |
+| `npm run dev` | Start development server |
+| `npm run build` | Compile TypeScript to `dist/` |
+| `npm start` | Run compiled server |
+| `npm run db:push` | Push Drizzle schema |
+| `npm run seed` | Build and seed demo data |
+| `npm run backfill:patient-assignments` | Dry-run patient assignment backfill |
+| `npm run backfill:patient-assignments -- --apply` | Apply patient assignment backfill |
+| `npm run vapid:generate` | Generate Web Push VAPID keys |
+| `npm run lint` | Run ESLint |
+| `npm run test` | Run Vitest |
+| `npm run test:coverage` | Run tests with coverage |
 
----
+## Verification
 
-## Catatan Production
+Before pushing backend changes:
 
-- Untuk Web Push di HP/PWA, frontend harus berjalan pada HTTPS atau secure context.
-- Endpoint `GET /api/v1/notifications/public-key` membutuhkan env `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, dan `VAPID_SUBJECT`; generate key dengan `npm run vapid:generate`, lalu set di Railway/backend production.
-- Untuk Railway/production, jangan mengandalkan filesystem lokal `uploads/`; gunakan Supabase Storage dengan env storage di atas.
-- Endpoint `/api/v1/notifications/events` sengaja tidak membutuhkan bearer token karena dipanggil dari service worker saat user mengklik notifikasi.
-- Pasien yang dibuat oleh role `nurse` otomatis dibuatkan assignment aktif ke nurse pembuat agar tetap muncul setelah refresh.
-- Untuk data lama yang sudah terlanjur dibuat tanpa assignment, jalankan `npm run backfill:patient-assignments` untuk dry-run, lalu `npm run backfill:patient-assignments -- --apply` untuk insert assignment aktif.
+```bash
+npm run lint
+npm run build
+npm run test
+```
 
----
+Production smoke test examples:
 
-## Struktur Direktori
+```bash
+curl -i https://api.jivara.web.id/
+curl -i https://api.jivara.web.id/api/v1/notifications/public-key
+```
+
+## Deployment To Heroku
+
+Backend is deployed from the `backend` folder using Git subtree:
+
+```bash
+git subtree push --prefix backend heroku main
+```
+
+If Heroku reports the same commit was already built, split and push explicitly:
+
+```bash
+git push heroku `git subtree split --prefix backend main`:main --force
+```
+
+Required Heroku config examples:
+
+```bash
+heroku config:set API_URL="https://api.jivara.web.id" -a jivara-api
+heroku config:set FRONTEND_URL="https://jivara.web.id,https://www.jivara.web.id" -a jivara-api
+```
+
+Use Heroku config vars for all secrets. Do not commit production `.env`.
+
+## Production Notes
+
+- API utama memakai `/api/v1`.
+- Legacy `/api` alias may exist for compatibility, but new clients should use `/api/v1`.
+- `API_URL` should be the backend origin only, for example `https://api.jivara.web.id`, not `/api/v1`.
+- Web Push needs HTTPS/secure context on frontend PWA.
+- Food scan uploads should use Supabase Storage in production, not local `uploads/`.
+- Reminder scheduler runs in backend when `ENABLE_REMINDER_SCHEDULER=true`.
+- Patient created by a nurse is auto-assigned to that nurse.
+
+## Directory Structure
 
 ```text
 backend/
@@ -127,7 +199,7 @@ backend/
 │   ├── controllers/
 │   ├── db/
 │   ├── middleware/
-│   ├── routers/
+│   ├── routes/
 │   ├── scripts/
 │   ├── services/
 │   ├── types/

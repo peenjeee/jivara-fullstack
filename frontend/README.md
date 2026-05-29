@@ -1,87 +1,166 @@
 # Jivara Frontend
 
-Ini adalah antarmuka pengguna (Frontend) untuk platform Jivara. Dibangun menggunakan fitur terbaru dari ekosistem React untuk memberikan pengalaman yang super cepat, interaktif, dan responsif baik di desktop maupun perangkat mobile (PWA ready).
+Frontend Jivara adalah aplikasi web/PWA untuk pasien, nurse, admin, dan super admin. Aplikasi ini memakai Next.js App Router, React 19, Tailwind CSS 4, Zustand, dan proxy API internal untuk berbicara dengan backend Jivara.
 
----
+## Tech Stack
 
-## Teknologi Utama
+- Next.js 16 App Router
+- React 19
+- Tailwind CSS 4
+- Zustand
+- Axios
+- Supabase SSR client
+- SweetAlert2
+- Chart.js
+- Playwright/Vitest
+- PWA manifest + service worker
 
-- **Framework Utama:** Next.js 16.x (App Router)
-- **Library UI:** React 19.x
-- **Styling:** Tailwind CSS 4.x
-- **State Management:** Zustand
-- **Animasi & Interaksi:** Motion (Framer Motion)
-- **Smooth Scrolling:** Lenis Scroll
-- **Charting / Grafik:** Chart.js & react-chartjs-2
-- **Alert & Dialogs:** SweetAlert2
-- **Icon:** Lucide React
+## Prerequisites
 
----
+- Node.js 22 atau lebih baru
+- npm
+- Backend Jivara berjalan lokal atau URL production API
+- Supabase publishable key jika memakai Supabase client/session helper
 
-## Fitur Unggulan
+## Quick Start
 
-- **Role-Aware Architecture:** Aplikasi mampu membedakan antarmuka (UI) antara pasien dan tenaga kesehatan (Nurse/Admin).
-- **Patient Dashboard & Heatmap:** Komponen kalender dinamis dan *heatmap adherence* interaktif untuk melacak riwayat kepatuhan hingga 12 bulan terakhir.
-- **Food Scan Flow:** Integrasi UI untuk mensimulasikan pemindaian makanan (YOLOv11 AI detection) yang mencocokkan interaksi makanan dengan obat yang sedang dikonsumsi.
-- **PWA (Progressive Web App):** Memungkinkan aplikasi diinstal selayaknya aplikasi *native* di perangkat seluler pengguna.
-- **Client-Side Storage:** Penggunaan Zustand dan JS Cookies untuk menyimpan *state* secara lokal.
-
----
-
-## Persyaratan (Prerequisites)
-
-- Node.js versi 22 atau lebih baru.
-
----
-
-## Instalasi & Konfigurasi
-
-1. **Instal Dependensi**
-   Masuk ke direktori `frontend` dan jalankan:
-   ```bash
-   npm install
-   ```
-
-2. **Konfigurasi Environment**
-   Salin file contoh konfigurasi dan sesuaikan isinya:
-   ```bash
-   cp .env.local.example .env.local
-   ```
-   *Pastikan untuk mengatur `NEXT_PUBLIC_API_URL` agar mengarah ke API Backend (biasanya `http://localhost:3001` di lokal).*
-
----
-
-## Menjalankan Aplikasi Lokal
-
-Untuk memulai *development server*:
 ```bash
+git clone https://github.com/jivara-capstone/jivara.git
+cd jivara/frontend
+npm install
+cp .env.local.example .env.local
+```
+
+Untuk local development dengan backend lokal, isi `.env.local` seperti ini:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_publishable_key
+```
+
+Untuk production frontend, gunakan:
+
+```env
+NEXT_PUBLIC_API_URL=https://api.jivara.web.id/api/v1
+```
+
+`NEXT_PUBLIC_API_URL` harus diset di environment frontend hosting, misalnya Vercel. Jangan set variable ini di Heroku backend.
+
+## Run Locally
+
+Start backend first in another terminal:
+
+```bash
+cd ../backend
 npm run dev
 ```
 
-Aplikasi berjalan di `http://localhost:3000`.
+Start frontend:
 
----
+```bash
+cd ../frontend
+npm run dev
+```
 
-## Menjalankan Perintah 
+Frontend runs on `http://localhost:3000`.
 
-| Perintah |
-| --- |
-| `npm run dev` |
-| `npm run build` |
-| `npm start` |
-| `npm run lint` |
-| `npm run test` |
+## How API Calls Work
 
----
+- Browser calls same-origin paths like `/api/v1/patients`.
+- Next.js catches `/api/[...path]` and forwards to `NEXT_PUBLIC_API_URL`.
+- Auth login/status/refresh/logout use dedicated Next routes under `/api/auth/*` to manage HTTP-only cookies.
+- Backend production full API base is `https://api.jivara.web.id/api/v1`.
 
-## Struktur Direktori
+## Scripts
+
+| Command | Description |
+| --- | --- |
+| `npm run dev` | Start Next.js dev server |
+| `npm run build` | Build production app |
+| `npm start` | Start production build locally |
+| `npm run lint` | Run ESLint with zero warnings |
+| `npm run test` | Run Vitest unit/feature tests |
+| `npm run test:e2e` | Run Playwright tests |
+| `npm run test:e2e:ui` | Run Playwright UI mode |
+| `npm run doctor` | Run React Doctor |
+
+## Verification
+
+Before pushing frontend changes:
+
+```bash
+npm run lint
+npm run build
+npm run test
+```
+
+Production smoke checks:
+
+```bash
+curl -i https://www.jivara.web.id/login
+curl -i -X POST https://api.jivara.web.id/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"identifier":"superadmin@jivara.test","password":"Demo12345"}'
+```
+
+## Deployment To Vercel
+
+Recommended Vercel project settings:
+
+- Root Directory: `frontend`
+- Build Command: `npm run build`
+- Install Command: `npm install`
+- Output: Next.js default
+
+Required environment variables:
+
+```env
+NEXT_PUBLIC_API_URL=https://api.jivara.web.id/api/v1
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
+```
+
+After changing any `NEXT_PUBLIC_*` variable, redeploy frontend so the new value is included in the build.
+
+## Demo Credentials
+
+When backend seed data is available:
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Super Admin | `superadmin@jivara.test` | `Demo12345` |
+| Admin | `admin@jivara.test` | `Demo12345` |
+| Nurse | `nurse1@jivara.test` | `Demo12345` |
+| Patient | `patient1@jivara.test` | `Demo12345` |
+
+## Main Routes
+
+| Route | Purpose |
+| --- | --- |
+| `/` | Landing page |
+| `/login` | Login |
+| `/register` | Admin registration |
+| `/dashboard` | Role-aware dashboard |
+| `/patients` | Patient management |
+| `/nurses` | Nurse management |
+| `/schedule` | Medication schedules |
+| `/food-scan` | Food scan flow |
+| `/activity-log` | Activity/audit timeline |
+| `/settings` | Profile, password, notification preferences |
+| `/offline` | PWA offline fallback |
+
+## Directory Structure
 
 ```text
 frontend/
 ├── public/
+│   ├── manifest.json
+│   └── sw.js
 ├── src/
 │   ├── app/
 │   ├── components/
+│   ├── config/
 │   ├── helpers/
 │   ├── hooks/
 │   ├── lib/
@@ -89,7 +168,8 @@ frontend/
 │   ├── store/
 │   ├── styles/
 │   ├── types/
-│   ├── proxy.ts
+│   └── proxy.ts
 ├── tests/
 ├── next.config.ts
 └── package.json
+```

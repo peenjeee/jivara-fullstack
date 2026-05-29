@@ -1,3 +1,6 @@
 /docs/
 
 .*
+!.github/
+!.github/profile/
+!.github/profile/README.md
