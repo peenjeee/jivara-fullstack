@@ -267,7 +267,7 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
       </m.div>
 
       <div className="mt-6">
-        {isLoading ? <PatientActivityCalendarSkeleton /> : <PatientActivityCalendar month={visibleMonth} activities={filteredActivities} onMonthChange={(month) => dispatch({ type: "patch", payload: { visibleMonth: month } })} onViewDetail={viewActivityDetail} />}
+        {isLoading && !hasLoadedActivities ? <PatientActivityCalendarSkeleton /> : <PatientActivityCalendar month={visibleMonth} activities={filteredActivities} onMonthChange={(month) => dispatch({ type: "patch", payload: { visibleMonth: month } })} onViewDetail={viewActivityDetail} />}
       </div>
 
       <ActivityDetailModal activity={selectedActivity} useScheduleQuery={false} onClose={() => dispatch({ type: "patch", payload: { selectedActivity: null } })} onViewFoodScan={viewFoodScan} onViewSchedule={viewSchedule} />

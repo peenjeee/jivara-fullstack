@@ -223,7 +223,7 @@ export default function SuperAdminActivityLogPage() {
       </m.div>
 
       <m.div className="mt-6" {...getDashboardEntranceMotion(shouldAnimate, 0.4, 24)}>
-        {isLoading ? <ActivityDataSkeleton /> : <ActivityFeed activities={filteredActivities} visibleCount={filteredActivities.length} readOnly hasMore={hasMoreFromServer} isLoadingMore={isLoadingMore} onLoadMore={loadMoreActivities} onMarkRead={() => {}} onViewDetail={(activity) => dispatch({ type: "patch", payload: { selectedActivity: activity } })} />}
+        {isLoading && !hasLoadedActivities ? <ActivityDataSkeleton /> : <ActivityFeed activities={filteredActivities} visibleCount={filteredActivities.length} readOnly hasMore={hasMoreFromServer} isLoadingMore={isLoadingMore} onLoadMore={loadMoreActivities} onMarkRead={() => {}} onViewDetail={(activity) => dispatch({ type: "patch", payload: { selectedActivity: activity } })} />}
       </m.div>
 
       <ActivityDetailModal activity={selectedActivity} onClose={() => dispatch({ type: "patch", payload: { selectedActivity: null } })} />

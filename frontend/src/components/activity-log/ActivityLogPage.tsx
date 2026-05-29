@@ -661,7 +661,7 @@ export default function ActivityLogPage(props: ActivityLogPageProps) {
       </m.div>
 
       <m.div className="mt-6" {...getDashboardEntranceMotion(shouldAnimate, 0.4, 24)}>
-        {controller.state.isLoading ? <ActivityDataSkeleton /> : (
+        {controller.state.isLoading && !controller.state.hasLoadedActivities ? <ActivityDataSkeleton /> : (
           <ActivityFeed
             activities={controller.filteredActivities}
             visibleCount={controller.filteredActivities.length}

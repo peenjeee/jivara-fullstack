@@ -50,10 +50,10 @@ export default function SchedulePage({ initialPatientId = "", initialPatientName
         className="mt-6 overflow-hidden rounded-3xl shadow-[0_10px_30px_rgba(15,23,42,0.08)]"
         {...getDashboardEntranceMotion(shouldAnimate, 0.4, 24)}
       >
-        {schedule.isLoading ? <TableDataSkeleton /> : (
+        {schedule.isLoading && !schedule.hasLoadedSchedules ? <TableDataSkeleton /> : (
           <>
             <ScheduleTable groups={schedule.paginatedGroups} onViewDetail={(group) => schedule.setSelectedPatientId(group.patientId)} onAddMedicine={(group) => schedule.setAddMedicinePatientId(group.patientId)} readOnly={readOnly} emptyMessage="Tidak ada data jadwal." />
-            <PatientPagination currentPage={schedule.currentPage} totalPages={schedule.totalPages} totalItems={schedule.totalPatients} pageSize={schedule.pageSize} itemLabel="pasien" onPageChange={schedule.setCurrentPage} />
+            <PatientPagination currentPage={schedule.currentPage} totalPages={schedule.totalPatients > 0 ? schedule.totalPages : 1} totalItems={schedule.totalPatients} pageSize={schedule.pageSize} itemLabel="pasien" onPageChange={schedule.setCurrentPage} />
           </>
         )}
       </m.div>
