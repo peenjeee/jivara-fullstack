@@ -6,9 +6,8 @@ import path from 'path';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import swaggerUi from 'swagger-ui-express';
+import { apiReference } from '@scalar/express-api-reference';
 import { swaggerSpec } from './config/swagger';
-import { swaggerUiAssets } from './config/swagger-ui-assets';
 import authRoutes from './routes/auth.routes';
 import patientRoutes from './routes/patient.routes';
 import medicationScheduleRoutes from './routes/medication-schedule.routes';
@@ -46,7 +45,7 @@ app.use(cors({
 
 // Security: HTTP headers
 app.use(helmet({
-  contentSecurityPolicy: false, // Dinonaktifkan agar Swagger UI bisa berjalan
+  contentSecurityPolicy: false, // Dinonaktifkan agar dokumentasi Scalar bisa berjalan
   crossOriginEmbedderPolicy: { policy: 'credentialless' },
   crossOriginOpenerPolicy: { policy: 'same-origin' },
   crossOriginResourcePolicy: { policy: 'same-site' },
@@ -79,18 +78,23 @@ app.use('/uploads', authenticateToken, authorizeFoodScanUpload, express.static(p
   },
 }));
 
-app.use('/swagger-assets/logo', express.static(path.join(publicDir, 'images/logo')));
-app.use('/swagger-assets', express.static(publicDir));
+app.use('/docs-assets/logo', express.static(path.join(publicDir, 'images/logo')));
+app.use('/docs-assets', express.static(publicDir));
 
 // Routes
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
-  swaggerOptions: {
-    persistAuthorization: true,
+app.get('/openapi.json', (_req: Request, res: Response) => {
+  res.json(swaggerSpec);
+});
+
+app.use('/api-docs', apiReference({
+  url: '/openapi.json',
+  theme: 'saturn',
+  layout: 'modern',
+  darkMode: false,
+  favicon: '/docs-assets/favicon.ico',
+  metaData: {
+    title: 'Dokumentasi API | Jivara',
   },
-  customCssUrl: swaggerUiAssets.customCssUrl,
-  customJs: swaggerUiAssets.customJs,
-  customSiteTitle: "Dokumentasi API | Jivara",
-  customfavIcon: '/swagger-assets/favicon.ico'
 }));
 
 const mountApiRoutes = (basePath: string) => {

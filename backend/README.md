@@ -12,7 +12,7 @@ Ini adalah repositori layanan API (Backend) untuk platform Jivara. Backend ini d
 - **ORM:** Drizzle ORM
 - **Bahasa:** TypeScript
 - **Keamanan:** Helmet, Express Rate Limit, bcryptjs, JWT (JSON Web Token)
-- **Dokumentasi API:** Swagger UI Express
+- **Dokumentasi API:** Scalar API Reference
 
 ---
 
@@ -91,7 +91,7 @@ Server secara default akan berjalan di `http://localhost:3001`.
 
 ## Endpoint Penting
 
-Dokumentasi interaktif tersedia melalui Swagger UI saat server berjalan. Endpoint yang perlu diperhatikan untuk integrasi terbaru:
+Dokumentasi interaktif tersedia melalui Scalar API Reference di `/api-docs` saat server berjalan. OpenAPI JSON tersedia di `/openapi.json`. Endpoint yang perlu diperhatikan untuk integrasi terbaru:
 
 API utama tersedia dengan prefix versioning `/api/v1`.
 

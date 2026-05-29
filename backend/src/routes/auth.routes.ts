@@ -141,7 +141,7 @@ router.post(
  * /api/v1/auth/login:
  *   post:
  *     summary: Masuk ke akun pengguna
- *     description: Gunakan access_token dari response endpoint ini untuk tombol Authorize di Swagger UI.
+ *     description: Gunakan access_token dari response endpoint ini untuk autentikasi Bearer di Scalar.
  *     tags: [Auth]
  *     security: []
  *     requestBody:
@@ -327,7 +327,7 @@ router.post("/logout", authController.logout);
  * /api/v1/auth/me:
  *   get:
  *     summary: Ambil profil pengguna saat ini
- *     description: Klik tombol Authorize di bagian atas Swagger UI, lalu masukkan access_token dari /api/v1/auth/login tanpa awalan Bearer.
+ *     description: Masukkan access_token dari /api/v1/auth/login sebagai Bearer token di Scalar.
  *     tags: [Auth]
  *     security:
  *       - bearerAuth: []
