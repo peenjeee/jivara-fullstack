@@ -1,5 +1,6 @@
 import { and, count, desc, eq, gt, gte, isNotNull, isNull, lt } from "drizzle-orm";
 import axios from "axios";
+import sharp from "sharp";
 import { db } from "../db";
 import {
   detectedItems,
@@ -169,6 +170,10 @@ const getReasoningTimeoutMs = () => Number(process.env.FOOD_REASONING_TIMEOUT_MS
 
 const getDetectionTimeoutMs = () => Number(process.env.FOOD_AI_TIMEOUT_MS || 30000);
 
+const getDetectionImageMaxSize = () => Number(process.env.FOOD_AI_IMAGE_MAX_SIZE || 960);
+
+const getDetectionImageQuality = () => Number(process.env.FOOD_AI_IMAGE_QUALITY || 75);
+
 const normalizeFoodClass = (value: unknown) => String(value || "makanan_terdeteksi")
   .trim()
   .toLowerCase()
@@ -209,10 +214,17 @@ const fetchImageForDetection = async (imageUrl: string): Promise<ImageForDetecti
   }
 
   const contentType = response.headers.get("content-type") || "image/jpeg";
-  const buffer = await response.arrayBuffer();
+  const buffer = Buffer.from(await response.arrayBuffer());
+  const optimizedBuffer = await sharp(buffer)
+    .rotate()
+    .resize({ width: getDetectionImageMaxSize(), height: getDetectionImageMaxSize(), fit: "inside", withoutEnlargement: true })
+    .jpeg({ quality: getDetectionImageQuality(), mozjpeg: true })
+    .toBuffer();
+  const optimizedArrayBuffer = optimizedBuffer.buffer.slice(optimizedBuffer.byteOffset, optimizedBuffer.byteOffset + optimizedBuffer.byteLength) as ArrayBuffer;
+
   return {
-    blob: new Blob([buffer], { type: contentType }),
-    filename: getFilenameFromImageUrl(imageUrl, contentType),
+    blob: new Blob([optimizedArrayBuffer], { type: "image/jpeg" }),
+    filename: getFilenameFromImageUrl(imageUrl, contentType).replace(/\.[^.]+$/, ".jpg"),
   };
 };
 
