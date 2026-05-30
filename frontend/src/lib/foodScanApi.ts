@@ -2,7 +2,7 @@ import api from "@/lib/axios";
 import { getApiErrorMessage } from "@/lib/apiErrors";
 import { getDateRangeParams } from "@/lib/dateRange";
 import type { FoodScanAnalysis } from "@/helpers/foodScans";
-import type { FoodScanRecord, FoodScanRisk } from "@/lib/mocks/foodScans";
+import type { FoodScanBoundingBox, FoodScanDetectedItem, FoodScanRecord, FoodScanRisk } from "@/lib/mocks/foodScans";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
 
 const foodScansCacheTtl = 15_000;
@@ -42,6 +42,7 @@ interface DetectedItemResponse {
   label: string;
   label_display: string;
   confidence: number;
+  bounding_box?: FoodScanBoundingBox | null;
 }
 
 interface DetectResponse {
@@ -137,6 +138,7 @@ interface FoodScanDetailResponse {
     label: string;
     labelDisplay: string;
     confidence: number;
+    boundingBox?: FoodScanBoundingBox | null;
   }>;
   interactions?: Array<{
     id: string;
@@ -190,6 +192,20 @@ const toFoodName = (items: DetectedItemResponse[]) => {
   if (items.length === 0) return "Makanan terdeteksi";
   return items.map((item) => item.label_display).join(", ");
 };
+
+const mapDetectedItem = (item: DetectedItemResponse): FoodScanDetectedItem => ({
+  label: item.label,
+  labelDisplay: item.label_display,
+  confidence: item.confidence,
+  boundingBox: item.bounding_box,
+});
+
+const mapDetailDetectedItem = (item: NonNullable<FoodScanDetailResponse["detectedItems"]>[number]): FoodScanDetectedItem => ({
+  label: item.label,
+  labelDisplay: item.labelDisplay,
+  confidence: item.confidence,
+  boundingBox: item.boundingBox,
+});
 
 const toRisk = (riskLevel: string): FoodScanRisk => {
   if (["tinggi", "critical", "high"].includes(riskLevel.toLowerCase())) return "High Risk";
@@ -295,6 +311,7 @@ const mapScanDetail = (detail: FoodScanDetailResponse, patientName = "Pasien"): 
     aiReasoning: `Model ${detail.modelVersion || "AI"} menganalisis ${foodName}${detail.inferenceTimeMs ? ` dalam ${detail.inferenceTimeMs} ms` : ""}${analyzedMedicationCount > 0 ? " dan mencocokkannya dengan obat aktif pasien" : ""}.`,
     result: detail.interactions?.length ? "Ditemukan potensi interaksi obat-makanan." : "Tidak ditemukan interaksi signifikan pada makanan yang terdeteksi.",
     recommendation: detail.interactions?.[0]?.recommendation || "Ikuti jadwal obat dan pantau gejala setelah makan.",
+    detectedItems: detail.detectedItems?.map(mapDetailDetectedItem) ?? [],
   };
   const interactions = (detail.interactions || []).map((interaction) => {
     const medicationDetail = findMedicationDetail(detail.patientMedicationDetails, interaction.medication);
@@ -441,6 +458,7 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
     aiReasoning: `Model ${detection.model_version} mendeteksi ${foodName} dalam ${detection.inference_time_ms} ms${analyzedMedicationCount > 0 ? " dan mencocokkannya dengan obat aktif pasien" : ""}.`,
     result: interactionData.interactions.length > 0 ? "Ditemukan potensi interaksi obat-makanan." : "Tidak ditemukan interaksi signifikan pada makanan yang terdeteksi.",
     recommendation: interactionData.overall_recommendation || interactionData.disclaimer,
+    detectedItems: detection.detected_items.map(mapDetectedItem),
   };
   const interactions = interactionData.interactions.map((interaction, index) => ({
     schedule: createSchedule(interaction, patient, index, interactionData.patient_medication_details),

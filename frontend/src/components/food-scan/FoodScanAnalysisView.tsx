@@ -7,7 +7,7 @@ import { Apple, BrainCircuit, Pill, ShieldAlert, Utensils } from "lucide-react";
 import DetailItem from "@/components/ui/DetailItem";
 import type { FoodScanAnalysis } from "@/helpers/foodScans";
 import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
-import type { FoodScanRisk } from "@/lib/mocks/foodScans";
+import type { FoodScanBoundingBox, FoodScanDetectedItem, FoodScanRisk } from "@/lib/mocks/foodScans";
 
 interface FoodScanAnalysisViewProps {
   readonly scanId: string;
@@ -21,6 +21,8 @@ const riskTextClass: Record<FoodScanRisk, string> = {
 };
 
 const defaultMedicalDisclaimer = "Ini bukan nasihat medis. Selalu konsultasikan dengan dokter atau apoteker Anda.";
+
+const detectionBoxColors = ["#ef4444", "#f59e0b", "#22c55e", "#3b82f6", "#a855f7", "#ec4899"];
 
 const formatMedicineInfo = (value?: string | null) => {
   const trimmed = value?.trim();
@@ -79,7 +81,7 @@ function FoodScanHero({ scan, risk, imageSizes, shouldAnimate }: { readonly scan
 
   return (
     <m.section className="overflow-hidden rounded-3xl bg-surface" {...getDashboardEntranceMotion(shouldAnimate, 0, 16)}>
-      <div data-food-scan-result-image-frame className="mx-auto w-full max-w-[520px] overflow-hidden rounded-3xl bg-black/5">
+      <div data-food-scan-result-image-frame className="relative mx-auto w-full max-w-[520px] overflow-hidden rounded-3xl bg-black/5">
         <Image
           src={scan.image}
           alt={scan.foodName}
@@ -94,6 +96,7 @@ function FoodScanHero({ scan, risk, imageSizes, shouldAnimate }: { readonly scan
             }
           }}
         />
+        <DetectionOverlay items={scan.detectedItems ?? []} imageWidth={imageWidth} imageHeight={imageHeight} />
       </div>
 
       <div className="p-5">
@@ -112,6 +115,50 @@ function FoodScanHero({ scan, risk, imageSizes, shouldAnimate }: { readonly scan
         </div>
       </div>
     </m.section>
+  );
+}
+
+function getBoxRect(box: FoodScanBoundingBox, imageWidth: number, imageHeight: number) {
+  const left = box.x1 ?? box.x ?? 0;
+  const top = box.y1 ?? box.y ?? 0;
+  const right = box.x2 ?? (box.x !== undefined && box.width !== undefined ? box.x + box.width : undefined);
+  const bottom = box.y2 ?? (box.y !== undefined && box.height !== undefined ? box.y + box.height : undefined);
+  const width = right !== undefined ? right - left : box.width ?? 0;
+  const height = bottom !== undefined ? bottom - top : box.height ?? 0;
+
+  if (width <= 0 || height <= 0 || imageWidth <= 0 || imageHeight <= 0) return null;
+
+  return {
+    left: `${Math.max(0, Math.min(100, (left / imageWidth) * 100))}%`,
+    top: `${Math.max(0, Math.min(100, (top / imageHeight) * 100))}%`,
+    width: `${Math.max(0, Math.min(100, (width / imageWidth) * 100))}%`,
+    height: `${Math.max(0, Math.min(100, (height / imageHeight) * 100))}%`,
+  };
+}
+
+function DetectionOverlay({ items, imageWidth, imageHeight }: { readonly items: readonly FoodScanDetectedItem[]; readonly imageWidth: number; readonly imageHeight: number }) {
+  const boxes = items.flatMap((item, index) => {
+    if (!item.boundingBox) return [];
+    const rect = getBoxRect(item.boundingBox, imageWidth, imageHeight);
+    if (!rect) return [];
+    return [{ item, index, rect }];
+  });
+
+  if (boxes.length === 0) return null;
+
+  return (
+    <div className="pointer-events-none absolute inset-0">
+      {boxes.map(({ item, index, rect }) => {
+        const color = detectionBoxColors[index % detectionBoxColors.length];
+        return (
+          <div key={`${item.label}-${index}`} className="absolute border-2" style={{ ...rect, borderColor: color }}>
+            <div className="absolute -left-0.5 -top-6 max-w-[180px] truncate rounded-t-md px-2 py-1 text-[10px] font-black leading-none text-white shadow-sm" style={{ backgroundColor: color }}>
+              {item.labelDisplay} {Math.round(item.confidence * 100)}%
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

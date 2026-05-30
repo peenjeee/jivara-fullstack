@@ -22,7 +22,7 @@ describe("foodScanApi", () => {
     mockedGet.mockResolvedValueOnce({ data: { data: { id: "patient-1", fullName: "Budi Santoso" } } });
     mockedPost
       .mockResolvedValueOnce({ data: { data: { image_id: "img-1", upload_url: "/uploads/img-1.jpg", timestamp: "2026-05-09T08:00:00.000Z" } } })
-      .mockResolvedValueOnce({ data: { data: { scan_id: "scan-1", detected_items: [{ label: "milk", label_display: "Susu", confidence: 0.95 }], inference_time_ms: 120, model_version: "v1", timestamp: "2026-05-09T08:00:01.000Z" } } })
+      .mockResolvedValueOnce({ data: { data: { scan_id: "scan-1", detected_items: [{ label: "milk", label_display: "Susu", confidence: 0.95, bounding_box: { x1: 10, y1: 20, x2: 110, y2: 220 } }], inference_time_ms: 120, model_version: "v1", timestamp: "2026-05-09T08:00:01.000Z" } } })
       .mockResolvedValueOnce({ data: { data: { interactions: [{ food_item: "milk", food_display: "Susu", medication: "Cefixime", severity: "high", severity_label: "Tinggi", interaction_description: "Susu dapat mengganggu penyerapan.", recommendation: "Beri jeda 2 jam." }], patient_medications: ["CEFIXIME"], analyzed_medications_count: 1, recommended_foods: [{ food_name: "ayam-goreng", severity_score: 0, risk_level: "aman", worst_category: null }], foods_to_avoid: [{ food_name: "susu", severity_score: 5, risk_level: "tinggi", worst_category: "antibiotik" }], overall_risk_level: "high", overall_recommendation: "Hindari konsumsi bersamaan.", disclaimer: "Konsultasikan ke tenaga kesehatan." } } })
       .mockResolvedValueOnce({ data: { data: { recommended_foods: [{ food_name: "ayam-goreng", severity_score: 0, risk_level: "aman", worst_category: null }], foods_to_avoid: [{ food_name: "susu", severity_score: 5, risk_level: "tinggi", worst_category: "antibiotik" }], patient_medications: ["CEFIXIME"], analyzed_medications_count: 1 } } })
       .mockResolvedValueOnce({ data: { data: { items: [{ food_item: "milk", food_display: "Susu", portion: "100 gram", nutrition: { calories: 60, protein_g: 3.2, fat_g: 3.3, carbs_g: 4.8 }, source: "Jivara AI Nutrition" }], total: { calories: 60, protein_g: 3.2, fat_g: 3.3, carbs_g: 4.8 } } } });
@@ -38,7 +38,7 @@ describe("foodScanApi", () => {
     expect(mockedPost).toHaveBeenNthCalledWith(5, "/nutrition-estimates", { detectedItems: [{ label: "milk", confidence: 0.95 }] });
     expect(analysis).toMatchObject({
       overallRisk: "High Risk",
-      scan: { id: "img-1", patientId: "patient-1", foodName: "Susu", risk: "High Risk" },
+      scan: { id: "img-1", patientId: "patient-1", foodName: "Susu", risk: "High Risk", detectedItems: [{ label: "milk", labelDisplay: "Susu", confidence: 0.95, boundingBox: { x1: 10, y1: 20, x2: 110, y2: 220 } }] },
       analyzedMedicationCount: 1,
       analyzedMedications: ["CEFIXIME"],
       interactions: [expect.objectContaining({ risk: "High Risk", recommendation: "Beri jeda 2 jam." })],
@@ -84,7 +84,7 @@ describe("foodScanApi", () => {
           modelVersion: "v1",
           inferenceTimeMs: 120,
           createdAt: "2026-05-09T08:00:00.000Z",
-          detectedItems: [{ id: "item-1", label: "kangkung", labelDisplay: "Kangkung", confidence: 0.9 }],
+          detectedItems: [{ id: "item-1", label: "kangkung", labelDisplay: "Kangkung", confidence: 0.9, boundingBox: { x: 20, y: 30, width: 120, height: 140 } }],
           interactions: [],
           patientMedications: ["ATORVASTATIN"],
           analyzedMedicationCount: 1,
@@ -98,6 +98,7 @@ describe("foodScanApi", () => {
     expect(mockedPost).not.toHaveBeenCalled();
     expect(analysis.analyzedMedicationCount).toBe(1);
     expect(analysis.analyzedMedications).toEqual(["ATORVASTATIN"]);
+    expect(analysis.scan.detectedItems).toEqual([{ label: "kangkung", labelDisplay: "Kangkung", confidence: 0.9, boundingBox: { x: 20, y: 30, width: 120, height: 140 } }]);
     expect(analysis.recommendedFoods).toEqual([{ foodName: "apel", severityScore: 0, riskLevel: "aman", worstCategory: null }]);
     expect(analysis.foodsToAvoid).toEqual([{ foodName: "gudeg", severityScore: 3, riskLevel: "sedang", worstCategory: "statin" }]);
   });

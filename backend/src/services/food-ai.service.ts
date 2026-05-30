@@ -38,6 +38,17 @@ type FoodDetectionResult = {
   modelVersion: string;
 };
 
+type ImageForDetection = {
+  blob: Blob;
+  filename: string;
+};
+
+type ServiceError = {
+  status?: number;
+  message?: string;
+  code?: string;
+};
+
 type ReasoningFoodScore = {
   food_name: string;
   severity_score: number;
@@ -114,13 +125,13 @@ const getAiInferenceUrl = () => {
   if (process.env.FOOD_AI_INFERENCE_URL) return process.env.FOOD_AI_INFERENCE_URL;
   if (process.env.AI_INFERENCE_URL) return process.env.AI_INFERENCE_URL;
   if (process.env.FASTAPI_URL) return `${process.env.FASTAPI_URL.replace(/\/$/, "")}/food-scans/detections`;
-  return undefined;
+  return "https://aljuan14-jivara-food-detection.hf.space/predict";
 };
 
 const getReasoningApiBaseUrl = () => (process.env.FOOD_REASONING_API_URL || process.env.AI_REASONING_URL || "https://ai.jivara.web.id").replace(/\/+$/, "");
 
 const shouldUseDevelopmentFallback = () =>
-  process.env.FOOD_AI_ALLOW_LOCAL_FALLBACK === "true" || process.env.NODE_ENV !== "production";
+  process.env.FOOD_AI_ALLOW_LOCAL_FALLBACK === "true";
 
 const resolvePublicImageUrl = (imageUrl: string) => {
   if (/^https?:\/\//i.test(imageUrl)) return imageUrl;
@@ -156,6 +167,16 @@ const mapRiskScoreToLevel = (score: number) => {
 
 const getReasoningTimeoutMs = () => Number(process.env.FOOD_REASONING_TIMEOUT_MS || process.env.FOOD_AI_TIMEOUT_MS || 10000);
 
+const getDetectionTimeoutMs = () => Number(process.env.FOOD_AI_TIMEOUT_MS || 30000);
+
+const normalizeFoodClass = (value: unknown) => String(value || "makanan_terdeteksi")
+  .trim()
+  .toLowerCase()
+  .replace(/[_\s]+/g, "-")
+  .replace(/[^a-z0-9-]/g, "")
+  .replace(/-+/g, "-")
+  .replace(/^-|-$/g, "") || "makanan_terdeteksi";
+
 const postReasoning = async <T>(path: string, body: unknown): Promise<T> => {
   try {
     const response = await axios.post<T>(`${getReasoningApiBaseUrl()}${path}`, body, { timeout: getReasoningTimeoutMs() });
@@ -165,6 +186,54 @@ const postReasoning = async <T>(path: string, body: unknown): Promise<T> => {
     throw { status, message: "Service AI reasoning gagal memproses analisis makanan", code: "AI_REASONING_FAILED" };
   }
 };
+
+const getFilenameFromImageUrl = (imageUrl: string, contentType: string) => {
+  const extension = contentType.includes("png")
+    ? "png"
+    : contentType.includes("webp")
+      ? "webp"
+      : "jpg";
+  try {
+    const pathname = new URL(imageUrl).pathname;
+    const filename = pathname.split("/").filter(Boolean).pop();
+    return filename || `food-scan.${extension}`;
+  } catch {
+    return `food-scan.${extension}`;
+  }
+};
+
+const fetchImageForDetection = async (imageUrl: string): Promise<ImageForDetection> => {
+  const response = await fetch(imageUrl, { signal: AbortSignal.timeout(getDetectionTimeoutMs()) });
+  if (!response.ok) {
+    throw { status: 502, message: "Gagal mengambil gambar dari storage", code: "FOOD_IMAGE_FETCH_FAILED" };
+  }
+
+  const contentType = response.headers.get("content-type") || "image/jpeg";
+  const buffer = await response.arrayBuffer();
+  return {
+    blob: new Blob([buffer], { type: contentType }),
+    filename: getFilenameFromImageUrl(imageUrl, contentType),
+  };
+};
+
+const postFoodDetectionMultipart = async (inferenceUrl: string, image: ImageForDetection) => {
+  const formData = new FormData();
+  formData.append("file", image.blob, image.filename);
+
+  const response = await fetch(inferenceUrl, {
+    method: "POST",
+    body: formData,
+    signal: AbortSignal.timeout(getDetectionTimeoutMs()),
+  });
+
+  if (!response.ok) {
+    throw { status: response.status, message: "Service YOLO gagal memproses gambar makanan", code: "AI_INFERENCE_FAILED" };
+  }
+
+  return response.json();
+};
+
+const isServiceError = (error: unknown): error is ServiceError => Boolean(error && typeof error === "object" && typeof (error as ServiceError).status === "number");
 
 const getFallbackInteraction = (yoloClass: string): ReasoningInteractionResponse => ({
   detected_food: yoloClass,
@@ -276,12 +345,20 @@ const getFoodNutrition = async (yoloClass: string, portionGrams = 100) => {
   }
 };
 
-const toDetectionItem = (item: Record<string, unknown>): DetectionItem => ({
-  label: String(item.label || item.class || item.name || "makanan_terdeteksi"),
-  labelDisplay: String(item.label_display || item.labelDisplay || item.display || item.name || item.label || "Makanan Terdeteksi"),
-  confidence: typeof item.confidence === "number" ? item.confidence : Number(item.score || item.probability || 0),
-  boundingBox: item.bounding_box || item.boundingBox || item.bbox,
-});
+const toDetectionItem = (item: Record<string, unknown>): DetectionItem => {
+  const displayLabel = item.label_display || item.labelDisplay || item.label_final || item.class_name || item.display || item.name || item.label || "Makanan Terdeteksi";
+
+  return {
+    label: normalizeFoodClass(item.label || item.label_final || item.class_name || item.class || item.name),
+    labelDisplay: String(displayLabel),
+    confidence: typeof item.confidence === "number" ? item.confidence : Number(item.score || item.probability || 0),
+    boundingBox: item.bounding_box || item.boundingBox || item.bbox || (
+      ["x1", "y1", "x2", "y2"].every((key) => typeof item[key] === "number")
+        ? { x1: item.x1, y1: item.y1, x2: item.x2, y2: item.y2 }
+        : undefined
+    ),
+  };
+};
 
 const normalizeDetectionResponse = (payload: unknown): FoodDetectionResult => {
   const root = (payload && typeof payload === "object" && "data" in payload ? (payload as { data: unknown }).data : payload) as Record<string, unknown>;
@@ -289,9 +366,11 @@ const normalizeDetectionResponse = (payload: unknown): FoodDetectionResult => {
     ? root.detected_items
     : Array.isArray(root?.detectedItems)
       ? root.detectedItems
-      : Array.isArray(root?.predictions)
-        ? root.predictions
-        : [];
+      : Array.isArray(root?.detections)
+        ? root.detections
+        : Array.isArray(root?.predictions)
+          ? root.predictions
+          : [];
 
   const detectedItems = rawItems
     .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
@@ -306,7 +385,7 @@ const normalizeDetectionResponse = (payload: unknown): FoodDetectionResult => {
     detectedItems,
     lowConfidenceItems: Array.isArray(root?.low_confidence_items) ? root.low_confidence_items : [],
     inferenceTimeMs: typeof root?.inference_time_ms === "number" ? root.inference_time_ms : Number(root?.inferenceTimeMs || 0),
-    modelVersion: String(root?.model_version || root?.modelVersion || "external-food-ai"),
+    modelVersion: String(root?.model_version || root?.modelVersion || "jivara-food-detection-hf"),
   };
 };
 
@@ -327,7 +406,7 @@ const getDevelopmentDetectionResult = (): FoodDetectionResult => ({
   modelVersion: "AI",
 });
 
-const runFoodDetection = async (scan: typeof foodScans.$inferSelect, patientId: string): Promise<FoodDetectionResult> => {
+const runFoodDetection = async (scan: typeof foodScans.$inferSelect): Promise<FoodDetectionResult> => {
   const inferenceUrl = getAiInferenceUrl();
 
   if (!inferenceUrl) {
@@ -337,20 +416,16 @@ const runFoodDetection = async (scan: typeof foodScans.$inferSelect, patientId: 
 
   try {
     const startedAt = Date.now();
-    const response = await axios.post(inferenceUrl, {
-      scanId: scan.id,
-      patientId,
-      imageUrl: resolvePublicImageUrl(scan.imageUrl),
-    }, {
-      timeout: Number(process.env.FOOD_AI_TIMEOUT_MS || 10000),
-    });
-    const result = normalizeDetectionResponse(response.data);
+    const image = await fetchImageForDetection(resolvePublicImageUrl(scan.imageUrl));
+    const payload = await postFoodDetectionMultipart(inferenceUrl, image);
+    const result = normalizeDetectionResponse(payload);
     return {
       ...result,
       inferenceTimeMs: result.inferenceTimeMs || Date.now() - startedAt,
     };
   } catch (error) {
     if (shouldUseDevelopmentFallback()) return getDevelopmentDetectionResult();
+    if (isServiceError(error)) throw error;
     const status = axios.isAxiosError(error) && error.response?.status ? error.response.status : 502;
     throw { status, message: "Service AI gagal memproses gambar makanan", code: "AI_INFERENCE_FAILED" };
   }
@@ -582,7 +657,7 @@ export const detectFood = async (dto: FoodDetectDTO, user?: AccessUser) => {
       })
       .returning())[0];
 
-  const detectionResult = await runFoodDetection(scan, dto.patientId);
+  const detectionResult = await runFoodDetection(scan);
 
   const existingItems = await db.select({ id: detectedItems.id }).from(detectedItems).where(eq(detectedItems.scanId, scan.id)).limit(1);
   if (existingItems.length === 0) {

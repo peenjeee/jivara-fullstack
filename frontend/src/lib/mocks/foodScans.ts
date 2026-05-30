@@ -2,6 +2,24 @@ import { patients } from "./patients";
 
 export type FoodScanRisk = "Low Risk" | "High Risk";
 
+export interface FoodScanBoundingBox {
+  readonly x?: number;
+  readonly y?: number;
+  readonly width?: number;
+  readonly height?: number;
+  readonly x1?: number;
+  readonly y1?: number;
+  readonly x2?: number;
+  readonly y2?: number;
+}
+
+export interface FoodScanDetectedItem {
+  readonly label: string;
+  readonly labelDisplay: string;
+  readonly confidence: number;
+  readonly boundingBox?: FoodScanBoundingBox | null;
+}
+
 export interface FoodScanRecord {
   readonly id: string;
   readonly patientId: string;
@@ -13,6 +31,7 @@ export interface FoodScanRecord {
   readonly result: string;
   readonly recommendation: string;
   readonly hasDetectedFood?: boolean;
+  readonly detectedItems?: readonly FoodScanDetectedItem[];
 }
 
 const today = new Date();
