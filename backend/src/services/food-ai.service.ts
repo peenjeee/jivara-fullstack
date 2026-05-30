@@ -42,6 +42,10 @@ type FoodDetectionResult = {
 type ImageForDetection = {
   blob: Blob;
   filename: string;
+  sourceWidth: number;
+  sourceHeight: number;
+  detectionWidth: number;
+  detectionHeight: number;
 };
 
 type ServiceError = {
@@ -174,6 +178,8 @@ const getDetectionImageMaxSize = () => Number(process.env.FOOD_AI_IMAGE_MAX_SIZE
 
 const getDetectionImageQuality = () => Number(process.env.FOOD_AI_IMAGE_QUALITY || 75);
 
+const isRotatedExifOrientation = (orientation?: number) => orientation !== undefined && orientation >= 5 && orientation <= 8;
+
 const normalizeFoodClass = (value: unknown) => String(value || "makanan_terdeteksi")
   .trim()
   .toLowerCase()
@@ -215,16 +221,23 @@ const fetchImageForDetection = async (imageUrl: string): Promise<ImageForDetecti
 
   const contentType = response.headers.get("content-type") || "image/jpeg";
   const buffer = Buffer.from(await response.arrayBuffer());
-  const optimizedBuffer = await sharp(buffer)
+  const metadata = await sharp(buffer).metadata();
+  const sourceWidth = isRotatedExifOrientation(metadata.orientation) ? metadata.height : metadata.width;
+  const sourceHeight = isRotatedExifOrientation(metadata.orientation) ? metadata.width : metadata.height;
+  const { data: optimizedBuffer, info } = await sharp(buffer)
     .rotate()
     .resize({ width: getDetectionImageMaxSize(), height: getDetectionImageMaxSize(), fit: "inside", withoutEnlargement: true })
     .jpeg({ quality: getDetectionImageQuality(), mozjpeg: true })
-    .toBuffer();
+    .toBuffer({ resolveWithObject: true });
   const optimizedArrayBuffer = optimizedBuffer.buffer.slice(optimizedBuffer.byteOffset, optimizedBuffer.byteOffset + optimizedBuffer.byteLength) as ArrayBuffer;
 
   return {
     blob: new Blob([optimizedArrayBuffer], { type: "image/jpeg" }),
     filename: getFilenameFromImageUrl(imageUrl, contentType).replace(/\.[^.]+$/, ".jpg"),
+    sourceWidth: sourceWidth || info.width,
+    sourceHeight: sourceHeight || info.height,
+    detectionWidth: info.width,
+    detectionHeight: info.height,
   };
 };
 
@@ -372,6 +385,54 @@ const toDetectionItem = (item: Record<string, unknown>): DetectionItem => {
   };
 };
 
+const toFiniteNumber = (value: unknown) => {
+  const numberValue = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  return Number.isFinite(numberValue) ? numberValue : null;
+};
+
+const scaleDetectionBoundingBox = (box: unknown, image: ImageForDetection) => {
+  if (!box || typeof box !== "object") return box;
+
+  const record = box as Record<string, unknown>;
+  const rawLeft = toFiniteNumber(record.x1 ?? record.x);
+  const rawTop = toFiniteNumber(record.y1 ?? record.y);
+  const rawRight = toFiniteNumber(record.x2);
+  const rawBottom = toFiniteNumber(record.y2);
+  const rawWidth = toFiniteNumber(record.width);
+  const rawHeight = toFiniteNumber(record.height);
+  const left = rawLeft ?? 0;
+  const top = rawTop ?? 0;
+  const right = rawRight ?? (rawWidth !== null ? left + rawWidth : null);
+  const bottom = rawBottom ?? (rawHeight !== null ? top + rawHeight : null);
+
+  if (right === null || bottom === null || right <= left || bottom <= top) return box;
+
+  const values = [left, top, right, bottom];
+  const isNormalizedBox = values.every((value) => value >= 0 && value <= 1);
+  const scaleX = isNormalizedBox ? image.sourceWidth : image.sourceWidth / image.detectionWidth;
+  const scaleY = isNormalizedBox ? image.sourceHeight : image.sourceHeight / image.detectionHeight;
+
+  const x1 = Math.round(left * scaleX);
+  const y1 = Math.round(top * scaleY);
+  const x2 = Math.round(right * scaleX);
+  const y2 = Math.round(bottom * scaleY);
+
+  return {
+    x1: Math.max(0, Math.min(image.sourceWidth, x1)),
+    y1: Math.max(0, Math.min(image.sourceHeight, y1)),
+    x2: Math.max(0, Math.min(image.sourceWidth, x2)),
+    y2: Math.max(0, Math.min(image.sourceHeight, y2)),
+  };
+};
+
+const scaleDetectionBoundingBoxes = (result: FoodDetectionResult, image: ImageForDetection): FoodDetectionResult => ({
+  ...result,
+  detectedItems: result.detectedItems.map((item) => ({
+    ...item,
+    boundingBox: scaleDetectionBoundingBox(item.boundingBox, image),
+  })),
+});
+
 const normalizeDetectionResponse = (payload: unknown): FoodDetectionResult => {
   const root = (payload && typeof payload === "object" && "data" in payload ? (payload as { data: unknown }).data : payload) as Record<string, unknown>;
   const rawItems = Array.isArray(root?.detected_items)
@@ -430,7 +491,7 @@ const runFoodDetection = async (scan: typeof foodScans.$inferSelect): Promise<Fo
     const startedAt = Date.now();
     const image = await fetchImageForDetection(resolvePublicImageUrl(scan.imageUrl));
     const payload = await postFoodDetectionMultipart(inferenceUrl, image);
-    const result = normalizeDetectionResponse(payload);
+    const result = scaleDetectionBoundingBoxes(normalizeDetectionResponse(payload), image);
     return {
       ...result,
       inferenceTimeMs: result.inferenceTimeMs || Date.now() - startedAt,
