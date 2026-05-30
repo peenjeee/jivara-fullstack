@@ -8,7 +8,13 @@ interface ScheduleResponse {
   id: string;
   patientId: string;
   drugName: string;
+  registrationNumber?: string | null;
+  compositionNormalized?: string | null;
+  activeSubstances?: string | null;
+  drugCategories?: string | null;
   dosage: string;
+  medicineForm?: string | null;
+  mealRule?: string | null;
   stock?: number | null;
   frequency: number;
   scheduledTimes: unknown;
@@ -16,8 +22,30 @@ interface ScheduleResponse {
   reminderEnabled?: boolean | null;
   isActive?: boolean | null;
   completedAt?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
   createdAt?: string | null;
 }
+
+interface MedicineCatalogResponse {
+  id: string;
+  registrationNumber: string;
+  productName: string;
+  compositionNormalized?: string | null;
+  activeSubstances?: string | null;
+  drugCategories?: string | null;
+  dosageFormGroup?: string | null;
+}
+
+export type MedicineCatalogOption = {
+  id: string;
+  registrationNumber: string;
+  productName: string;
+  compositionNormalized?: string | null;
+  activeSubstances?: string | null;
+  drugCategories?: string | null;
+  dosageFormGroup?: string | null;
+};
 
 interface SingleScheduleResponse {
   data: ScheduleResponse;
@@ -120,14 +148,18 @@ const mapSchedule = (schedule: ScheduleResponse, patient?: PatientRecord): Medic
   patientAvatar: patient?.avatar ?? "PX",
   patientStatus: patient?.status,
   medicineName: schedule.drugName,
+  registrationNumber: schedule.registrationNumber ?? undefined,
+  compositionNormalized: schedule.compositionNormalized ?? undefined,
+  activeSubstances: schedule.activeSubstances ?? undefined,
+  drugCategories: schedule.drugCategories ?? undefined,
   dose: schedule.dosage,
-  medicineForm: "Tablet",
+  medicineForm: (schedule.medicineForm as MedicationScheduleRecord["medicineForm"] | null | undefined) || "Tablet",
   stock: Math.max(Number(schedule.stock ?? 0), 0),
   frequency: `${schedule.frequency} kali sehari`,
   times: getScheduledTimes(schedule.scheduledTimes),
-  mealRule: "Tidak tergantung makan",
-  startDate: schedule.createdAt?.slice(0, 10) || new Date().toISOString().slice(0, 10),
-  endDate: schedule.completedAt?.slice(0, 10) || undefined,
+  mealRule: (schedule.mealRule as MedicationScheduleRecord["mealRule"] | null | undefined) || "Tidak tergantung makan",
+  startDate: schedule.startDate?.slice(0, 10) || schedule.createdAt?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+  endDate: schedule.endDate?.slice(0, 10) || schedule.completedAt?.slice(0, 10) || undefined,
   reminderEnabled: schedule.reminderEnabled ?? true,
   instructions: schedule.instructions ?? undefined,
   status: Number(schedule.stock ?? 0) <= 0 ? "Selesai" : schedule.isActive === false ? "Nonaktif" : "Aktif",
@@ -136,13 +168,21 @@ const mapSchedule = (schedule: ScheduleResponse, patient?: PatientRecord): Medic
 const mapMedicinePayload = (patientId: string, medicine: ScheduleMedicineFormValues, isActive = true) => ({
   patientId,
   drugName: medicine.medicineName,
+  registrationNumber: medicine.registrationNumber || null,
+  compositionNormalized: medicine.compositionNormalized || null,
+  activeSubstances: medicine.activeSubstances || null,
+  drugCategories: medicine.drugCategories || null,
   dosage: medicine.dose,
+  medicineForm: medicine.medicineForm || "Tablet",
+  mealRule: medicine.mealRule || "Tidak tergantung makan",
   stock: medicine.stock,
   frequency: getFrequencyNumber(medicine.frequency),
   scheduledTimes: [...medicine.times],
   instructions: medicine.instructions || null,
   reminderEnabled: medicine.reminderEnabled,
   isActive,
+  startDate: medicine.startDate,
+  endDate: medicine.endDate || null,
 });
 
 const getAge = (dateOfBirth?: string | null) => {
@@ -193,6 +233,22 @@ const mapPatient = (patient: PatientListResponse): PatientRecord => {
   };
 };
 
+export const getMedicineCatalogFromApi = async (search = ""): Promise<MedicineCatalogOption[]> => {
+  const response = await api.get<{ data: MedicineCatalogResponse[] }>("/medication-schedules/medicine-catalog", {
+    params: { limit: 333, ...(search.trim() ? { search: search.trim() } : {}) },
+  });
+
+  return response.data.data.map((medicine) => ({
+    id: medicine.id,
+    registrationNumber: medicine.registrationNumber,
+    productName: medicine.productName,
+    compositionNormalized: medicine.compositionNormalized ?? null,
+    activeSubstances: medicine.activeSubstances ?? null,
+    drugCategories: medicine.drugCategories ?? null,
+    dosageFormGroup: medicine.dosageFormGroup ?? null,
+  }));
+};
+
 export const getSchedulesFromApi = async (providedPatients?: readonly PatientRecord[]): Promise<MedicationScheduleRecord[]> => {
   if (!providedPatients) {
     const now = Date.now();
@@ -221,7 +277,7 @@ export const getSchedulesFromApi = async (providedPatients?: readonly PatientRec
 
 export const getSchedulesForPatientsFromApi = async (
   patients: readonly PatientRecord[],
-  options: { readonly limit?: number } = {},
+  options: { readonly limit?: number; readonly forceRefresh?: boolean } = {},
 ): Promise<MedicationScheduleRecord[]> => {
   if (patients.length === 0) return [];
 
@@ -229,11 +285,15 @@ export const getSchedulesForPatientsFromApi = async (
   const patientIdsParam = patientIds.join(",");
   const limit = options.limit && options.limit > 0 ? Math.floor(options.limit) : undefined;
   const cacheKey = `${patientIdsParam}:${limit ?? "all"}`;
+  if (options.forceRefresh) {
+    schedulePatientsCache.delete(cacheKey);
+    schedulePatientsRequests.delete(cacheKey);
+  }
   const now = Date.now();
   const cached = schedulePatientsCache.get(cacheKey);
-  if (cached && cached.expiresAt > now) return cached.data;
+  if (!options.forceRefresh && cached && cached.expiresAt > now) return cached.data;
   const activeRequest = schedulePatientsRequests.get(cacheKey);
-  if (activeRequest) return activeRequest;
+  if (!options.forceRefresh && activeRequest) return activeRequest;
 
   const patientById = new Map(patients.map((patient) => [patient.id, patient]));
   const request = api.get<{ data: ScheduleResponse[] }>("/medication-schedules", {

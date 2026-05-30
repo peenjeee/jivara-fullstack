@@ -12,6 +12,8 @@ const router = Router();
 
 router.use(authenticateToken);
 
+router.get("/medicine-catalog", authorizeRoles("nurse", "admin"), medicationScheduleController.listMedicineCatalog);
+
 /**
  * @swagger
  * tags:

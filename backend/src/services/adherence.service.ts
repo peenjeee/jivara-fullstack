@@ -24,6 +24,13 @@ const getPeriodDays = (period?: string) => {
 
 const getDateKey = (date: Date) => date.toISOString().slice(0, 10);
 
+const isDateKey = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+const getScheduleStartDateKey = (schedule: { startDate?: string | null; createdAt: Date | null }) => {
+  if (isDateKey(schedule.startDate)) return schedule.startDate;
+  return schedule.createdAt ? getDateKey(schedule.createdAt) : null;
+};
+
 const getStartDate = (days: number) => {
   const start = new Date();
   start.setUTCHours(0, 0, 0, 0);
@@ -32,11 +39,11 @@ const getStartDate = (days: number) => {
 };
 
 const getAllTimeOccurrenceDays = (
-  schedules: Array<{ createdAt: Date | null }>,
+  schedules: Array<{ startDate?: string | null; createdAt: Date | null }>,
   logs: Array<{ scheduledTime: Date }>,
 ) => {
   const dates = [
-    ...schedules.map((schedule) => schedule.createdAt),
+    ...schedules.map((schedule) => isDateKey(schedule.startDate) ? new Date(`${schedule.startDate}T00:00:00.000Z`) : schedule.createdAt),
     ...logs.map((log) => log.scheduledTime),
   ].filter((date): date is Date => date != null && !Number.isNaN(date.getTime()));
 
@@ -92,19 +99,28 @@ const getOccurrenceDateTime = (day: Date, time: string) => {
   return occurrence;
 };
 
-const getScheduleOccurrenceEndDateKey = (schedule: { createdAt: Date | null; completedAt?: Date | null; stock?: number | null; isActive?: boolean | null }, latestLogDate?: Date) => {
+const getScheduleOccurrenceEndDateKey = (schedule: { startDate?: string | null; endDate?: string | null; createdAt: Date | null; completedAt?: Date | null; stock?: number | null; isActive?: boolean | null }, latestLogDate?: Date) => {
+  const startDateKey = getScheduleStartDateKey(schedule);
   const latestLogDateKey = latestLogDate ? getDateKey(latestLogDate) : null;
+  const configuredEndDateKey = isDateKey(schedule.endDate) ? schedule.endDate : null;
   const shouldUseLatestLogAsEnd = schedule.isActive === false || Number(schedule.stock ?? 1) <= 0;
-  if (!schedule.createdAt) {
+  if (!startDateKey) {
     const completedDateKey = schedule.completedAt ? getDateKey(schedule.completedAt) : null;
+    if (configuredEndDateKey && latestLogDateKey) return configuredEndDateKey < latestLogDateKey ? configuredEndDateKey : latestLogDateKey;
+    if (configuredEndDateKey) return configuredEndDateKey;
     if (!completedDateKey && shouldUseLatestLogAsEnd) return latestLogDateKey;
     if (completedDateKey && latestLogDateKey) return completedDateKey < latestLogDateKey ? completedDateKey : latestLogDateKey;
     return completedDateKey || latestLogDateKey;
   }
 
-  const displayEndDate = new Date(schedule.createdAt);
+  const displayEndDate = new Date(`${startDateKey}T00:00:00.000Z`);
   displayEndDate.setUTCDate(displayEndDate.getUTCDate() + 30);
   const displayEndDateKey = getDateKey(displayEndDate);
+  if (configuredEndDateKey) {
+    const boundedEndDateKey = configuredEndDateKey < displayEndDateKey ? configuredEndDateKey : displayEndDateKey;
+    if (shouldUseLatestLogAsEnd && latestLogDateKey) return latestLogDateKey < boundedEndDateKey ? latestLogDateKey : boundedEndDateKey;
+    return boundedEndDateKey;
+  }
   const completedDateKey = schedule.completedAt ? getDateKey(schedule.completedAt) : null;
   if (!completedDateKey && shouldUseLatestLogAsEnd && latestLogDateKey) return latestLogDateKey < displayEndDateKey ? latestLogDateKey : displayEndDateKey;
 
@@ -118,7 +134,7 @@ const getScheduleOccurrenceEndDateKey = (schedule: { createdAt: Date | null; com
 
 const buildScheduledOccurrences = (
   days: number,
-  schedules: Array<{ id: string; createdAt: Date | null; completedAt?: Date | null; stock?: number | null; isActive?: boolean | null; scheduledTimes: unknown; frequency?: number | null }>,
+  schedules: Array<{ id: string; startDate?: string | null; endDate?: string | null; createdAt: Date | null; completedAt?: Date | null; stock?: number | null; isActive?: boolean | null; scheduledTimes: unknown; frequency?: number | null }>,
   logs: Array<{ scheduleId: string; scheduledTime: Date; status: string }>,
 ) => {
   const now = new Date();
@@ -148,10 +164,10 @@ const buildScheduledOccurrences = (
     day.setUTCDate(start.getUTCDate() + index);
 
     for (const schedule of schedules) {
-      const createdDateKey = schedule.createdAt ? getDateKey(schedule.createdAt) : null;
+      const configuredStartDateKey = getScheduleStartDateKey(schedule);
       const earliestLogDate = earliestLogDateBySchedule.get(schedule.id);
       const earliestLogDateKey = earliestLogDate ? getDateKey(earliestLogDate) : null;
-      const startDateKey = createdDateKey || earliestLogDateKey;
+      const startDateKey = configuredStartDateKey || earliestLogDateKey;
       if (startDateKey && getDateKey(day) < startDateKey) continue;
       const occurrenceEndDateKey = getScheduleOccurrenceEndDateKey(schedule, latestLogDateBySchedule.get(schedule.id));
       if (occurrenceEndDateKey && getDateKey(day) > occurrenceEndDateKey) continue;
@@ -159,6 +175,8 @@ const buildScheduledOccurrences = (
 
       for (const time of getScheduleTimes(schedule.scheduledTimes, schedule.frequency)) {
         const scheduledTime = getOccurrenceDateTime(day, time);
+        if (!schedule.startDate && schedule.createdAt && scheduledTime < schedule.createdAt) continue;
+        if (scheduledTime > now) continue;
 
         const bucket = logsByScheduleDate.get(`${schedule.id}|${getDateKey(scheduledTime)}`);
         const status = bucket?.confirmed
@@ -234,6 +252,8 @@ export const getAdherenceStats = async (query: AdherenceQuery, user?: AccessUser
         id: medicationSchedules.id,
         createdAt: medicationSchedules.createdAt,
         completedAt: medicationSchedules.completedAt,
+        startDate: medicationSchedules.startDate,
+        endDate: medicationSchedules.endDate,
         stock: medicationSchedules.stock,
         isActive: medicationSchedules.isActive,
         scheduledTimes: medicationSchedules.scheduledTimes,
@@ -259,8 +279,8 @@ export const getAdherenceStats = async (query: AdherenceQuery, user?: AccessUser
   const totalConfirmed = occurrences.filter((occurrence) => occurrence.status === "confirmed").length;
   const totalMissed = occurrences.filter((occurrence) => occurrence.status === "missed").length;
   const totalSnoozed = occurrences.filter((occurrence) => occurrence.status === "snoozed").length;
-  const adherenceRate = totalScheduled > 0 ? Number(((totalConfirmed / totalScheduled) * 100).toFixed(1)) : 0;
-  const reminderResponseRate = totalScheduled > 0 ? Number((((totalConfirmed + totalSnoozed) / totalScheduled) * 100).toFixed(1)) : 0;
+  const adherenceRate = totalScheduled > 0 ? Number(((totalConfirmed / totalScheduled) * 100).toFixed(1)) : 100;
+  const reminderResponseRate = totalScheduled > 0 ? Number((((totalConfirmed + totalSnoozed) / totalScheduled) * 100).toFixed(1)) : 100;
   const dailyBreakdown = buildDailyBreakdown(adherenceDays, occurrences);
   const midpoint = Math.floor(dailyBreakdown.length / 2);
   const firstHalf = dailyBreakdown.slice(0, midpoint);
@@ -344,6 +364,8 @@ export const getAggregateAdherenceStats = async (query: AdherenceQuery = {}, use
         patientId: medicationSchedules.patientId,
         createdAt: medicationSchedules.createdAt,
         completedAt: medicationSchedules.completedAt,
+        startDate: medicationSchedules.startDate,
+        endDate: medicationSchedules.endDate,
         stock: medicationSchedules.stock,
         isActive: medicationSchedules.isActive,
         scheduledTimes: medicationSchedules.scheduledTimes,

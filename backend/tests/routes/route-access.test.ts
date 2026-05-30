@@ -29,6 +29,7 @@ const { pass, controllers, validators } = vi.hoisted(() => {
       createMedicationSchedules: ok,
       updateMedicationSchedule: ok,
       deactivateMedicationSchedule: ok,
+      listMedicineCatalog: ok,
       listMedicationSchedulePatientGroups: ok,
       listMedicationLogs: ok,
       snoozeMedicationReminder: ok,

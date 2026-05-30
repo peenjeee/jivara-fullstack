@@ -3,6 +3,10 @@ import type { MealRule, MedicationScheduleRecord, MedicationScheduleStatus, Medi
 
 export interface ScheduleMedicineFormValues {
   readonly medicineName: string;
+  readonly registrationNumber?: string;
+  readonly compositionNormalized?: string;
+  readonly activeSubstances?: string;
+  readonly drugCategories?: string;
   readonly dose: string;
   readonly medicineForm: MedicineForm | "";
   readonly stock: number;
@@ -23,6 +27,10 @@ export interface ScheduleFormValues {
 
 export const emptyMedicine: ScheduleMedicineFormValues = {
   medicineName: "",
+  registrationNumber: "",
+  compositionNormalized: "",
+  activeSubstances: "",
+  drugCategories: "",
   dose: "",
   medicineForm: "",
   stock: 1,
@@ -53,6 +61,10 @@ export function getScheduleFormValues(schedule: MedicationScheduleRecord): Sched
     patientId: schedule.patientId,
     medicines: [{
       medicineName: schedule.medicineName,
+      registrationNumber: schedule.registrationNumber ?? "",
+      compositionNormalized: schedule.compositionNormalized ?? "",
+      activeSubstances: schedule.activeSubstances ?? "",
+      drugCategories: schedule.drugCategories ?? "",
       dose: schedule.dose,
       medicineForm: schedule.medicineForm,
       stock: schedule.stock,
@@ -77,6 +89,10 @@ export function createScheduleRecord(patientId: string, values: ScheduleMedicine
     patientName: patient?.name ?? "Pasien tidak diketahui",
     patientAvatar: patient?.avatar ?? "??",
     medicineName: values.medicineName,
+    registrationNumber: values.registrationNumber || undefined,
+    compositionNormalized: values.compositionNormalized || undefined,
+    activeSubstances: values.activeSubstances || undefined,
+    drugCategories: values.drugCategories || undefined,
     dose: values.dose,
     medicineForm: values.medicineForm as MedicineForm,
     stock: values.stock,
@@ -100,6 +116,10 @@ export function updateScheduleRecord(schedule: MedicationScheduleRecord, values:
     patientName: patient?.name ?? schedule.patientName,
     patientAvatar: patient?.avatar ?? schedule.patientAvatar,
     medicineName: values.medicineName,
+    registrationNumber: values.registrationNumber || undefined,
+    compositionNormalized: values.compositionNormalized || undefined,
+    activeSubstances: values.activeSubstances || undefined,
+    drugCategories: values.drugCategories || undefined,
     dose: values.dose,
     medicineForm: values.medicineForm as MedicineForm,
     stock: values.stock,

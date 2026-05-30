@@ -26,6 +26,7 @@ vi.mock("@/lib/patientApi", () => ({
 vi.mock("@/lib/scheduleApi", () => ({
   getSchedulesForPatientsFromApi: vi.fn(async () => [schedule, { ...schedule, id: "schedule-2", patientId: "other-patient" }]),
   getSchedulesFromApi: vi.fn(async () => [schedule, { ...schedule, id: "schedule-2", patientId: "other-patient" }]),
+  clearSchedulesCache: vi.fn(),
 }));
 
 vi.mock("@/lib/foodScanApi", () => ({
@@ -103,6 +104,7 @@ describe("patientDashboardApi", () => {
   });
 
   it("calculates visible dashboard adherence as confirmed doses over scheduled doses", async () => {
+    mockedGetSchedulesForPatients.mockResolvedValueOnce([{ ...schedule, times: Array.from({ length: 12 }, (_, index) => `${String(index).padStart(2, "0")}:00`) }]);
     mockedGet.mockImplementation(async (url, config) => {
       if (url === "/medication-logs" && config?.params?.limit === 10) return { data: { data: [] } };
       if (url === "/adherence") {
@@ -128,7 +130,21 @@ describe("patientDashboardApi", () => {
     expect(data.adherenceStats.totalConfirmed).toBe(3);
   });
 
-  it("uses the latest medication log date as completed schedule end date", async () => {
+  it("keeps dashboard adherence at 100 when no visible dose is due yet", async () => {
+    mockedGet.mockImplementation(async (url, config) => {
+      if (url === "/medication-logs" && config?.params?.limit === 10) return { data: { data: [] } };
+      if (url === "/adherence") return { data: { data: { adherenceRate: 0, totalScheduled: 0, totalConfirmed: 0, dailyBreakdown: [{ date: "2026-05-09", scheduled: 0, confirmed: 0 }] } } };
+      return { data: { data: [], meta: { total: 0 } } };
+    });
+
+    const data = await getPatientDashboardData();
+
+    expect(data.patient.adherence).toBe(100);
+    expect(data.adherenceStats.adherenceRate).toBe(100);
+    expect(data.adherenceStats.totalScheduled).toBe(0);
+  });
+
+  it("uses the latest medication log date as completed schedule end date only when schedule end date is missing", async () => {
     const completedSchedule = { ...schedule, stock: 0, status: "Selesai" as const, endDate: "2026-05-27" };
     mockedGetSchedulesForPatients.mockResolvedValueOnce([completedSchedule]);
     mockedGet.mockImplementation(async (url) => {
@@ -146,6 +162,28 @@ describe("patientDashboardApi", () => {
     });
 
     const data = await getPatientScheduleData(new Date(2026, 4, 1));
+
+    expect(data.schedules[0]).toMatchObject({ endDate: "2026-05-27" });
+  });
+
+  it("falls back to the latest medication log date for completed schedules without an end date", async () => {
+    const completedSchedule = { ...schedule, stock: 0, status: "Selesai" as const, endDate: undefined };
+    mockedGetSchedulesForPatients.mockResolvedValueOnce([completedSchedule]);
+    mockedGet.mockImplementation(async (url) => {
+      if (url === "/medication-logs") {
+        return {
+          data: {
+            data: [
+              { id: "log-1", scheduleId: "schedule-1", patientId: "patient-1", drugName: "Metformin", status: "confirmed", scheduledTime: "2026-05-19T08:00:00.000Z" },
+            ],
+            meta: { total: 1 },
+          },
+        };
+      }
+      return { data: { data: [], meta: { total: 0 } } };
+    });
+
+    const data = await getPatientScheduleData(new Date(2026, 4, 1), { forceRefresh: true });
 
     expect(data.schedules[0]).toMatchObject({ endDate: "2026-05-19" });
   });

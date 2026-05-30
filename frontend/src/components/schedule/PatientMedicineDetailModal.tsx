@@ -11,6 +11,26 @@ interface PatientMedicineDetailModalProps {
   readonly onClose: () => void;
 }
 
+const formatMedicineInfo = (value?: string | null) => {
+  const trimmed = value?.trim();
+  if (!trimmed || trimmed === "[]") return "Tidak ada";
+
+  try {
+    const parsed = JSON.parse(trimmed.replaceAll("'", '"')) as unknown;
+    if (Array.isArray(parsed)) {
+      const items = parsed.flatMap((item) => {
+        const text = String(item).trim();
+        return text ? [text] : [];
+      });
+      return items.length > 0 ? items.join(", ") : "Tidak ada";
+    }
+  } catch {
+    // keep raw value when it is not JSON-like.
+  }
+
+  return trimmed;
+};
+
 export default function PatientMedicineDetailModal({ schedule, onClose }: PatientMedicineDetailModalProps) {
   return (
     <Modal isOpen={Boolean(schedule)} title="Detail Jadwal Obat" onClose={onClose}>
@@ -38,6 +58,14 @@ export default function PatientMedicineDetailModal({ schedule, onClose }: Patien
             <DetailItem surface="white" label="Aturan Makan" value={schedule.mealRule} />
             <DetailItem surface="white" label="Reminder" value={schedule.reminderEnabled ? "Aktif" : "Nonaktif"} />
             <DetailItem surface="white" label="Tanggal" value={`${schedule.startDate} - ${schedule.endDate || "Berlanjut"}`} />
+            {schedule.registrationNumber && <DetailItem surface="white" label="Nomor Registrasi" value={schedule.registrationNumber} />}
+            {schedule.drugCategories && <DetailItem surface="white" label="Kategori Obat" value={schedule.drugCategories} />}
+          </div>
+
+          <div className="mt-4 rounded-2xl bg-white p-4">
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-primary">Komposisi & Zat Aktif</p>
+            <p className="mt-2 text-sm font-semibold leading-6 text-muted">Komposisi: {formatMedicineInfo(schedule.compositionNormalized)}</p>
+            <p className="mt-2 text-sm font-semibold leading-6 text-muted">Zat Aktif: {formatMedicineInfo(schedule.activeSubstances)}</p>
           </div>
 
           <div className="mt-4 rounded-2xl bg-white p-4">

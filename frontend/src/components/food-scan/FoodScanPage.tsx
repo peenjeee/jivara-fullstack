@@ -97,24 +97,29 @@ export default function FoodScanPage() {
     <DashboardPageShell>
       <DashboardPageHeader title="Scan Makanan" />
 
-      <div className="mt-6 grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <FoodScanCameraCard
-          cameraDevices={camera.cameraDevices}
-          cameraError={camera.cameraError}
-          cameraAspectRatio={camera.cameraAspectRatio}
-          cameraStatus={camera.cameraError ? "error" : camera.isCameraStarting ? "starting" : camera.isCameraEnabled && camera.isCameraReady ? "ready" : "disabled"}
-          isScanning={isScanning}
-          cameraKey={camera.cameraKey}
-          selectedCameraId={camera.selectedCameraId}
-          onCameraReady={camera.handleCameraReady}
-          onCameraError={camera.handleCameraError}
-          onRetryCamera={camera.retryCamera}
-          onScan={runScan}
-          onSelectCamera={camera.selectCamera}
-          onUploadImage={uploadImage}
-          webcamRef={camera.webcamRef}
-        />
-        <FoodScanResultPanel isScanning={isScanning} result={scanResult} analysis={scanAnalysis} />
+      <div className="mt-6 min-w-0 space-y-6">
+        <div className="mx-auto w-full max-w-3xl">
+          <FoodScanCameraCard
+            cameraDevices={camera.cameraDevices}
+            cameraError={camera.cameraError}
+            cameraAspectRatio={camera.cameraAspectRatio}
+            cameraStatus={camera.cameraError ? "error" : camera.isCameraStarting ? "starting" : camera.isCameraEnabled && camera.isCameraReady ? "ready" : "disabled"}
+            isScanning={isScanning}
+            cameraKey={camera.cameraKey}
+            selectedCameraId={camera.selectedCameraId}
+            onCameraReady={camera.handleCameraReady}
+            onCameraError={camera.handleCameraError}
+            onRetryCamera={camera.retryCamera}
+            onScan={runScan}
+            onSelectCamera={camera.selectCamera}
+            onUploadImage={uploadImage}
+            webcamRef={camera.webcamRef}
+          />
+        </div>
+
+        <div className="mx-auto w-full max-w-5xl">
+          <FoodScanResultPanel isScanning={isScanning} result={scanResult} analysis={scanAnalysis} />
+        </div>
       </div>
     </DashboardPageShell>
   );

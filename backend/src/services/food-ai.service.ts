@@ -139,6 +139,15 @@ const normalizeDetectedLabel = (item: unknown) => {
 
 const normalizeMedicationNames = (medications: Array<{ drugName: string }>) => medications.map((medication) => medication.drugName.toUpperCase());
 
+const mapMedicationDetails = (medications: Array<{ drugName: string; registrationNumber?: string | null; compositionNormalized?: string | null; activeSubstances?: string | null; drugCategories?: string | null; medicineForm?: string | null }>) => medications.map((medication) => ({
+  drugName: medication.drugName,
+  registrationNumber: medication.registrationNumber || null,
+  compositionNormalized: medication.compositionNormalized || null,
+  activeSubstances: medication.activeSubstances || null,
+  drugCategories: medication.drugCategories || null,
+  medicineForm: medication.medicineForm || null,
+}));
+
 const mapRiskScoreToLevel = (score: number) => {
   if (score >= 4) return "tinggi";
   if (score >= 2) return "sedang";
@@ -369,7 +378,14 @@ const ensureScanExists = async (scanId: string, patientId?: string) => {
 
 const getActivePatientMedications = async (patientId: string) => {
   const activeMedications = await db
-    .select({ drugName: medicationSchedules.drugName })
+    .select({
+      drugName: medicationSchedules.drugName,
+      registrationNumber: medicationSchedules.registrationNumber,
+      compositionNormalized: medicationSchedules.compositionNormalized,
+      activeSubstances: medicationSchedules.activeSubstances,
+      drugCategories: medicationSchedules.drugCategories,
+      medicineForm: medicationSchedules.medicineForm,
+    })
     .from(medicationSchedules)
     .where(and(
       eq(medicationSchedules.patientId, patientId),
@@ -378,7 +394,7 @@ const getActivePatientMedications = async (patientId: string) => {
       isNull(medicationSchedules.completedAt),
     ));
 
-  return normalizeMedicationNames(activeMedications);
+  return { names: normalizeMedicationNames(activeMedications), details: mapMedicationDetails(activeMedications) };
 };
 
 const writeFoodScanAuditLogOnce = async (input: {
@@ -487,17 +503,24 @@ export const getFoodScanById = async (scanId: string, user?: AccessUser) => {
     db.select().from(detectedItems).where(eq(detectedItems.scanId, scanId)),
     db.select().from(interactionResults).where(eq(interactionResults.scanId, scanId)),
     db
-      .select({ drugName: medicationSchedules.drugName })
+      .select({
+        drugName: medicationSchedules.drugName,
+        registrationNumber: medicationSchedules.registrationNumber,
+        compositionNormalized: medicationSchedules.compositionNormalized,
+        activeSubstances: medicationSchedules.activeSubstances,
+        drugCategories: medicationSchedules.drugCategories,
+        medicineForm: medicationSchedules.medicineForm,
+      })
       .from(medicationSchedules)
       .where(and(
         eq(medicationSchedules.patientId, scan.patientId),
         eq(medicationSchedules.isActive, true),
-        gt(medicationSchedules.stock, 0),
         isNull(medicationSchedules.completedAt),
       )),
   ]);
 
   const patientMedications = normalizeMedicationNames(activeMedications);
+  const patientMedicationDetails = mapMedicationDetails(activeMedications);
   const recommendedFoods = toFoodScoreArray(scan.recommendedFoods);
   const foodsToAvoid = toFoodScoreArray(scan.foodsToAvoid);
   const recommendationSummary = toRecommendationSummary(scan.recommendationSummary);
@@ -506,6 +529,7 @@ export const getFoodScanById = async (scanId: string, user?: AccessUser) => {
     detectedItems: items,
     interactions,
     patientMedications,
+    patientMedicationDetails,
     analyzedMedicationCount: patientMedications.length,
     recommendedFoods,
     foodsToAvoid,
@@ -599,7 +623,8 @@ export const checkInteraction = async (dto: InteractionCheckDTO, user?: AccessUs
   await ensureScanExists(dto.scanId, dto.patientId);
 
   const detectedLabels = dto.detectedItems.map(normalizeDetectedLabel).filter(Boolean);
-  const patientMedications = await getActivePatientMedications(dto.patientId);
+  const activeMedicationData = await getActivePatientMedications(dto.patientId);
+  const patientMedications = activeMedicationData.names;
   const shouldIncludeRecommendations = dto.includeRecommendations !== false;
   const [interactionChecks, recommendationData] = await Promise.all([
     Promise.all(detectedLabels.map((label) => checkFoodInteractionWithReasoning(label, patientMedications))),
@@ -702,6 +727,7 @@ export const checkInteraction = async (dto: InteractionCheckDTO, user?: AccessUs
   return {
     interactions,
     patient_medications: patientMedications,
+    patient_medication_details: activeMedicationData.details,
     analyzed_medications_count: patientMedications.length,
     safe_items: detectedLabels
       .filter((item) => !interactions.some((interaction) => interaction.food_item === item))
@@ -725,7 +751,8 @@ export const recommendFoods = async (dto: FoodRecommendationDTO, user?: AccessUs
   if (user) await assertCanAccessPatient(user, dto.patientId);
   await ensureScanExists(dto.scanId, dto.patientId);
 
-  const patientMedications = await getActivePatientMedications(dto.patientId);
+  const activeMedicationData = await getActivePatientMedications(dto.patientId);
+  const patientMedications = activeMedicationData.names;
   const topN = Math.min(Math.max(Number(dto.topN || 100), 1), 100);
   const recommendationData = await getFoodRecommendations(patientMedications, topN);
   const recommendationGroups = splitRecommendationsByRisk(recommendationData);
@@ -746,6 +773,7 @@ export const recommendFoods = async (dto: FoodRecommendationDTO, user?: AccessUs
 
   return {
     patient_medications: patientMedications,
+    patient_medication_details: activeMedicationData.details,
     analyzed_medications_count: patientMedications.length,
     recommended_foods: recommendationGroups.recommendedFoods,
     foods_to_avoid: recommendationGroups.foodsToAvoid,

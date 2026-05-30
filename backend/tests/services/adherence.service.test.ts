@@ -26,14 +26,16 @@ describe("adherence service", () => {
   it("uses the latest medication log date when completedAt is later than the last dose date", () => {
     const today = new Date();
     today.setUTCHours(12, 0, 0, 0);
+    today.setUTCDate(today.getUTCDate() - 1);
     const createdAt = new Date(today);
     createdAt.setUTCDate(createdAt.getUTCDate() - 4);
+    createdAt.setUTCHours(0, 0, 0, 0);
     const lastDoseDate = new Date(createdAt);
     lastDoseDate.setUTCDate(createdAt.getUTCDate() + 2);
     lastDoseDate.setUTCHours(8, 0, 0, 0);
 
     const occurrences = __test__.buildScheduledOccurrences(
-      5,
+      6,
       [{
         id: "schedule-1",
         createdAt,
@@ -54,7 +56,7 @@ describe("adherence service", () => {
   it("starts the schedule window from createdAt even when medication logs predate it", () => {
     const firstLogDate = new Date();
     firstLogDate.setUTCHours(8, 0, 0, 0);
-    firstLogDate.setUTCDate(firstLogDate.getUTCDate() - 4);
+    firstLogDate.setUTCDate(firstLogDate.getUTCDate() - 6);
     const createdAt = new Date(firstLogDate);
     createdAt.setUTCDate(firstLogDate.getUTCDate() + 2);
     const lastLogDate = new Date(firstLogDate);
@@ -86,8 +88,10 @@ describe("adherence service", () => {
   it("matches schedule calendar by capping occurrences at 30 days after creation", () => {
     const today = new Date();
     today.setUTCHours(12, 0, 0, 0);
+    today.setUTCDate(today.getUTCDate() - 1);
     const createdAt = new Date(today);
-    createdAt.setUTCDate(createdAt.getUTCDate() - 31);
+    createdAt.setUTCDate(today.getUTCDate() - 31);
+    createdAt.setUTCHours(0, 0, 0, 0);
     const lastVisibleDay = new Date(createdAt);
     lastVisibleDay.setUTCDate(lastVisibleDay.getUTCDate() + 30);
     const lastVisibleDateKey = lastVisibleDay.toISOString().slice(0, 10);
@@ -106,5 +110,30 @@ describe("adherence service", () => {
 
     expect(occurrences.at(-1)?.scheduledTime.toISOString().slice(0, 10)).toBe(lastVisibleDateKey);
     expect(occurrences).toHaveLength(31);
+  });
+
+  it("does not mark a newly-created schedule as missed before any due occurrence exists", () => {
+    const createdAt = new Date();
+    const earlierToday = new Date(createdAt);
+    earlierToday.setUTCHours(Math.max(createdAt.getUTCHours() - 1, 0), createdAt.getUTCMinutes(), 0, 0);
+    const laterToday = new Date(createdAt);
+    laterToday.setUTCHours(Math.min(createdAt.getUTCHours() + 1, 23), createdAt.getUTCMinutes(), 0, 0);
+
+    const occurrences = __test__.buildScheduledOccurrences(
+      1,
+      [{
+        id: "schedule-1",
+        createdAt,
+        completedAt: null,
+        scheduledTimes: [
+          `${String(earlierToday.getUTCHours()).padStart(2, "0")}:${String(earlierToday.getUTCMinutes()).padStart(2, "0")}`,
+          `${String(laterToday.getUTCHours()).padStart(2, "0")}:${String(laterToday.getUTCMinutes()).padStart(2, "0")}`,
+        ],
+        frequency: 2,
+      }],
+      [],
+    );
+
+    expect(occurrences).toHaveLength(0);
   });
 });

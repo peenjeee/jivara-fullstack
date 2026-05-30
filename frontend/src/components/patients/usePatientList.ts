@@ -21,8 +21,9 @@ let patientListViewCache: {
   currentPage: number;
 } | null = null;
 
-export function usePatientList(onViewPatient: (patientId: string) => void, options: { readonly shouldLoadNurses?: boolean } = {}) {
+export function usePatientList(onViewPatient: (patientId: string) => void, options: { readonly shouldLoadNurses?: boolean; readonly assignAfterCreate?: boolean } = {}) {
   const shouldLoadNurses = options.shouldLoadNurses ?? true;
+  const assignAfterCreate = options.assignAfterCreate ?? false;
   const nurses = useNurseStore((state) => state.nurses);
   const setNurses = useNurseStore((state) => state.setNurses);
   const [patientRecords, setPatientRecords] = useState<PatientRecord[]>(() => patientListViewCache?.patientRecords ?? []);
@@ -126,8 +127,9 @@ export function usePatientList(onViewPatient: (patientId: string) => void, optio
   };
 
   const handleAddPatient = async (values: AddPatientValues) => {
+    let createdPatient: PatientRecord;
     try {
-      await createPatientViaApi(values);
+      createdPatient = await createPatientViaApi(values);
     } catch (error) {
       showError(getApiErrorMessage(error, "Gagal menambahkan pasien."));
       return;
@@ -136,6 +138,12 @@ export function usePatientList(onViewPatient: (patientId: string) => void, optio
     setIsAddModalOpen(false);
     resetFilters();
     await loadPatientPage(1, true, { search: "", activeFilter: "all" });
+    if (assignAfterCreate) {
+      setAssigningPatient(createdPatient);
+      void ensureNursesLoaded();
+      showToast("Pasien berhasil ditambahkan. Pilih perawat yang menangani pasien.", "success");
+      return;
+    }
     showToast("Pasien berhasil ditambahkan.", "success");
   };
 

@@ -66,6 +66,7 @@ interface InteractionResponse {
   overall_recommendation: string;
   disclaimer: string;
   patient_medications?: string[];
+  patient_medication_details?: AnalyzedMedicationDetailResponse[];
   analyzed_medications_count?: number;
   safe_items?: Array<{
     food_item: string;
@@ -83,8 +84,18 @@ interface FoodRecommendationResponse {
   worst_category?: string | null;
 }
 
+interface AnalyzedMedicationDetailResponse {
+  drugName: string;
+  registrationNumber?: string | null;
+  compositionNormalized?: string | null;
+  activeSubstances?: string | null;
+  drugCategories?: string | null;
+  medicineForm?: string | null;
+}
+
 interface RecommendationResponse {
   patient_medications?: string[];
+  patient_medication_details?: AnalyzedMedicationDetailResponse[];
   analyzed_medications_count?: number;
   recommended_foods?: FoodRecommendationResponse[];
   foods_to_avoid?: FoodRecommendationResponse[];
@@ -136,6 +147,7 @@ interface FoodScanDetailResponse {
     recommendation?: string | null;
   }>;
   patientMedications?: string[];
+  patientMedicationDetails?: AnalyzedMedicationDetailResponse[];
   analyzedMedicationCount?: number;
   recommendedFoods?: FoodRecommendationResponse[];
   foodsToAvoid?: FoodRecommendationResponse[];
@@ -250,10 +262,28 @@ const mapNutritionItem = (item: NutritionItemResponse) => ({
   source: item.source,
 });
 
+const uniqueStrings = (values: readonly string[]) => Array.from(values.reduce((uniqueValues, value) => {
+  const text = value.trim();
+  if (!text) return uniqueValues;
+
+  const key = text.toLocaleLowerCase("id-ID");
+  if (!uniqueValues.has(key)) uniqueValues.set(key, text);
+  return uniqueValues;
+}, new Map<string, string>()).values());
+
+const getAnalyzedMedicationNames = (detail: FoodScanDetailResponse) => uniqueStrings([
+  ...(detail.patientMedications || []),
+  ...(detail.patientMedicationDetails || []).map((medicine) => medicine.drugName),
+  ...(detail.interactions || []).map((interaction) => interaction.medication),
+]);
+
+const getAnalyzedMedicationCount = (explicitCount: number | null | undefined, medicationNames: readonly string[]) => Math.max(explicitCount ?? 0, medicationNames.length);
+
 const mapScanDetail = (detail: FoodScanDetailResponse, patientName = "Pasien"): FoodScanAnalysis => {
   const foodName = detail.detectedItems?.map((item) => item.labelDisplay).join(", ") || "Makanan terdeteksi";
   const risk = toRisk(detail.overallRiskLevel || "rendah");
-  const analyzedMedicationCount = detail.analyzedMedicationCount ?? detail.patientMedications?.length ?? 0;
+  const analyzedMedicationNames = getAnalyzedMedicationNames(detail);
+  const analyzedMedicationCount = getAnalyzedMedicationCount(detail.analyzedMedicationCount, analyzedMedicationNames);
   const scan: FoodScanRecord = {
     id: detail.id,
     patientId: detail.patientId,
@@ -266,27 +296,34 @@ const mapScanDetail = (detail: FoodScanDetailResponse, patientName = "Pasien"): 
     result: detail.interactions?.length ? "Ditemukan potensi interaksi obat-makanan." : "Tidak ditemukan interaksi signifikan pada makanan yang terdeteksi.",
     recommendation: detail.interactions?.[0]?.recommendation || "Ikuti jadwal obat dan pantau gejala setelah makan.",
   };
-  const interactions = (detail.interactions || []).map((interaction) => ({
-    schedule: {
-      id: interaction.id,
-      patientId: detail.patientId,
-      patientName,
-      patientAvatar: getInitials(patientName),
-      medicineName: interaction.medication,
-      dose: "-",
-      medicineForm: "Tablet" as const,
-      stock: 0,
-      frequency: "Sesuai jadwal aktif",
-      times: [],
-      mealRule: "Tidak tergantung makan" as const,
-      startDate: new Date().toISOString().slice(0, 10),
-      reminderEnabled: true,
-      status: "Aktif" as const,
-    },
-    risk: toRisk(interaction.severity),
-    reasoning: interaction.interactionDescription || "Interaksi terdeteksi dari hasil analisis makanan-obat.",
-    recommendation: interaction.recommendation || "Ikuti rekomendasi tenaga kesehatan.",
-  }));
+  const interactions = (detail.interactions || []).map((interaction) => {
+    const medicationDetail = findMedicationDetail(detail.patientMedicationDetails, interaction.medication);
+    return {
+      schedule: {
+        id: interaction.id,
+        patientId: detail.patientId,
+        patientName,
+        patientAvatar: getInitials(patientName),
+        medicineName: interaction.medication,
+        registrationNumber: medicationDetail?.registrationNumber || undefined,
+        compositionNormalized: medicationDetail?.compositionNormalized || undefined,
+        activeSubstances: medicationDetail?.activeSubstances || undefined,
+        drugCategories: medicationDetail?.drugCategories || undefined,
+        dose: "-",
+        medicineForm: (medicationDetail?.medicineForm as MedicationScheduleRecord["medicineForm"] | null | undefined) || "Tablet",
+        stock: 0,
+        frequency: "Sesuai jadwal aktif",
+        times: [],
+        mealRule: "Tidak tergantung makan" as const,
+        startDate: new Date().toISOString().slice(0, 10),
+        reminderEnabled: true,
+        status: "Aktif" as const,
+      },
+      risk: toRisk(interaction.severity),
+      reasoning: interaction.interactionDescription || "Interaksi terdeteksi dari hasil analisis makanan-obat.",
+      recommendation: interaction.recommendation || "Ikuti rekomendasi tenaga kesehatan.",
+    };
+  });
   const riskyFoodItems = new Set((detail.interactions || []).map((interaction) => interaction.foodItem));
   const safeFoods = (detail.detectedItems || [])
     .flatMap((item) => (riskyFoodItems.has(item.label) ? [] : [{ foodItem: item.label, foodDisplay: item.labelDisplay, status: "aman" }]));
@@ -297,7 +334,8 @@ const mapScanDetail = (detail: FoodScanDetailResponse, patientName = "Pasien"): 
     scan,
     patientName,
     analyzedMedicationCount,
-    analyzedMedications: detail.patientMedications ?? interactions.map((interaction) => interaction.schedule.medicineName),
+    analyzedMedications: analyzedMedicationNames,
+    analyzedMedicationDetails: detail.patientMedicationDetails ?? [],
     schedules: interactions.map((interaction) => interaction.schedule),
     interactions,
     safeFoods,
@@ -308,22 +346,31 @@ const mapScanDetail = (detail: FoodScanDetailResponse, patientName = "Pasien"): 
   };
 };
 
-const createSchedule = (interaction: InteractionResponse["interactions"][number], patient: PatientResponse, index: number): MedicationScheduleRecord => ({
-  id: `API-FOOD-INTERACTION-${index}`,
-  patientId: patient.id,
-  patientName: patient.fullName || "Pasien",
-  patientAvatar: getInitials(patient.fullName),
-  medicineName: interaction.medication,
-  dose: "-",
-  medicineForm: "Tablet",
-  stock: 0,
-  frequency: "Sesuai jadwal aktif",
-  times: [],
-  mealRule: "Tidak tergantung makan",
-  startDate: new Date().toISOString().slice(0, 10),
-  reminderEnabled: true,
-  status: "Aktif",
-});
+const findMedicationDetail = (details: readonly AnalyzedMedicationDetailResponse[] | undefined, medication: string) => details?.find((detail) => detail.drugName.toLowerCase() === medication.toLowerCase());
+
+const createSchedule = (interaction: InteractionResponse["interactions"][number], patient: PatientResponse, index: number, medicationDetails?: readonly AnalyzedMedicationDetailResponse[]): MedicationScheduleRecord => {
+  const detail = findMedicationDetail(medicationDetails, interaction.medication);
+  return {
+    id: `API-FOOD-INTERACTION-${index}`,
+    patientId: patient.id,
+    patientName: patient.fullName || "Pasien",
+    patientAvatar: getInitials(patient.fullName),
+    medicineName: interaction.medication,
+    registrationNumber: detail?.registrationNumber || undefined,
+    compositionNormalized: detail?.compositionNormalized || undefined,
+    activeSubstances: detail?.activeSubstances || undefined,
+    drugCategories: detail?.drugCategories || undefined,
+    dose: "-",
+    medicineForm: (detail?.medicineForm as MedicationScheduleRecord["medicineForm"] | null | undefined) || "Tablet",
+    stock: 0,
+    frequency: "Sesuai jadwal aktif",
+    times: [],
+    mealRule: "Tidak tergantung makan",
+    startDate: new Date().toISOString().slice(0, 10),
+    reminderEnabled: true,
+    status: "Aktif",
+  };
+};
 
 export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
   const patient = await getPatient();
@@ -372,12 +419,17 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
   const risk = toRisk(interactionData.overall_risk_level);
   const image = getBackendImageUrl(upload.upload_url);
   const foodName = toFoodName(detection.detected_items);
-  const analyzedMedicationCount =
-    recommendationData?.analyzed_medications_count
-    ?? interactionData.analyzed_medications_count
-    ?? recommendationData?.patient_medications?.length
-    ?? interactionData.patient_medications?.length
-    ?? 0;
+  const analyzedMedicationNames = uniqueStrings([
+    ...(recommendationData?.patient_medications || []),
+    ...(interactionData.patient_medications || []),
+    ...(recommendationData?.patient_medication_details || []).map((medicine) => medicine.drugName),
+    ...(interactionData.patient_medication_details || []).map((medicine) => medicine.drugName),
+    ...interactionData.interactions.map((interaction) => interaction.medication),
+  ]);
+  const analyzedMedicationCount = getAnalyzedMedicationCount(
+    recommendationData?.analyzed_medications_count ?? interactionData.analyzed_medications_count,
+    analyzedMedicationNames,
+  );
   const scan: FoodScanRecord = {
     id: upload.image_id,
     patientId,
@@ -391,7 +443,7 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
     recommendation: interactionData.overall_recommendation || interactionData.disclaimer,
   };
   const interactions = interactionData.interactions.map((interaction, index) => ({
-    schedule: createSchedule(interaction, patient, index),
+    schedule: createSchedule(interaction, patient, index, interactionData.patient_medication_details),
     risk: risk,
     reasoning: interaction.interaction_description,
     recommendation: interaction.recommendation,
@@ -407,10 +459,11 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
     scan,
     patientName: patient.fullName || "Pasien",
     analyzedMedicationCount,
-    analyzedMedications:
-      recommendationData?.patient_medications
-      ?? interactionData.patient_medications
-      ?? interactions.map((interaction) => interaction.schedule.medicineName),
+    analyzedMedications: analyzedMedicationNames,
+    analyzedMedicationDetails:
+      recommendationData?.patient_medication_details
+      ?? interactionData.patient_medication_details
+      ?? [],
     schedules: interactions.map((interaction) => interaction.schedule),
     interactions,
     nutritionItems: nutritionData?.items.map(mapNutritionItem),

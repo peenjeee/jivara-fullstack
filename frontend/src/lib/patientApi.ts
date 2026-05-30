@@ -47,6 +47,8 @@ interface PatientDetailResponse extends PatientListResponse {
     id: string;
     drugName: string;
     dosage: string;
+    medicineForm?: string | null;
+    mealRule?: string | null;
     stock?: number | null;
     frequency: number;
     scheduledTimes: unknown;
@@ -81,6 +83,8 @@ interface PatientMedicationScheduleResponse {
   patientId: string;
   drugName: string;
   dosage: string;
+  medicineForm?: string | null;
+  mealRule?: string | null;
   stock?: number | null;
   frequency: number;
   scheduledTimes: unknown;
@@ -88,6 +92,8 @@ interface PatientMedicationScheduleResponse {
   reminderEnabled?: boolean | null;
   isActive?: boolean | null;
   completedAt?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
   createdAt?: string | null;
 }
 
@@ -231,13 +237,13 @@ const mapMedication = (patient: PatientRecord, medication: PatientMedicationSche
     patientAvatar: patient.avatar,
     medicineName: medication.drugName,
     dose: medication.dosage,
-    medicineForm: "Tablet",
+    medicineForm: (medication.medicineForm as MedicationScheduleRecord["medicineForm"] | null | undefined) || "Tablet",
     stock,
     frequency: `${medication.frequency} kali sehari`,
     times,
-    mealRule: "Tidak tergantung makan",
-    startDate: medication.createdAt?.slice(0, 10) || new Date().toISOString().slice(0, 10),
-    endDate: medication.completedAt?.slice(0, 10) || undefined,
+    mealRule: (medication.mealRule as MedicationScheduleRecord["mealRule"] | null | undefined) || "Tidak tergantung makan",
+    startDate: medication.startDate?.slice(0, 10) || medication.createdAt?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+    endDate: medication.endDate?.slice(0, 10) || medication.completedAt?.slice(0, 10) || undefined,
     reminderEnabled: medication.reminderEnabled ?? true,
     instructions: medication.instructions ?? undefined,
     status: stock <= 0 ? "Selesai" : medication.isActive === false ? "Nonaktif" : "Aktif",

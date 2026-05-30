@@ -11,6 +11,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "outline";
   size?: "sm" | "md" | "lg";
   loading?: boolean;
+  loadingLabel?: string;
 }
 
 const SIZE_STYLES = {
@@ -58,6 +59,7 @@ export default function Button({
   variant = "primary",
   size = "md",
   loading = false,
+  loadingLabel = "Memuat…",
   ...props
 }: ButtonProps) {
   const isDisabled = props.disabled || loading;
@@ -66,6 +68,7 @@ export default function Button({
     <m.button
       {...(props as React.ComponentProps<typeof m.button>)}
       disabled={isDisabled}
+      aria-busy={loading || undefined}
       className={`${BASE_STYLES} ${SIZE_STYLES[size]} ${VARIANT_STYLES[variant]} ${className}`}
       whileHover={isDisabled ? undefined : HOVER_VARIANTS[variant]}
       whileTap={isDisabled ? undefined : { y: -1, scale: 0.97 }}
@@ -74,7 +77,7 @@ export default function Button({
       {loading ? (
         <>
           <Loader2 className="animate-spin -ml-1 mr-3 size-5" aria-hidden="true" focusable="false" />
-          Memuat…
+          {loadingLabel}
         </>
       ) : (
         <>

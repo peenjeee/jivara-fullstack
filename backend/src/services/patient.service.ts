@@ -310,10 +310,14 @@ export const getPatientById = async (patientId: string, user?: AccessUser) => {
         id: medicationSchedules.id,
         drugName: medicationSchedules.drugName,
         dosage: medicationSchedules.dosage,
+        medicineForm: medicationSchedules.medicineForm,
+        mealRule: medicationSchedules.mealRule,
         stock: medicationSchedules.stock,
         frequency: medicationSchedules.frequency,
         scheduledTimes: medicationSchedules.scheduledTimes,
         instructions: medicationSchedules.instructions,
+        startDate: medicationSchedules.startDate,
+        endDate: medicationSchedules.endDate,
         createdAt: medicationSchedules.createdAt,
       })
       .from(medicationSchedules)

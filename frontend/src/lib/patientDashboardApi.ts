@@ -5,7 +5,7 @@ import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
 import { normalizeAdherenceForVisibleSchedules } from "@/helpers/patientSchedule";
 import { getFoodScansPageFromApi } from "@/lib/foodScanApi";
 import { clearPatientsCache, getCurrentPatientFromApi } from "@/lib/patientApi";
-import { getSchedulesForPatientsFromApi } from "@/lib/scheduleApi";
+import { clearSchedulesCache, getSchedulesForPatientsFromApi } from "@/lib/scheduleApi";
 
 export interface MedicationLogResponse {
   id: string;
@@ -89,6 +89,7 @@ export const clearPatientDashboardCache = () => {
   patientScheduleRequests.clear();
   activitiesCache.clear();
   activitiesRequests.clear();
+  clearSchedulesCache();
 };
 
 const medicationLogMonthPageSize = 100;
@@ -116,9 +117,9 @@ const getMonthLogRange = (monthDate: Date) => {
 
 const patientActivityScheduleLimit = 50;
 
-const getPatientScheduleBaseData = async (scheduleLimit?: number) => {
+const getPatientScheduleBaseData = async (options: { readonly scheduleLimit?: number; readonly forceRefresh?: boolean } = {}) => {
   const patient = await getCurrentPatientFromApi();
-  const schedules = await getSchedulesForPatientsFromApi([patient], scheduleLimit ? { limit: scheduleLimit } : {});
+  const schedules = await getSchedulesForPatientsFromApi([patient], { ...(options.scheduleLimit ? { limit: options.scheduleLimit } : {}), forceRefresh: options.forceRefresh });
 
   return {
     patient,
@@ -285,12 +286,12 @@ const applyCompletedScheduleEndDates = (
     if (schedule.status !== "Selesai") return schedule;
 
     const latestLogDate = latestLogDateBySchedule[schedule.id];
-    if (!latestLogDate) return schedule.endDate ? schedule : { ...schedule, endDate: schedule.startDate };
-    const endDate = schedule.endDate && schedule.endDate < latestLogDate ? schedule.endDate : latestLogDate;
+    if (schedule.endDate) return schedule;
+    if (!latestLogDate) return { ...schedule, endDate: schedule.startDate };
 
     return {
       ...schedule,
-      endDate,
+      endDate: latestLogDate,
     };
   });
 };
@@ -308,7 +309,7 @@ export const getPatientScheduleData = async (monthDate = new Date(), options: { 
   if (activeRequest) return activeRequest;
 
   const request = (async () => {
-    const baseData = await getPatientScheduleBaseData();
+    const baseData = await getPatientScheduleBaseData({ forceRefresh: options.forceRefresh });
     const medicationLogs = await getMedicationLogsForMonth(baseData.patient.id, monthDate);
 
     const result = {
@@ -363,7 +364,7 @@ export const getPatientActivityLogData = async (monthDate = new Date(), options:
   if (activeRequest) return activeRequest;
 
   const request = (async () => {
-    const baseData = await getPatientScheduleBaseData(patientActivityScheduleLimit);
+    const baseData = await getPatientScheduleBaseData({ scheduleLimit: patientActivityScheduleLimit });
     const [logResponse, scans] = await Promise.all([
       getMedicationLogsForMonth(baseData.patient.id, monthDate),
       getFoodScansForPatientMonth(baseData.patient.id, monthDate).catch(() => []),

@@ -25,7 +25,7 @@ export default function PatientListPage({ mode = "manage", canDeletePatients = f
   const shouldAnimate = useDashboardEntranceMotion();
   const { push } = useRouter();
   const shouldLoadNurses = canAssignNurses || mode === "readonly";
-  const patientList = usePatientList((patientId) => push(`/patients/${encodeURIComponent(patientId)}`), { shouldLoadNurses });
+  const patientList = usePatientList((patientId) => push(`/patients/${encodeURIComponent(patientId)}`), { shouldLoadNurses, assignAfterCreate: canAssignNurses });
   const baseActions = mode === "readonly"
     ? ["view"] as const
     : canDeletePatients

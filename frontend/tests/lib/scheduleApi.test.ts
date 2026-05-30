@@ -26,17 +26,18 @@ const patients: PatientRecord[] = [{ id: "patient-1", name: "Budi", age: 50, gen
 const medicine: ScheduleMedicineFormValues = {
   medicineName: "Metformin",
   dose: "500 mg",
-  medicineForm: "Tablet",
+  medicineForm: "Kapsul",
   stock: 10,
   frequency: "2 kali sehari",
   times: ["08:00", "20:00"],
-  mealRule: "Sesudah makan",
+  mealRule: "Sebelum makan",
   startDate: "2026-05-09",
+  endDate: "2026-06-30",
   reminderEnabled: true,
   instructions: "Sesudah makan",
   status: "Aktif",
 };
-const scheduleResponse = { id: "schedule-1", patientId: "patient-1", drugName: "Metformin", dosage: "500 mg", stock: 10, frequency: 2, scheduledTimes: ["08:00", 20], instructions: "Sesudah makan", isActive: true, createdAt: "2026-05-09T08:00:00.000Z" };
+const scheduleResponse = { id: "schedule-1", patientId: "patient-1", drugName: "Metformin", dosage: "500 mg", medicineForm: "Kapsul", mealRule: "Sebelum makan", stock: 10, frequency: 2, scheduledTimes: ["08:00", 20], instructions: "Sesudah makan", isActive: true, startDate: "2026-05-09", endDate: "2026-06-30", createdAt: "2026-05-09T08:00:00.000Z" };
 const scheduleRecord: MedicationScheduleRecord = { id: "schedule-1", patientId: "patient-1", patientName: "Budi", patientAvatar: "BD", medicineName: "Metformin", dose: "500 mg", medicineForm: "Tablet", stock: 10, frequency: "2 kali sehari", times: ["08:00"], mealRule: "Tidak tergantung makan", startDate: "2026-05-09", reminderEnabled: true, status: "Aktif" };
 
 describe("scheduleApi", () => {
@@ -53,7 +54,7 @@ describe("scheduleApi", () => {
     const schedules = await getSchedulesFromApi();
 
     expect(mockedGet).toHaveBeenCalledWith("/medication-schedules");
-    expect(schedules[0]).toMatchObject({ patientName: "Budi", medicineName: "Metformin", times: ["08:00"] });
+    expect(schedules[0]).toMatchObject({ patientName: "Budi", medicineName: "Metformin", medicineForm: "Kapsul", mealRule: "Sebelum makan", times: ["08:00"] });
   });
 
   it("creates schedules from medicine form values", async () => {
@@ -61,7 +62,7 @@ describe("scheduleApi", () => {
 
     const schedules = await createSchedulesViaApi("patient-1", [medicine], patients);
 
-    expect(mockedPost).toHaveBeenCalledWith("/medication-schedules", expect.objectContaining({ patientId: "patient-1", drugName: "Metformin", frequency: 2, scheduledTimes: ["08:00", "20:00"], isActive: true }));
+    expect(mockedPost).toHaveBeenCalledWith("/medication-schedules", expect.objectContaining({ patientId: "patient-1", drugName: "Metformin", medicineForm: "Kapsul", mealRule: "Sebelum makan", frequency: 2, scheduledTimes: ["08:00", "20:00"], startDate: "2026-05-09", endDate: "2026-06-30", isActive: true }));
     expect(schedules[0]).toMatchObject({ id: "schedule-1", patientName: "Budi" });
   });
 
@@ -74,7 +75,7 @@ describe("scheduleApi", () => {
     await expect(setScheduleActiveViaApi(scheduleRecord, false, patients)).resolves.toMatchObject({ status: "Nonaktif" });
     await deactivateScheduleViaApi("schedule/1");
 
-    expect(mockedPut).toHaveBeenNthCalledWith(1, "/medication-schedules/schedule%2F1", expect.objectContaining({ isActive: false }));
+    expect(mockedPut).toHaveBeenNthCalledWith(1, "/medication-schedules/schedule%2F1", expect.objectContaining({ medicineForm: "Kapsul", mealRule: "Sebelum makan", isActive: false }));
     expect(mockedPut).toHaveBeenNthCalledWith(2, "/medication-schedules/schedule-1", { isActive: false });
     expect(mockedDelete).toHaveBeenCalledWith("/medication-schedules/schedule%2F1");
   });

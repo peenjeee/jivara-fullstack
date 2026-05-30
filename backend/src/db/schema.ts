@@ -131,7 +131,26 @@ export const patientNurseAssignments = pgTable("patient_nurse_assignments", {
 }));
 
 // ─────────────────────────────────────────────
-// 6. MEDICATION SCHEDULES
+// 6. MEDICINE CATALOG
+// ─────────────────────────────────────────────
+export const medicineCatalog = pgTable("medicine_catalog", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  registrationNumber: varchar("nomor_registrasi", { length: 128 }).notNull().unique(),
+  productName: varchar("nama_produk", { length: 256 }).notNull(),
+  compositionNormalized: text("komposisi_normalized"),
+  activeSubstances: text("list_zat_aktif"),
+  drugCategories: text("all_drug_categories"),
+  dosageFormGroup: varchar("kelompok_bentuk_sediaan", { length: 128 }),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  productNameIdx: index("idx_medicine_catalog_product_name").on(table.productName),
+  registrationNumberIdx: index("idx_medicine_catalog_registration_number").on(table.registrationNumber),
+  dosageFormGroupIdx: index("idx_medicine_catalog_dosage_form_group").on(table.dosageFormGroup),
+}));
+
+// ─────────────────────────────────────────────
+// 7. MEDICATION SCHEDULES
 // ─────────────────────────────────────────────
 export const medicationSchedules = pgTable("medication_schedules", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -139,7 +158,13 @@ export const medicationSchedules = pgTable("medication_schedules", {
     .notNull()
     .references(() => patients.id, { onDelete: "cascade" }),
   drugName: varchar("drug_name", { length: 256 }).notNull(),
+  registrationNumber: varchar("registration_number", { length: 128 }),
+  compositionNormalized: text("composition_normalized"),
+  activeSubstances: text("active_substances"),
+  drugCategories: text("drug_categories"),
   dosage: varchar("dosage", { length: 64 }).notNull(),
+  medicineForm: varchar("medicine_form", { length: 32 }).default("Tablet"),
+  mealRule: varchar("meal_rule", { length: 64 }).default("Tidak tergantung makan"),
   stock: integer("stock").default(0),
   frequency: integer("frequency").notNull(),
   scheduledTimes: jsonb("scheduled_times").notNull(),
@@ -147,6 +172,8 @@ export const medicationSchedules = pgTable("medication_schedules", {
   reminderEnabled: boolean("reminder_enabled").default(true),
   isActive: boolean("is_active").default(true),
   completedAt: timestamp("completed_at"),
+  startDate: date("start_date"),
+  endDate: date("end_date"),
   createdBy: uuid("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

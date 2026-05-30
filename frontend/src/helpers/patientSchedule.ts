@@ -35,8 +35,16 @@ export function isSameDate(a: Date, b: Date) {
   return getDateKey(a) === getDateKey(b);
 }
 
-export function getSchedulesForDate(schedules: readonly MedicationScheduleRecord[], date: Date) {
-  return getSchedulesForDateWithLimit(schedules, date);
+export function getSchedulesForDate(schedules: readonly MedicationScheduleRecord[], date: Date, today = new Date()) {
+  return getSchedulesForDateWithLimit(schedules, date, today);
+}
+
+export function getDoseTrackedSchedules(schedules: readonly MedicationScheduleRecord[]) {
+  return schedules.filter((schedule) => schedule.status === "Aktif" && schedule.stock > 0);
+}
+
+function getCalendarTrackedSchedules(schedules: readonly MedicationScheduleRecord[]) {
+  return schedules.filter((schedule) => schedule.status === "Aktif" || schedule.status === "Selesai");
 }
 
 export function getScheduleDoseCount(schedule: MedicationScheduleRecord) {
@@ -107,24 +115,24 @@ function addDays(dateKey: string, amount: number) {
   return getDateKey(date);
 }
 
-function getScheduleDisplayEndDate(schedule: MedicationScheduleRecord) {
-  const maxOngoingEndDate = addDays(schedule.startDate, 30);
-  if (!schedule.endDate) return maxOngoingEndDate;
-  return schedule.endDate < maxOngoingEndDate ? schedule.endDate : maxOngoingEndDate;
+function getScheduleDisplayEndDate(schedule: MedicationScheduleRecord, today = new Date()) {
+  const rollingDisplayEndDate = addDays(getDateKey(today), 30);
+  if (!schedule.endDate) return rollingDisplayEndDate;
+  return schedule.endDate < rollingDisplayEndDate ? schedule.endDate : rollingDisplayEndDate;
 }
 
-function getSchedulesForDateWithLimit(schedules: readonly MedicationScheduleRecord[], date: Date) {
+function getSchedulesForDateWithLimit(schedules: readonly MedicationScheduleRecord[], date: Date, today = new Date()) {
   const dateKey = getDateKey(date);
 
   return schedules.filter((schedule) => {
     if (schedule.startDate > dateKey) return false;
-    if (getScheduleDisplayEndDate(schedule) < dateKey) return false;
+    if (getScheduleDisplayEndDate(schedule, today) < dateKey) return false;
     return true;
   });
 }
 
 export function getDayStatus(schedules: readonly MedicationScheduleRecord[], date: Date, confirmedScheduleDates: Readonly<Record<string, readonly string[]>>, today: Date): PatientScheduleDayStatus {
-  const schedulesForDate = getSchedulesForDateWithLimit(schedules, date);
+  const schedulesForDate = getSchedulesForDateWithLimit(schedules, date, today);
   if (schedulesForDate.length === 0) return "empty";
 
   const dateKey = getDateKey(date);
@@ -133,6 +141,11 @@ export function getDayStatus(schedules: readonly MedicationScheduleRecord[], dat
   const isDone = totalDoses > 0 && confirmedDoses >= totalDoses;
 
   if (isDone) return "done";
+  if (confirmedDoses > 0 && dateKey < getDateKey(today)) return "missed";
+
+  const calendarTrackedSchedules = getCalendarTrackedSchedules(schedulesForDate);
+  if (calendarTrackedSchedules.length === 0) return "empty";
+
   if (dateKey < getDateKey(today)) return "missed";
   if (dateKey > getDateKey(today)) return "upcoming";
   return "active";
@@ -185,8 +198,18 @@ export function normalizeAdherenceForVisibleSchedules<T extends AdherenceStatsFo
 
   const dailyBreakdown = adherenceStats.dailyBreakdown.map((day) => {
     const date = getDateFromKey(day.date);
-    if (!date || getSchedulesForDate(schedules, date).length > 0) return day;
-    return { ...day, scheduled: 0, confirmed: 0, missed: 0, snoozed: 0 };
+    if (!date) return day;
+
+    const schedulesForDate = getSchedulesForDate(schedules, date);
+    if (schedulesForDate.length === 0) return { ...day, scheduled: 0, confirmed: 0, missed: 0, snoozed: 0 };
+    if (day.scheduled <= 0) return day;
+
+    const scheduled = getTotalDoseCount(schedulesForDate);
+    const confirmed = Math.min(scheduled, Math.round((day.confirmed / day.scheduled) * scheduled));
+    const missed = Math.min(scheduled, Math.round(((day.missed ?? 0) / day.scheduled) * scheduled));
+    const snoozed = Math.min(scheduled, Math.round(((day.snoozed ?? 0) / day.scheduled) * scheduled));
+
+    return { ...day, scheduled, confirmed, missed, snoozed };
   });
   const totalScheduled = dailyBreakdown.reduce((total, day) => total + day.scheduled, 0);
   const totalConfirmed = dailyBreakdown.reduce((total, day) => total + day.confirmed, 0);
@@ -197,7 +220,7 @@ export function normalizeAdherenceForVisibleSchedules<T extends AdherenceStatsFo
     totalConfirmed,
     totalMissed: dailyBreakdown.reduce((total, day) => total + (day.missed ?? 0), 0),
     totalSnoozed: dailyBreakdown.reduce((total, day) => total + (day.snoozed ?? 0), 0),
-    adherenceRate: totalScheduled > 0 ? Number(((totalConfirmed / totalScheduled) * 100).toFixed(1)) : 0,
+    adherenceRate: totalScheduled > 0 ? Number(((totalConfirmed / totalScheduled) * 100).toFixed(1)) : 100,
     dailyBreakdown,
   };
 }

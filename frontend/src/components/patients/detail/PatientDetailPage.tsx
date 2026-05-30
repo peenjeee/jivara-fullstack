@@ -110,14 +110,19 @@ export default function PatientDetailPage({ data, patientId }: PatientDetailPage
       <PatientProfileHero patient={detailData.patient} />
       <SummaryCardGrid stats={stats} />
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.8fr)]">
-        <div className="min-w-0 space-y-6">
-          <PatientMedicineList schedules={detailData.schedules} />
-          <PatientAdherenceChart patient={detailData.patient} schedules={detailData.schedules} />
+      <div className="mt-6 space-y-6">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.8fr)]">
+          <div className="min-w-0">
+            <PatientMedicineList schedules={detailData.schedules} />
+          </div>
+          <div className="min-w-0">
+            <PatientActivityDistributionChart distribution={detailData.activityDistribution} />
+          </div>
         </div>
 
-        <div className="min-w-0 space-y-6">
-          <PatientActivityDistributionChart distribution={detailData.activityDistribution} />
+        <PatientAdherenceChart patient={detailData.patient} schedules={detailData.schedules} />
+
+        <div className="grid gap-6 xl:grid-cols-2">
           <PatientFoodScanPanel scans={detailData.scans} patientName={detailData.patient.name} />
           <PatientRecentActivity activities={detailData.activities} patientName={detailData.patient.name} />
         </div>

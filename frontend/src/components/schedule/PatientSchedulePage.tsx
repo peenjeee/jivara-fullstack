@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useReducer, useRef } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { AlarmClock, CalendarClock, Pill } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
@@ -42,6 +42,7 @@ export default function PatientSchedulePage() {
   const lastScan = usePatientDashboardStore((state) => state.lastScan);
   const confirmedScheduleDates = usePatientDashboardStore((state) => state.confirmedScheduleDates);
   const setScheduleContext = usePatientDashboardStore((state) => state.setScheduleContext);
+  const [confirmingScheduleId, setConfirmingScheduleId] = useState<string | null>(null);
   const [state, dispatch] = useReducer(patientScheduleReducer, {
     selectedDate: patientScheduleViewCache?.selectedDate ?? today,
     visibleMonth: patientScheduleViewCache?.visibleMonth ?? getMonthStart(today),
@@ -119,7 +120,7 @@ export default function PatientSchedulePage() {
   };
 
   const handleConfirmSchedule = async (scheduleId: string) => {
-    if (!isSameDate(selectedDate, today) || !lastScan?.hasDetectedFood) return;
+    if (confirmingScheduleId || !isSameDate(selectedDate, today) || !lastScan?.hasDetectedFood) return;
 
     if (lastScan.risk === "High Risk") {
       const result = await showConfirm(
@@ -133,10 +134,15 @@ export default function PatientSchedulePage() {
 
     const schedule = patientSchedules.find((currentSchedule) => currentSchedule.id === scheduleId);
     if (!schedule) return;
+    if (schedule.status !== "Aktif" || schedule.stock <= 0) {
+      showToast(schedule.status === "Nonaktif" ? "Obat sedang nonaktif, jadi tidak bisa dikonfirmasi." : "Obat sudah selesai, jadi tidak bisa dikonfirmasi.", "warning");
+      return;
+    }
 
     const doseWindow = getScheduleDoseWindow(schedule, selectedDate, confirmedScheduleDates);
-    if (doseWindow.doseIndex === null || !doseWindow.canConfirm || schedule.stock <= 0) return;
+    if (doseWindow.doseIndex === null || !doseWindow.canConfirm) return;
 
+    setConfirmingScheduleId(scheduleId);
     try {
       await confirmMedicationScheduleViaApi(schedule, selectedDate, doseWindow.doseIndex);
       const refreshedData = await getPatientScheduleData(visibleMonth, { forceRefresh: true });
@@ -149,11 +155,12 @@ export default function PatientSchedulePage() {
         patientSchedules: refreshedData.schedules,
         confirmedScheduleDates: nextConfirmedScheduleDates,
       };
+      showToast("Obat berhasil dikonfirmasi.", "success");
     } catch {
-      return;
+      showToast("Gagal mengonfirmasi obat. Coba muat ulang jadwal.", "error");
+    } finally {
+      setConfirmingScheduleId(null);
     }
-
-    showToast("Obat berhasil dikonfirmasi.", "success");
   };
 
   return (
@@ -170,6 +177,7 @@ export default function PatientSchedulePage() {
             hasFoodScan={Boolean(lastScan)}
             confirmedScheduleIds={confirmedScheduleIds}
             confirmedScheduleDates={confirmedScheduleDates}
+            confirmingScheduleId={confirmingScheduleId}
             onConfirm={(schedule) => handleConfirmSchedule(schedule.id)}
           />
         </div>

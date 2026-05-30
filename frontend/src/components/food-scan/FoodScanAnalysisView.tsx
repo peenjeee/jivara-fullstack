@@ -22,6 +22,27 @@ const riskTextClass: Record<FoodScanRisk, string> = {
 
 const defaultMedicalDisclaimer = "Ini bukan nasihat medis. Selalu konsultasikan dengan dokter atau apoteker Anda.";
 
+const formatMedicineInfo = (value?: string | null) => {
+  const trimmed = value?.trim();
+  if (!trimmed || trimmed === "[]") return "Tidak ada";
+
+  try {
+    const parsed = JSON.parse(trimmed.replaceAll("'", '"')) as unknown;
+    if (Array.isArray(parsed)) {
+      const items = parsed.flatMap((item) => {
+        const text = String(item).trim();
+        return text ? [text] : [];
+      });
+      return items.length > 0 ? items.join(", ") : "Tidak ada";
+    }
+  } catch {
+    // keep raw value when it is not JSON-like.
+  }
+
+  return trimmed;
+};
+
+
 export default function FoodScanAnalysisView({ scanId, imageSizes = "(max-width: 1280px) 100vw, 620px", analysisData }: FoodScanAnalysisViewProps) {
   const shouldAnimate = useDashboardEntranceMotion();
   const analysis = analysisData?.scan.id === scanId ? analysisData : null;
@@ -42,7 +63,7 @@ export default function FoodScanAnalysisView({ scanId, imageSizes = "(max-width:
 
       <FoodInsightCard icon={<BrainCircuit size={20} />} title="AI Detection & Reasoning" text={analysis.scan.aiReasoning} risk={analysis.overallRisk} delay={0.12} shouldAnimate={shouldAnimate} />
 
-      <InteractionAnalysisCard interactions={analysis.interactions} analyzedMedications={analysis.analyzedMedications ?? []} safeFoods={analysis.safeFoods ?? []} disclaimer={analysis.disclaimer} shouldAnimate={shouldAnimate} />
+      <InteractionAnalysisCard interactions={analysis.interactions} analyzedMedications={analysis.analyzedMedications ?? []} analyzedMedicationDetails={analysis.analyzedMedicationDetails ?? []} safeFoods={analysis.safeFoods ?? []} disclaimer={analysis.disclaimer} shouldAnimate={shouldAnimate} />
 
       <NutritionCard items={analysis.nutritionItems ?? []} total={analysis.nutritionTotal} shouldAnimate={shouldAnimate} />
 
@@ -250,7 +271,7 @@ function SafeFoodList({ items }: { readonly items: NonNullable<FoodScanAnalysis[
   );
 }
 
-function InteractionAnalysisCard({ interactions, analyzedMedications, safeFoods, disclaimer, shouldAnimate }: { readonly interactions: FoodScanAnalysis["interactions"]; readonly analyzedMedications: NonNullable<FoodScanAnalysis["analyzedMedications"]>; readonly safeFoods: NonNullable<FoodScanAnalysis["safeFoods"]>; readonly disclaimer?: string; readonly shouldAnimate: boolean }) {
+function InteractionAnalysisCard({ interactions, analyzedMedications, analyzedMedicationDetails, safeFoods, disclaimer, shouldAnimate }: { readonly interactions: FoodScanAnalysis["interactions"]; readonly analyzedMedications: NonNullable<FoodScanAnalysis["analyzedMedications"]>; readonly analyzedMedicationDetails: NonNullable<FoodScanAnalysis["analyzedMedicationDetails"]>; readonly safeFoods: NonNullable<FoodScanAnalysis["safeFoods"]>; readonly disclaimer?: string; readonly shouldAnimate: boolean }) {
   const disclaimerText = disclaimer?.trim() || defaultMedicalDisclaimer;
 
   return (
@@ -274,6 +295,17 @@ function InteractionAnalysisCard({ interactions, analyzedMedications, safeFoods,
               : "Makanan terdeteksi telah dianalisis dan tidak menunjukkan interaksi obat yang signifikan."}
           </p>
           {safeFoods.length > 0 && <p className="mt-3 text-sm font-bold leading-6 text-text-main">Makanan aman terdeteksi: {safeFoods.map((item) => item.foodDisplay).join(", ")}.</p>}
+          {analyzedMedicationDetails.length > 0 && (
+            <div className="mt-4 space-y-2 rounded-2xl bg-white p-3">
+              {analyzedMedicationDetails.map((medicine) => (
+                <div key={`analyzed-medicine-${medicine.drugName}`} className="rounded-2xl bg-white/70 p-3 text-sm font-semibold leading-6 text-muted">
+                  <p className="font-extrabold text-text-main">{medicine.drugName}</p>
+                  <p>Komposisi: {formatMedicineInfo(medicine.compositionNormalized)}</p>
+                  <p>Zat Aktif: {formatMedicineInfo(medicine.activeSubstances)}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </article>
       ) : (
         <div className="space-y-3">
@@ -287,11 +319,15 @@ function InteractionAnalysisCard({ interactions, analyzedMedications, safeFoods,
                     <span className="text-xs font-extrabold text-muted">{interaction.schedule.mealRule}</span>
                   </div>
                   <h4 className="mt-2 font-display text-xl font-extrabold tracking-[-0.04em] text-text-main">{interaction.schedule.medicineName}</h4>
-                  <p className="mt-1 text-sm font-bold text-muted">{interaction.schedule.dose} • {interaction.schedule.frequency}</p>
+                  <p className="mt-1 text-sm font-bold text-muted">{formatScheduleSummary(interaction.schedule.dose, interaction.schedule.frequency)}</p>
+                  <div className="mt-3 rounded-2xl bg-white/70 p-3 text-sm font-semibold leading-6 text-muted">
+                    <p>Komposisi: {formatMedicineInfo(interaction.schedule.compositionNormalized)}</p>
+                    <p>Zat Aktif: {formatMedicineInfo(interaction.schedule.activeSubstances)}</p>
+                  </div>
                 </div>
               </div>
               <p className="mt-4 text-sm font-semibold leading-6 text-muted">{interaction.reasoning}</p>
-              <p className={`mt-3 border-l-4 pl-4 text-sm font-bold leading-6 text-text-main ${interaction.risk === "High Risk" ? "border-danger" : "border-leaf"}`}>{interaction.recommendation}</p>
+              <p className="mt-3 text-sm font-bold leading-6 text-text-main">{interaction.recommendation}</p>
             </article>
           ))}
         </div>
@@ -320,4 +356,9 @@ function FoodInsightCard({ icon, title, text, risk, delay, shouldAnimate }: { re
 
 function formatScanTime(value: string) {
   return new Date(value).toLocaleDateString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+function formatScheduleSummary(dose: string, frequency: string) {
+  const parts = [dose, frequency].map((part) => part.trim()).filter((part) => part && part !== "-");
+  return parts.length > 0 ? parts.join(" • ") : "Sesuai jadwal aktif";
 }

@@ -11,6 +11,7 @@
     "build": "tsc",
     "start": "node dist/src/server.js",
     "seed": "npm run build && node dist/src/scripts/seed.js",
+    "seed:medicine-catalog": "npm run build && node dist/src/scripts/import-medicine-catalog.js",
     "backfill:patient-assignments": "npm run build && node dist/src/scripts/backfill-patient-assignments.js",
     "vapid:generate": "npx web-push generate-vapid-keys",
     "db:push": "drizzle-kit push",

@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import SchedulePage from "@/components/schedule/SchedulePage";
 import { getPatientsFromApi } from "@/lib/patientApi";
-import { getSchedulePatientGroupsPageFromApi, getSchedulesFromApi, setScheduleActiveViaApi } from "@/lib/scheduleApi";
+import { getMedicineCatalogFromApi, getSchedulePatientGroupsPageFromApi, getSchedulesFromApi, setScheduleActiveViaApi } from "@/lib/scheduleApi";
 import { showToast } from "@/lib/swal";
 import type { PatientRecord } from "@/lib/mocks/patients";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
@@ -18,6 +18,7 @@ vi.mock("@/lib/patientApi", () => ({
 vi.mock("@/lib/scheduleApi", () => ({
   createSchedulesViaApi: vi.fn(),
   deactivateScheduleViaApi: vi.fn(),
+  getMedicineCatalogFromApi: vi.fn(),
   getSchedulePatientGroupsPageFromApi: vi.fn(),
   getSchedulesFromApi: vi.fn(),
   setScheduleActiveViaApi: vi.fn(),
@@ -54,6 +55,8 @@ describe("schedule management feature", () => {
     vi.mocked(getSchedulesFromApi).mockReset();
     vi.mocked(getSchedulePatientGroupsPageFromApi).mockReset();
     vi.mocked(setScheduleActiveViaApi).mockReset();
+    vi.mocked(getMedicineCatalogFromApi).mockReset();
+    vi.mocked(getMedicineCatalogFromApi).mockResolvedValue([]);
     vi.mocked(showToast).mockClear();
   });
 

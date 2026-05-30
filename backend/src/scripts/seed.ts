@@ -2,6 +2,8 @@ import dotenv from "dotenv";
 dotenv.config();
 
 import bcrypt from "bcryptjs";
+import fs from "node:fs";
+import path from "node:path";
 import { faker } from "@faker-js/faker";
 import { db } from "../db";
 import {
@@ -11,6 +13,7 @@ import {
   nurses,
   patientNurseAssignments,
   medicationSchedules,
+  medicineCatalog,
   medicationLogs,
   foodScans,
   detectedItems,
@@ -25,6 +28,85 @@ const DEMO_PASSWORD = "Demo12345";
 const NUM_ORGS = 3;
 const NUM_NURSES = 15;
 const NUM_PATIENTS = 30;
+const MEDICINE_CATALOG_CSV_PATH = path.resolve(process.cwd(), "../docs/obat_backend_perawat_one_composition_mapped.csv");
+
+type MedicineCatalogSeedRow = {
+  registrationNumber: string;
+  productName: string;
+  compositionNormalized: string | null;
+  activeSubstances: string | null;
+  drugCategories: string | null;
+  dosageFormGroup: string | null;
+};
+
+const parseCsvLine = (line: string) => {
+  const values: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    const nextChar = line[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === "," && !inQuotes) {
+      values.push(current);
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+
+  values.push(current);
+  return values;
+};
+
+const cleanCsvValue = (value: string | undefined) => {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+};
+
+const loadMedicineCatalogFromCsv = (): MedicineCatalogSeedRow[] => {
+  if (!fs.existsSync(MEDICINE_CATALOG_CSV_PATH)) return [];
+
+  const csv = fs.readFileSync(MEDICINE_CATALOG_CSV_PATH, "utf8").replace(/^\uFEFF/, "");
+  const [headerLine, ...dataLines] = csv.split(/\r?\n/).filter((line) => line.trim().length > 0);
+  const headers = parseCsvLine(headerLine);
+  const registrationNumberIndex = headers.indexOf("nomor_registrasi");
+  const productNameIndex = headers.indexOf("nama_produk");
+  const compositionNormalizedIndex = headers.indexOf("komposisi_normalized");
+  const activeSubstancesIndex = headers.indexOf("list_zat_aktif");
+  const drugCategoriesIndex = headers.indexOf("all_drug_categories");
+  const dosageFormGroupIndex = headers.indexOf("kelompok_bentuk_sediaan");
+
+  if ([registrationNumberIndex, productNameIndex, compositionNormalizedIndex, activeSubstancesIndex, drugCategoriesIndex, dosageFormGroupIndex].some((index) => index === -1)) return [];
+
+  const byRegistrationNumber = new Map<string, MedicineCatalogSeedRow>();
+
+  dataLines.forEach((line) => {
+    const values = parseCsvLine(line);
+    const registrationNumber = cleanCsvValue(values[registrationNumberIndex]);
+    const productName = cleanCsvValue(values[productNameIndex]);
+
+    if (!registrationNumber || !productName) return;
+    byRegistrationNumber.set(registrationNumber, {
+      registrationNumber,
+      productName,
+      compositionNormalized: cleanCsvValue(values[compositionNormalizedIndex]),
+      activeSubstances: cleanCsvValue(values[activeSubstancesIndex]),
+      drugCategories: cleanCsvValue(values[drugCategoriesIndex]),
+      dosageFormGroup: cleanCsvValue(values[dosageFormGroupIndex]),
+    });
+  });
+
+  return Array.from(byRegistrationNumber.values());
+};
 
 const clearDatabase = async () => {
   // console.log("Clearing database...");
@@ -41,6 +123,7 @@ const clearDatabase = async () => {
   await db.delete(patients);
   await db.delete(users);
   await db.delete(organizations);
+  await db.delete(medicineCatalog);
 };
 
 const main = async () => {
@@ -48,6 +131,14 @@ const main = async () => {
   await clearDatabase();
 
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, AUTH_CONSTANTS.BCRYPT_SALT_ROUNDS);
+
+  const medicineCatalogRows = loadMedicineCatalogFromCsv();
+  if (medicineCatalogRows.length > 0) {
+    await db.insert(medicineCatalog).values(medicineCatalogRows);
+  }
+  const seedDrugNames = medicineCatalogRows.length > 0
+    ? medicineCatalogRows.map((row) => row.productName)
+    : ["Amlodipine", "Metformin", "Lisinopril", "Omeprazole", "Salbutamol", "Atorvastatin", "Ibuprofen"];
 
   // 1. Organizations
   // console.log("Seeding Organizations...");
@@ -214,7 +305,7 @@ const main = async () => {
     // 1-6 jadwal per pasien
     const numSchedules = faker.number.int({ min: 1, max: 6 });
     for (let j = 0; j < numSchedules; j++) {
-      const drug = faker.helpers.arrayElement(["Amlodipine", "Metformin", "Lisinopril", "Omeprazole", "Salbutamol", "Atorvastatin", "Ibuprofen"]);
+      const drug = faker.helpers.arrayElement(seedDrugNames);
       const freqs = [
         { freq: 1, times: ["08:00"] },
         { freq: 2, times: ["08:00", "20:00"] },

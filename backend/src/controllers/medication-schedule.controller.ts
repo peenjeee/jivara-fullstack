@@ -15,6 +15,15 @@ const sendError = (res: Response, error: unknown) => {
 
 const getParam = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] : value || "";
 
+export const listMedicineCatalog = async (req: AuthRequest, res: Response) => {
+  try {
+    const medicines = await medicationScheduleService.listMedicineCatalog(req.query);
+    res.status(200).json({ status: "berhasil", data: medicines });
+  } catch (error) {
+    sendError(res, error);
+  }
+};
+
 export const listMedicationSchedules = async (req: AuthRequest, res: Response) => {
   try {
     const schedules = await medicationScheduleService.listMedicationSchedules(req.query, req.user);

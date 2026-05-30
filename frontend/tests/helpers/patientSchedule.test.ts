@@ -5,6 +5,7 @@ import {
   getConfirmedCount,
   getDateKey,
   getDayStatus,
+  getDoseTrackedSchedules,
   getMonthStart,
   getSchedulesForDate,
   isSameDate,
@@ -33,7 +34,15 @@ const inactiveSchedule: MedicationScheduleRecord = {
   ...activeSchedule,
   id: "schedule-2",
   medicineName: "Amlodipine",
+  status: "Nonaktif",
+};
+
+const completedSchedule: MedicationScheduleRecord = {
+  ...activeSchedule,
+  id: "schedule-3",
+  medicineName: "Candesartan",
   status: "Selesai",
+  stock: 0,
 };
 
 describe("patient schedule helpers", () => {
@@ -59,11 +68,32 @@ describe("patient schedule helpers", () => {
     expect(getDayStatus([], new Date(2026, 4, 9), {}, today)).toBe("empty");
   });
 
+  it("keeps completed schedule history visible without showing inactive schedules as missed", () => {
+    const today = new Date(2026, 4, 30);
+
+    expect(getDoseTrackedSchedules([activeSchedule, inactiveSchedule, completedSchedule])).toEqual([activeSchedule]);
+    expect(getDayStatus([inactiveSchedule], new Date(2026, 4, 29), {}, today)).toBe("empty");
+    expect(getDayStatus([completedSchedule], new Date(2026, 4, 29), {}, today)).toBe("missed");
+    expect(getDayStatus([completedSchedule], new Date(2026, 4, 29), { "2026-05-29": ["schedule-3"] }, today)).toBe("done");
+  });
+
   it("builds a 42-day calendar grid with selected and today markers", () => {
     const days = getCalendarDays(new Date(2026, 4, 1), new Date(2026, 4, 9), [activeSchedule], {}, new Date(2026, 4, 9));
 
     expect(days).toHaveLength(42);
     expect(days.find((day) => day.dateKey === "2026-05-09")).toMatchObject({ isToday: true, isSelected: true, status: "active" });
+  });
+
+  it("rolls ongoing schedule calendar dots 30 days from today", () => {
+    const ongoingSchedule = { ...activeSchedule, startDate: "2026-05-29", endDate: undefined };
+    const juneFromMay31 = getCalendarDays(new Date(2026, 5, 1), new Date(2026, 4, 31), [ongoingSchedule], {}, new Date(2026, 4, 31));
+
+    expect(juneFromMay31.find((day) => day.dateKey === "2026-06-30")).toMatchObject({ status: "upcoming" });
+    expect(juneFromMay31.find((day) => day.dateKey === "2026-07-01")).toMatchObject({ status: "empty" });
+
+    const juneFromJune1 = getCalendarDays(new Date(2026, 5, 1), new Date(2026, 5, 1), [ongoingSchedule], {}, new Date(2026, 5, 1));
+
+    expect(juneFromJune1.find((day) => day.dateKey === "2026-07-01")).toMatchObject({ status: "upcoming" });
   });
 
   it("counts confirmed schedules for a date", () => {

@@ -1,6 +1,6 @@
-import { and, count, desc, eq, gt, inArray, lte } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, ilike, inArray, lte } from "drizzle-orm";
 import { db } from "../db";
-import { medicationSchedules, patients } from "../db/schema";
+import { medicationSchedules, medicineCatalog, patients } from "../db/schema";
 import {
   MedicationScheduleCreateDTO,
   MedicationScheduleListQuery,
@@ -29,6 +29,27 @@ const ensurePatientExists = async (patientId: string) => {
 };
 
 const getCacheScope = (user?: AccessUser) => `${user?.id || "anonymous"}:${user?.role || "none"}`;
+
+const isDateString = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+const getScheduleStartDate = (dtoStartDate: unknown, fallback?: Date | string | null) => {
+  if (isDateString(dtoStartDate)) return dtoStartDate;
+  if (fallback instanceof Date) return fallback.toISOString().slice(0, 10);
+  if (typeof fallback === "string" && fallback) return fallback.slice(0, 10);
+  return new Date().toISOString().slice(0, 10);
+};
+
+const getScheduleEndDate = (dtoEndDate: unknown) => {
+  if (dtoEndDate === null || dtoEndDate === "") return null;
+  return isDateString(dtoEndDate) ? dtoEndDate : undefined;
+};
+
+const normalizeOptionalText = (value: unknown) => {
+  if (value === null) return null;
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed || null;
+};
 
 const getListCacheKey = (query: MedicationScheduleListQuery, user?: AccessUser) => {
   const normalizedQuery = Object.entries(query)
@@ -83,6 +104,27 @@ export const getMedicationScheduleSummaryForPatients = async (patientIds: readon
     completed: completedRows[0]?.total || 0,
     reminders: reminderRows[0]?.total || 0,
   };
+};
+
+export const listMedicineCatalog = async (query: { search?: string; limit?: string | number }) => {
+  const search = String(query.search || "").trim();
+  const parsedLimit = Number(query.limit || 333);
+  const limit = Math.min(Math.max(Number.isFinite(parsedLimit) ? Math.trunc(parsedLimit) : 333, 1), 500);
+
+  return db
+    .select({
+      id: medicineCatalog.id,
+      registrationNumber: medicineCatalog.registrationNumber,
+      productName: medicineCatalog.productName,
+      compositionNormalized: medicineCatalog.compositionNormalized,
+      activeSubstances: medicineCatalog.activeSubstances,
+      drugCategories: medicineCatalog.drugCategories,
+      dosageFormGroup: medicineCatalog.dosageFormGroup,
+    })
+    .from(medicineCatalog)
+    .where(search ? ilike(medicineCatalog.productName, `%${search}%`) : undefined)
+    .orderBy(asc(medicineCatalog.productName))
+    .limit(limit);
 };
 
 export const listMedicationSchedules = async (query: MedicationScheduleListQuery, user?: AccessUser) => {
@@ -189,7 +231,13 @@ export const createMedicationSchedule = async (dto: MedicationScheduleCreateDTO,
     .values({
       patientId: dto.patientId,
       drugName: dto.drugName,
+      registrationNumber: normalizeOptionalText(dto.registrationNumber),
+      compositionNormalized: normalizeOptionalText(dto.compositionNormalized),
+      activeSubstances: normalizeOptionalText(dto.activeSubstances),
+      drugCategories: normalizeOptionalText(dto.drugCategories),
       dosage: dto.dosage,
+      medicineForm: normalizeOptionalText(dto.medicineForm) ?? "Tablet",
+      mealRule: normalizeOptionalText(dto.mealRule) ?? "Tidak tergantung makan",
       stock,
       frequency: dto.frequency,
       scheduledTimes: dto.scheduledTimes,
@@ -197,6 +245,8 @@ export const createMedicationSchedule = async (dto: MedicationScheduleCreateDTO,
       reminderEnabled: dto.reminderEnabled ?? true,
       isActive: dto.isActive ?? true,
       completedAt: stock <= 0 ? new Date() : null,
+      startDate: getScheduleStartDate(dto.startDate),
+      endDate: getScheduleEndDate(dto.endDate) ?? (stock <= 0 ? new Date().toISOString().slice(0, 10) : null),
       createdBy: createdBy || null,
     })
     .returning();
@@ -226,20 +276,30 @@ export const updateMedicationSchedule = async (id: string, dto: MedicationSchedu
   };
 
   if (dto.drugName !== undefined) updates.drugName = dto.drugName;
+  if (dto.registrationNumber !== undefined) updates.registrationNumber = normalizeOptionalText(dto.registrationNumber);
+  if (dto.compositionNormalized !== undefined) updates.compositionNormalized = normalizeOptionalText(dto.compositionNormalized);
+  if (dto.activeSubstances !== undefined) updates.activeSubstances = normalizeOptionalText(dto.activeSubstances);
+  if (dto.drugCategories !== undefined) updates.drugCategories = normalizeOptionalText(dto.drugCategories);
   if (dto.dosage !== undefined) updates.dosage = dto.dosage;
+  if (dto.medicineForm !== undefined) updates.medicineForm = normalizeOptionalText(dto.medicineForm);
+  if (dto.mealRule !== undefined) updates.mealRule = normalizeOptionalText(dto.mealRule);
   if (dto.stock !== undefined) updates.stock = dto.stock;
   if (dto.frequency !== undefined) updates.frequency = dto.frequency;
   if (dto.scheduledTimes !== undefined) updates.scheduledTimes = dto.scheduledTimes;
   if (dto.instructions !== undefined) updates.instructions = dto.instructions;
   if (dto.reminderEnabled !== undefined) updates.reminderEnabled = dto.reminderEnabled;
   if (dto.isActive !== undefined) updates.isActive = dto.isActive;
+  if (dto.startDate !== undefined) updates.startDate = getScheduleStartDate(dto.startDate, existing.startDate ?? existing.createdAt);
+  if (dto.endDate !== undefined) updates.endDate = getScheduleEndDate(dto.endDate);
 
   const nextStock = dto.stock ?? existing.stock ?? 0;
   const nextIsActive = dto.isActive ?? existing.isActive ?? true;
   if (nextStock > 0 && nextIsActive) {
     updates.completedAt = null;
   } else if (nextStock <= 0 && !existing.completedAt) {
-    updates.completedAt = new Date();
+    const completedAt = new Date();
+    updates.completedAt = completedAt;
+    if (dto.endDate === undefined) updates.endDate = completedAt.toISOString().slice(0, 10);
   }
 
   const [schedule] = await db
@@ -248,7 +308,7 @@ export const updateMedicationSchedule = async (id: string, dto: MedicationSchedu
     .where(eq(medicationSchedules.id, id))
     .returning();
 
-  const changes = diffChanges(existing, schedule, ["drugName", "dosage", "stock", "frequency", "scheduledTimes", "instructions", "reminderEnabled", "isActive", "completedAt"]);
+  const changes = diffChanges(existing, schedule, ["drugName", "registrationNumber", "compositionNormalized", "activeSubstances", "drugCategories", "dosage", "medicineForm", "mealRule", "stock", "frequency", "scheduledTimes", "instructions", "reminderEnabled", "isActive", "completedAt", "startDate", "endDate"]);
   if (Object.keys(changes).length > 0) {
     writeAuditLogAsync({
       userId: user?.id || null,

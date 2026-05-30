@@ -1,13 +1,14 @@
 "use client";
 
 import { Plus } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Button from "@/components/ui/Button";
 import FormField from "@/components/ui/FormField";
 import FormStickyActions from "@/components/ui/FormStickyActions";
 import SelectField from "@/components/ui/SelectField";
 import type { PatientRecord } from "@/lib/mocks/patients";
 import type { MealRule, MedicationScheduleStatus, MedicineForm } from "@/lib/mocks/schedules";
+import { getMedicineCatalogFromApi, type MedicineCatalogOption } from "@/lib/scheduleApi";
 import { showWarning } from "@/lib/swal";
 import ScheduleMedicineBlock from "./ScheduleMedicineBlock";
 import { emptyMedicine, emptyScheduleFormValues, type ScheduleFormValues } from "./scheduleFormUtils";
@@ -30,16 +31,46 @@ export default function ScheduleForm({ patients, initialValues, mode = "add", pa
   const values = initialValues ?? emptyScheduleFormValues;
   const [medicineKeys, setMedicineKeys] = useState(() => values.medicines.map((_, index) => index));
   const [selectedPatientId, setSelectedPatientId] = useState(values.patientId);
+  const [medicineCatalogOptions, setMedicineCatalogOptions] = useState<MedicineCatalogOption[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const canManageBlocks = mode === "add";
   const displayIndexOffset = patientLocked ? medicineIndexOffset : medicineIndexOffsetByPatient[selectedPatientId] ?? 0;
   const patientOptions = Array.from(new Map(patients.map((patient) => [patient.id, patient])).values()).map((patient) => ({ label: patient.name, value: patient.id }));
 
-  const handleSubmit = async (formData: FormData) => {
+  useEffect(() => {
+    let isMounted = true;
+    getMedicineCatalogFromApi()
+      .then((catalog) => {
+        if (isMounted) setMedicineCatalogOptions(catalog);
+      })
+      .catch(() => {
+        if (isMounted) setMedicineCatalogOptions([]);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleMedicineSearch = (search: string) => {
+    const query = search.trim();
+    if (query.length < 2) return;
+    getMedicineCatalogFromApi(query)
+      .then((catalog) => setMedicineCatalogOptions(catalog))
+      .catch(() => undefined);
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     if (isSubmitting) return;
+
+    const formData = new FormData(event.currentTarget);
     const patientId = String(formData.get("patientId") ?? "");
     const medicines = medicineKeys.map((key) => ({
       medicineName: String(formData.get(`medicineName-${key}`) ?? "").trim(),
+      registrationNumber: String(formData.get(`registrationNumber-${key}`) ?? "").trim(),
+      compositionNormalized: String(formData.get(`compositionNormalized-${key}`) ?? "").trim(),
+      activeSubstances: String(formData.get(`activeSubstances-${key}`) ?? "").trim(),
+      drugCategories: String(formData.get(`drugCategories-${key}`) ?? "").trim(),
       dose: String(formData.get(`dose-${key}`) ?? "").trim(),
       medicineForm: String(formData.get(`medicineForm-${key}`) ?? "") as MedicineForm | "",
       stock: Number(formData.get(`stock-${key}`) ?? 0),
@@ -76,7 +107,7 @@ export default function ScheduleForm({ patients, initialValues, mode = "add", pa
   };
 
   return (
-    <form action={handleSubmit} className="min-w-0 space-y-5" noValidate>
+    <form onSubmit={handleSubmit} className="min-w-0 space-y-5" noValidate>
       <FormField label="Pasien" required>
         {patientLocked && <input type="hidden" name="patientId" value={values.patientId} />}
         <SelectField
@@ -103,6 +134,8 @@ export default function ScheduleForm({ patients, initialValues, mode = "add", pa
               displayIndexOffset={displayIndexOffset}
               fieldKey={key}
               values={medicineValues}
+              medicineCatalogOptions={medicineCatalogOptions}
+              onMedicineSearch={handleMedicineSearch}
               removable={canManageBlocks && medicineKeys.length > 1}
               onRemove={() => setMedicineKeys((currentKeys) => currentKeys.filter((currentKey) => currentKey !== key))}
             />
@@ -111,13 +144,13 @@ export default function ScheduleForm({ patients, initialValues, mode = "add", pa
       </div>
 
       {canManageBlocks && (
-        <button type="button" onClick={addMedicineBlock} className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-2 text-sm font-bold text-primary hover:bg-primary hover:text-white">
+        <button type="button" disabled={isSubmitting} onClick={addMedicineBlock} className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-2 text-sm font-bold text-primary hover:bg-primary hover:text-white disabled:cursor-not-allowed disabled:opacity-60">
           <Plus size={16} /> Tambah Obat
         </button>
       )}
 
       <FormStickyActions>
-        <Button size="sm" type="submit" loading={isSubmitting}>
+        <Button size="sm" type="submit" loading={isSubmitting} loadingLabel={mode === "edit" ? "Menyimpan obat…" : "Menyimpan jadwal…"}>
           {mode === "edit" ? "Simpan Obat" : "Simpan Jadwal"}
         </Button>
       </FormStickyActions>

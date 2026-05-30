@@ -2,7 +2,7 @@ import { patients, type PatientStatus } from "./patients";
 
 export type MedicationScheduleStatus = "Aktif" | "Selesai" | "Nonaktif";
 export type MealRule = "Sebelum makan" | "Sesudah makan" | "Tidak tergantung makan";
-export type MedicineForm = "Tablet" | "Kapsul" | "Sirup" | "Injeksi" | "Tetes" | "Lainnya";
+export type MedicineForm = string;
 
 export interface MedicationScheduleRecord {
   readonly id: string;
@@ -11,6 +11,10 @@ export interface MedicationScheduleRecord {
   readonly patientAvatar: string;
   readonly patientStatus?: PatientStatus;
   readonly medicineName: string;
+  readonly registrationNumber?: string;
+  readonly compositionNormalized?: string;
+  readonly activeSubstances?: string;
+  readonly drugCategories?: string;
   readonly dose: string;
   readonly medicineForm: MedicineForm;
   readonly stock: number;

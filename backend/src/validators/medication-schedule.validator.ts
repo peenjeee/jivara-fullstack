@@ -7,6 +7,7 @@ const isValidUuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
 const isValidTime = (value: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+const isValidDate = (value: unknown) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(new Date(`${value}T00:00:00.000Z`).getTime());
 
 const validateScheduledTimes = (scheduledTimes: unknown) => {
   return Array.isArray(scheduledTimes)
@@ -15,7 +16,7 @@ const validateScheduledTimes = (scheduledTimes: unknown) => {
 };
 
 export const validateMedicationScheduleCreate = (req: Request, res: Response, next: NextFunction) => {
-  const { patientId, drugName, dosage, stock, frequency, scheduledTimes } = req.body;
+  const { patientId, drugName, dosage, stock, frequency, scheduledTimes, startDate, endDate } = req.body;
 
   if (isMissing(patientId) || !isValidUuid(patientId)) {
     return res.status(400).json({ status: "gagal", message: "patientId wajib berupa UUID valid", error_code: "VALIDATION_ERROR" });
@@ -39,6 +40,14 @@ export const validateMedicationScheduleCreate = (req: Request, res: Response, ne
 
   if (!validateScheduledTimes(scheduledTimes)) {
     return res.status(400).json({ status: "gagal", message: "scheduledTimes wajib array jam format HH:mm", error_code: "VALIDATION_ERROR" });
+  }
+
+  if (startDate !== undefined && !isValidDate(startDate)) {
+    return res.status(400).json({ status: "gagal", message: "startDate wajib format YYYY-MM-DD", error_code: "VALIDATION_ERROR" });
+  }
+
+  if (endDate !== undefined && endDate !== null && endDate !== "" && !isValidDate(endDate)) {
+    return res.status(400).json({ status: "gagal", message: "endDate wajib format YYYY-MM-DD", error_code: "VALIDATION_ERROR" });
   }
 
   next();
@@ -76,7 +85,7 @@ export const validateMedicationScheduleId = (req: Request, res: Response, next: 
 };
 
 export const validateMedicationScheduleUpdate = (req: Request, res: Response, next: NextFunction) => {
-  const { stock, frequency, scheduledTimes } = req.body;
+  const { stock, frequency, scheduledTimes, startDate, endDate } = req.body;
 
   if (frequency !== undefined && (!Number.isInteger(frequency) || frequency < 1 || frequency > 3)) {
     return res.status(400).json({ status: "gagal", message: "Frekuensi harus angka 1 sampai 3", error_code: "VALIDATION_ERROR" });
@@ -88,6 +97,14 @@ export const validateMedicationScheduleUpdate = (req: Request, res: Response, ne
 
   if (scheduledTimes !== undefined && !validateScheduledTimes(scheduledTimes)) {
     return res.status(400).json({ status: "gagal", message: "scheduledTimes wajib array jam format HH:mm", error_code: "VALIDATION_ERROR" });
+  }
+
+  if (startDate !== undefined && !isValidDate(startDate)) {
+    return res.status(400).json({ status: "gagal", message: "startDate wajib format YYYY-MM-DD", error_code: "VALIDATION_ERROR" });
+  }
+
+  if (endDate !== undefined && endDate !== null && endDate !== "" && !isValidDate(endDate)) {
+    return res.status(400).json({ status: "gagal", message: "endDate wajib format YYYY-MM-DD", error_code: "VALIDATION_ERROR" });
   }
 
   next();
