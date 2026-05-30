@@ -151,7 +151,7 @@ function DetectionOverlay({ items, imageWidth, imageHeight }: { readonly items: 
       {boxes.map(({ item, index, rect }) => {
         const color = detectionBoxColors[index % detectionBoxColors.length];
         return (
-          <div key={`${item.label}-${index}`} className="absolute border-2" style={{ ...rect, borderColor: color }}>
+          <div key={`${item.label}-${item.confidence}-${rect.left}-${rect.top}-${rect.width}-${rect.height}`} className="absolute border-2" style={{ ...rect, borderColor: color }}>
             <div className="absolute -left-0.5 -top-6 max-w-[180px] truncate rounded-t-md px-2 py-1 text-[10px] font-black leading-none text-white shadow-sm" style={{ backgroundColor: color }}>
               {item.labelDisplay} {Math.round(item.confidence * 100)}%
             </div>
