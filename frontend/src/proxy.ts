@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { updateSession } from './lib/supabase/middleware';
 import { JSON_LD_SCRIPT } from './config/seo';
 
 function getConfiguredApiOrigin() {
@@ -141,8 +140,6 @@ function isTokenUsable(token?: string) {
 }
 
 export async function proxy(request: NextRequest) {
-  const supabaseResponse = await updateSession(request);
-
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-nonce', nonce);
@@ -167,7 +164,6 @@ export async function proxy(request: NextRequest) {
     response.headers.set('Content-Security-Policy', contentSecurityPolicy);
     setHardeningHeaders(response);
     response.headers.set('Cache-Control', 'no-store, max-age=0');
-    supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
     expireAuthCookies(response);
     setLogoutMarker(response);
     return response;
@@ -179,7 +175,6 @@ export async function proxy(request: NextRequest) {
     const response = NextResponse.redirect(url);
     response.headers.set('Content-Security-Policy', contentSecurityPolicy);
     setHardeningHeaders(response);
-    supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
     if (hasLogoutMarker) expireAuthCookies(response);
     return response;
   }
@@ -188,7 +183,6 @@ export async function proxy(request: NextRequest) {
     const response = NextResponse.redirect(new URL('/dashboard', request.url));
     response.headers.set('Content-Security-Policy', contentSecurityPolicy);
     setHardeningHeaders(response);
-    supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
     return response;
   }
 
@@ -199,7 +193,6 @@ export async function proxy(request: NextRequest) {
   });
   response.headers.set('Content-Security-Policy', contentSecurityPolicy);
   setHardeningHeaders(response);
-  supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
   if (hasLogoutMarker) expireAuthCookies(response);
   return response;
 }
