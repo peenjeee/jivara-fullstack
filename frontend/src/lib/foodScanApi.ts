@@ -148,6 +148,7 @@ interface FoodScanDetailResponse {
     interactionDescription?: string | null;
     recommendation?: string | null;
   }>;
+  patientName?: string | null;
   patientMedications?: string[];
   patientMedicationDetails?: AnalyzedMedicationDetailResponse[];
   analyzedMedicationCount?: number;
@@ -293,9 +294,9 @@ const getAnalyzedMedicationNames = (detail: FoodScanDetailResponse) => uniqueStr
   ...(detail.interactions || []).map((interaction) => interaction.medication),
 ]);
 
-const getAnalyzedMedicationCount = (explicitCount: number | null | undefined, medicationNames: readonly string[]) => Math.max(explicitCount ?? 0, medicationNames.length);
+const getAnalyzedMedicationCount = (explicitCount: number | null | undefined, medicationNames: readonly string[]) => explicitCount ?? medicationNames.length;
 
-const mapScanDetail = (detail: FoodScanDetailResponse, patientName = "Pasien"): FoodScanAnalysis => {
+const mapScanDetail = (detail: FoodScanDetailResponse, patientName = detail.patientName || "Pasien"): FoodScanAnalysis => {
   const foodName = detail.detectedItems?.map((item) => item.labelDisplay).join(", ") || "Makanan terdeteksi";
   const risk = toRisk(detail.overallRiskLevel || "rendah");
   const analyzedMedicationNames = getAnalyzedMedicationNames(detail);

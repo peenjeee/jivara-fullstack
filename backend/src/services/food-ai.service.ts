@@ -8,6 +8,7 @@ import {
   interactionResults,
   medicationSchedules,
   patients,
+  users,
   auditLogs,
 } from "../db/schema";
 import {
@@ -545,6 +546,17 @@ const getActivePatientMedications = async (patientId: string) => {
   return { names: normalizeMedicationNames(activeMedications), details: mapMedicationDetails(activeMedications) };
 };
 
+const getPatientDisplayName = async (patientId: string) => {
+  const patientRows = await db
+    .select({ fullName: users.fullName })
+    .from(patients)
+    .innerJoin(users, eq(patients.userId, users.id))
+    .where(eq(patients.id, patientId))
+    .limit(1);
+
+  return patientRows[0]?.fullName || "Pasien";
+};
+
 const writeFoodScanAuditLogOnce = async (input: {
   userId?: string | null;
   action: string;
@@ -647,28 +659,17 @@ export const getFoodScanById = async (scanId: string, user?: AccessUser) => {
   const scan = await ensureScanExists(scanId);
   if (user) await assertCanAccessPatient(user, scan.patientId);
 
-  const [items, interactions, activeMedications] = await Promise.all([
+  const [items, storedInteractions, activeMedicationData, patientName] = await Promise.all([
     db.select().from(detectedItems).where(eq(detectedItems.scanId, scanId)),
     db.select().from(interactionResults).where(eq(interactionResults.scanId, scanId)),
-    db
-      .select({
-        drugName: medicationSchedules.drugName,
-        registrationNumber: medicationSchedules.registrationNumber,
-        compositionNormalized: medicationSchedules.compositionNormalized,
-        activeSubstances: medicationSchedules.activeSubstances,
-        drugCategories: medicationSchedules.drugCategories,
-        medicineForm: medicationSchedules.medicineForm,
-      })
-      .from(medicationSchedules)
-      .where(and(
-        eq(medicationSchedules.patientId, scan.patientId),
-        eq(medicationSchedules.isActive, true),
-        isNull(medicationSchedules.completedAt),
-      )),
+    getActivePatientMedications(scan.patientId),
+    getPatientDisplayName(scan.patientId),
   ]);
 
-  const patientMedications = normalizeMedicationNames(activeMedications);
-  const patientMedicationDetails = mapMedicationDetails(activeMedications);
+  const patientMedications = activeMedicationData.names;
+  const patientMedicationDetails = activeMedicationData.details;
+  const activeMedicationNames = new Set(patientMedications.map((name) => name.toLocaleUpperCase("id-ID")));
+  const interactions = storedInteractions.filter((interaction) => activeMedicationNames.has(interaction.medication.toLocaleUpperCase("id-ID")));
   const recommendedFoods = toFoodScoreArray(scan.recommendedFoods);
   const foodsToAvoid = toFoodScoreArray(scan.foodsToAvoid);
   const recommendationSummary = toRecommendationSummary(scan.recommendationSummary);
@@ -676,6 +677,7 @@ export const getFoodScanById = async (scanId: string, user?: AccessUser) => {
     ...mapScanSummary(scan),
     detectedItems: items,
     interactions,
+    patientName,
     patientMedications,
     patientMedicationDetails,
     analyzedMedicationCount: patientMedications.length,
