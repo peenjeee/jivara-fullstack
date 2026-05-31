@@ -484,10 +484,6 @@ const normalizeDetectionResponse = (payload: unknown): FoodDetectionResult => {
     .map(toDetectionItem)
     .filter((item) => item.label.length > 0);
 
-  if (detectedItems.length === 0) {
-    throw { status: 502, message: "Service AI tidak mengembalikan hasil deteksi", code: "AI_EMPTY_DETECTION" };
-  }
-
   return {
     detectedItems,
     lowConfidenceItems: Array.isArray(root?.low_confidence_items) ? root.low_confidence_items : [],
@@ -758,7 +754,7 @@ export const detectFood = async (dto: FoodDetectDTO, user?: AccessUser) => {
   const detectionResult = await runFoodDetection(scan);
 
   const existingItems = await db.select({ id: detectedItems.id }).from(detectedItems).where(eq(detectedItems.scanId, scan.id)).limit(1);
-  if (existingItems.length === 0) {
+  if (existingItems.length === 0 && detectionResult.detectedItems.length > 0) {
     await db.insert(detectedItems).values(detectionResult.detectedItems.map((item) => ({
       scanId: scan.id,
       label: item.label,

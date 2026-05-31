@@ -93,6 +93,26 @@ describe("foodScanApi", () => {
     expect(analysis.nutritionTotal).toBeUndefined();
   });
 
+  it("returns a handled result when detection finds no food", async () => {
+    mockedGet.mockResolvedValueOnce({ data: { data: { id: "patient-1", fullName: "Budi Santoso" } } });
+    mockedPost
+      .mockResolvedValueOnce({ data: { data: { image_id: "img-1", upload_url: "/uploads/img-1.jpg", timestamp: "2026-05-09T08:00:00.000Z" } } })
+      .mockResolvedValueOnce({ data: { data: { scan_id: "scan-1", detected_items: [], low_confidence_items: [], inference_time_ms: 120, model_version: "v1", timestamp: "2026-05-09T08:00:01.000Z" } } });
+
+    const analysis = await scanFoodImage(new File(["image"], "food.jpg", { type: "image/jpeg" }));
+
+    expect(mockedPost).toHaveBeenCalledTimes(2);
+    expect(analysis.scan).toMatchObject({
+      foodName: "Tidak ada makanan terdeteksi",
+      hasDetectedFood: false,
+      detectedItems: [],
+    });
+    expect(analysis.scan.result).toBe("Tidak ada makanan yang dapat dianalisis dari gambar ini.");
+    expect(analysis.interactions).toEqual([]);
+    expect(analysis.recommendedFoods).toEqual([]);
+    expect(analysis.foodsToAvoid).toEqual([]);
+  });
+
   it("retries food detection once after a transient timeout", async () => {
     vi.useFakeTimers();
     mockedGet.mockResolvedValueOnce({ data: { data: { id: "patient-1", fullName: "Budi Santoso" } } });
