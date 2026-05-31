@@ -6,6 +6,7 @@ import { NotificationPreferenceDTO, PushSubscriptionDTO, SendNotificationDTO, Us
 import { AccessUser, assertCanAccessPatient, getAssignedPatientIdsForNurse, getPatientIdForUser, scopedPatientFilter } from "./access-control.service";
 import { deleteCachedByPrefix, getCached, setCached } from "./cache.service";
 import { writeAuditLogAsync } from "./audit-log.service";
+import { APP_TIMEZONE, getAppDateRangeFromQuery } from "../utils/app-timezone";
 
 const NOTIF_CACHE_TTL_MS = Number(process.env.NOTIF_CACHE_TTL_MS || 15_000);
 const NOTIF_CACHE_PREFIX = "notif:";
@@ -75,33 +76,7 @@ const parsePagination = (query: Record<string, unknown>) => {
   return { page, limit, offset: (page - 1) * limit };
 };
 
-const appTimezoneOffset = "+07:00";
-const appTimezone = "Asia/Jakarta";
-
-const getDateRange = (query: Record<string, unknown>) => {
-  const startValue = typeof query.startDate === "string"
-    ? query.startDate
-    : typeof query.start_date === "string"
-      ? query.start_date
-      : typeof query.date === "string"
-        ? query.date
-        : undefined;
-  const endValue = typeof query.endDate === "string"
-    ? query.endDate
-    : typeof query.end_date === "string"
-      ? query.end_date
-      : startValue;
-  if (!startValue || !endValue) return null;
-
-  const start = new Date(`${startValue}T00:00:00.000${appTimezoneOffset}`);
-  const end = new Date(`${endValue}T00:00:00.000${appTimezoneOffset}`);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
-
-  const normalizedStart = start <= end ? start : end;
-  const normalizedEnd = start <= end ? end : start;
-  normalizedEnd.setDate(normalizedEnd.getDate() + 1);
-  return { start: normalizedStart, end: normalizedEnd };
-};
+const appTimezone = APP_TIMEZONE;
 
 const getNotificationCategoryCondition = (category?: string) => {
   if (category === "food_scan") return ilike(notifications.type, "%food%");
@@ -539,7 +514,7 @@ export const listNotifications = async (query: Record<string, unknown>, user: Ac
   const activityCategory = typeof query.activity_category === "string" ? query.activity_category : typeof query.activityCategory === "string" ? query.activityCategory : undefined;
   const severity = typeof query.severity === "string" ? query.severity : undefined;
   const search = typeof query.search === "string" ? query.search.trim() : "";
-  const dateRange = getDateRange(query);
+  const dateRange = getAppDateRangeFromQuery(query);
   const conditions = [];
   const { page, limit, offset } = parsePagination(query);
   const scopedFilter = await scopedPatientFilter(notifications.patientId, user, patientId);

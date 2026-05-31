@@ -10,7 +10,7 @@ import Button from "@/components/ui/Button";
 import { ActivityDataSkeleton, SummaryCardsSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import { FoodScanDetailModal } from "@/components/food-scan";
-import { getActivityDateKey } from "@/helpers/activityLogs";
+import { getActivityDateKey, getTodayDateKey } from "@/helpers/activityLogs";
 import { activityMatchesNurse } from "@/helpers/nurses";
 import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
 import { getActivityReadIdsFromApi, markActivitiesReadViaApi, markAllUnreadViaApi } from "@/lib/activityReadApi";
@@ -290,7 +290,7 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
     stateRef.current = state;
   }, [state]);
   const debouncedSearch = useDebouncedValue(state.search);
-  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayKey = getTodayDateKey();
   const effectiveQuickFilter = readOnly && state.quickFilter === "unread" ? "all" : state.quickFilter;
 
   useEffect(() => {

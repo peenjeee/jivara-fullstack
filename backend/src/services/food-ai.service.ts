@@ -22,6 +22,7 @@ import { AccessUser, assertCanAccessPatient, scopedPatientFilter } from "./acces
 import { writeAuditLog } from "./audit-log.service";
 import { deleteCachedByPrefix, getCached, setCached } from "./cache.service";
 import { sendCareTeamCriticalPushNotification } from "./notification.service";
+import { getAppDateRangeFromQuery } from "../utils/app-timezone";
 
 const FOOD_SCAN_CACHE_PREFIX = "food-scans:";
 const FOOD_SCAN_CACHE_TTL_MS = Number(process.env.FOOD_SCAN_CACHE_TTL_MS || 15_000);
@@ -631,21 +632,6 @@ const mapScanSummary = (scan: typeof foodScans.$inferSelect) => ({
   createdAt: scan.createdAt,
 });
 
-const getDateRange = (query: { date?: string; start_date?: string; startDate?: string; end_date?: string; endDate?: string }) => {
-  const startValue = query.startDate || query.start_date || query.date;
-  const endValue = query.endDate || query.end_date || startValue;
-  if (!startValue || !endValue) return null;
-
-  const start = new Date(`${startValue}T00:00:00.000Z`);
-  const end = new Date(`${endValue}T00:00:00.000Z`);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
-
-  const normalizedStart = start <= end ? start : end;
-  const normalizedEnd = start <= end ? end : start;
-  normalizedEnd.setUTCDate(normalizedEnd.getUTCDate() + 1);
-  return { start: normalizedStart, end: normalizedEnd };
-};
-
 export const listFoodScans = async (query: { page?: string; limit?: string; patient_id?: string; patientId?: string; date?: string; start_date?: string; startDate?: string; end_date?: string; endDate?: string } = {}, user?: AccessUser) => {
   const cacheKey = `food-scans:list:${user?.id || "anon"}:${query.patientId || query.patient_id || "all"}:${query.date || query.startDate || query.start_date || "all"}:${query.endDate || query.end_date || "all"}:${query.page || 1}:${query.limit || 20}`;
   const cached = getCached(cacheKey);
@@ -655,7 +641,7 @@ export const listFoodScans = async (query: { page?: string; limit?: string; pati
   const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100);
   const offset = (page - 1) * limit;
   const patientId = query.patientId || query.patient_id;
-  const dateRange = getDateRange(query);
+  const dateRange = getAppDateRangeFromQuery(query);
   const scopedFilter = await scopedPatientFilter(foodScans.patientId, user, patientId);
 
   if (!scopedFilter.scope.allowed) {

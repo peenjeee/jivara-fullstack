@@ -1,4 +1,5 @@
 import type { ActivityLogRecord } from "@/lib/mocks/activityLogs";
+import { getAppDateKey, getTodayAppDateKey } from "@/lib/appTimezone";
 
 export interface ActivityLogDateGroup {
   readonly label: string;
@@ -7,23 +8,17 @@ export interface ActivityLogDateGroup {
 }
 
 export function getActivityDateKey(timestamp: string) {
-  const date = new Date(timestamp);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return getAppDateKey(timestamp);
 }
 
 export function getTodayDateKey() {
-  return getActivityDateKey(new Date().toISOString());
+  return getTodayAppDateKey();
 }
 
 export function getActivityDateLabel(timestamp: string) {
   const date = new Date(timestamp);
   const todayKey = getTodayDateKey();
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayKey = getActivityDateKey(yesterday.toISOString());
+  const yesterdayKey = getAppDateKey(Date.now() - 86_400_000);
 
   if (getActivityDateKey(timestamp) === todayKey) return "Hari Ini";
   if (getActivityDateKey(timestamp) === yesterdayKey) return "Kemarin";

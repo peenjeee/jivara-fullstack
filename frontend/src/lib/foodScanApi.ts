@@ -1,5 +1,6 @@
 import api from "@/lib/axios";
 import { getApiErrorMessage } from "@/lib/apiErrors";
+import { getTodayAppDateKey } from "@/lib/appTimezone";
 import { getDateRangeParams } from "@/lib/dateRange";
 import type { FoodScanAnalysis } from "@/helpers/foodScans";
 import type { FoodScanBoundingBox, FoodScanDetectedItem, FoodScanRecord, FoodScanRisk } from "@/lib/mocks/foodScans";
@@ -362,7 +363,7 @@ const mapScanDetail = (detail: FoodScanDetailResponse, patientName = detail.pati
         frequency: "Sesuai jadwal aktif",
         times: [],
         mealRule: "Tidak tergantung makan" as const,
-        startDate: new Date().toISOString().slice(0, 10),
+        startDate: getTodayAppDateKey(),
         reminderEnabled: true,
         status: "Aktif" as const,
       },
@@ -416,7 +417,7 @@ const createSchedule = (interaction: InteractionResponse["interactions"][number]
     frequency: "Sesuai jadwal aktif",
     times: [],
     mealRule: "Tidak tergantung makan",
-    startDate: new Date().toISOString().slice(0, 10),
+    startDate: getTodayAppDateKey(),
     reminderEnabled: true,
     status: "Aktif",
   };

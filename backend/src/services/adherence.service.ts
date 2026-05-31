@@ -11,6 +11,7 @@ import {
   users,
 } from "../db/schema";
 import { AdherenceQuery } from "../types/adherence.types";
+import { addAppDays, getAppDateKey, getAppDateStartUtc, getTodayAppDateStartUtc } from "../utils/app-timezone";
 import { AccessUser, assertCanAccessPatient, getNurseIdForUser, getAssignedPatientIdsForNurse, getOrganizationIdForUser, patientScopeCondition } from "./access-control.service";
 
 const getPeriodDays = (period?: string) => {
@@ -22,7 +23,7 @@ const getPeriodDays = (period?: string) => {
   return 7;
 };
 
-const getDateKey = (date: Date) => date.toISOString().slice(0, 10);
+const getDateKey = getAppDateKey;
 
 const isDateKey = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
 
@@ -32,10 +33,7 @@ const getScheduleStartDateKey = (schedule: { startDate?: string | null; createdA
 };
 
 const getStartDate = (days: number) => {
-  const start = new Date();
-  start.setUTCHours(0, 0, 0, 0);
-  start.setUTCDate(start.getUTCDate() - days + 1);
-  return start;
+  return addAppDays(getTodayAppDateStartUtc(), -days + 1);
 };
 
 const getAllTimeOccurrenceDays = (
@@ -43,16 +41,15 @@ const getAllTimeOccurrenceDays = (
   logs: Array<{ scheduledTime: Date }>,
 ) => {
   const dates = [
-    ...schedules.map((schedule) => isDateKey(schedule.startDate) ? new Date(`${schedule.startDate}T00:00:00.000Z`) : schedule.createdAt),
+    ...schedules.map((schedule) => isDateKey(schedule.startDate) ? getAppDateStartUtc(schedule.startDate) : schedule.createdAt),
     ...logs.map((log) => log.scheduledTime),
   ].filter((date): date is Date => date != null && !Number.isNaN(date.getTime()));
 
   if (dates.length === 0) return 1;
 
-  const earliest = new Date(Math.min(...dates.map((date) => date.getTime())));
-  earliest.setUTCHours(0, 0, 0, 0);
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
+  const earliestRaw = new Date(Math.min(...dates.map((date) => date.getTime())));
+  const earliest = getAppDateStartUtc(getDateKey(earliestRaw)) ?? earliestRaw;
+  const today = getTodayAppDateStartUtc();
   const days = Math.floor((today.getTime() - earliest.getTime()) / 86_400_000) + 1;
   return Math.max(days, 1);
 };
@@ -62,8 +59,7 @@ const buildDailyBreakdown = (days: number, occurrences: Array<{ scheduledTime: D
   const breakdown = new Map<string, { date: string; scheduled: number; confirmed: number; missed: number; snoozed: number }>();
 
   for (let index = 0; index < days; index += 1) {
-    const current = new Date(start);
-    current.setUTCDate(start.getUTCDate() + index);
+    const current = addAppDays(start, index);
     const key = getDateKey(current);
     breakdown.set(key, { date: key, scheduled: 0, confirmed: 0, missed: 0, snoozed: 0 });
   }
@@ -93,10 +89,10 @@ const getScheduleTimes = (scheduledTimes: unknown, frequency?: number | null) =>
 };
 
 const getOccurrenceDateTime = (day: Date, time: string) => {
-  const occurrence = new Date(day);
   const [hours, minutes] = time.split(":").map(Number);
-  occurrence.setUTCHours(Number.isFinite(hours) ? hours : 0, Number.isFinite(minutes) ? minutes : 0, 0, 0);
-  return occurrence;
+  const safeHours = Number.isFinite(hours) ? hours : 0;
+  const safeMinutes = Number.isFinite(minutes) ? minutes : 0;
+  return new Date(day.getTime() + ((safeHours * 60) + safeMinutes) * 60_000);
 };
 
 const getScheduleOccurrenceEndDateKey = (schedule: { startDate?: string | null; endDate?: string | null; createdAt: Date | null; completedAt?: Date | null; stock?: number | null; isActive?: boolean | null }, latestLogDate?: Date) => {
@@ -113,8 +109,9 @@ const getScheduleOccurrenceEndDateKey = (schedule: { startDate?: string | null; 
     return completedDateKey || latestLogDateKey;
   }
 
-  const displayEndDate = new Date(`${startDateKey}T00:00:00.000Z`);
-  displayEndDate.setUTCDate(displayEndDate.getUTCDate() + 30);
+  const displayStartDate = getAppDateStartUtc(startDateKey);
+  if (!displayStartDate) return configuredEndDateKey || latestLogDateKey;
+  const displayEndDate = addAppDays(displayStartDate, 30);
   const displayEndDateKey = getDateKey(displayEndDate);
   if (configuredEndDateKey) {
     const boundedEndDateKey = configuredEndDateKey < displayEndDateKey ? configuredEndDateKey : displayEndDateKey;
@@ -160,8 +157,7 @@ const buildScheduledOccurrences = (
   const occurrences: Array<{ scheduledTime: Date; status: string }> = [];
 
   for (let index = 0; index < days; index += 1) {
-    const day = new Date(start);
-    day.setUTCDate(start.getUTCDate() + index);
+    const day = addAppDays(start, index);
 
     for (const schedule of schedules) {
       const configuredStartDateKey = getScheduleStartDateKey(schedule);
@@ -195,6 +191,112 @@ const buildScheduledOccurrences = (
   }
 
   return occurrences;
+};
+
+type AdherenceScheduleRow = {
+  id: string;
+  patientId?: string | null;
+  createdAt: Date | null;
+  completedAt?: Date | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  stock?: number | null;
+  isActive?: boolean | null;
+  scheduledTimes: unknown;
+  frequency?: number | null;
+};
+
+type AdherenceLogRow = {
+  scheduleId: string;
+  patientId?: string | null;
+  scheduledTime: Date;
+  status: string;
+};
+
+export type AdherenceStatsSnapshot = {
+  adherenceRate: number;
+  totalScheduled: number;
+  totalConfirmed: number;
+  totalMissed: number;
+  totalSnoozed: number;
+  dailyBreakdown: Array<{ date: string; scheduled: number; confirmed: number; missed: number; snoozed: number }>;
+  trend: "membaik" | "menurun" | "stabil";
+  reminderResponseRate: number;
+};
+
+const buildAdherenceStatsSnapshot = (
+  period: string,
+  schedules: AdherenceScheduleRow[],
+  logs: AdherenceLogRow[],
+): AdherenceStatsSnapshot => {
+  const periodDays = getPeriodDays(period);
+  const adherenceDays = periodDays ?? getAllTimeOccurrenceDays(schedules, logs);
+  const occurrences = buildScheduledOccurrences(adherenceDays, schedules, logs);
+
+  const totalScheduled = occurrences.length;
+  const totalConfirmed = occurrences.filter((occurrence) => occurrence.status === "confirmed").length;
+  const totalMissed = occurrences.filter((occurrence) => occurrence.status === "missed").length;
+  const totalSnoozed = occurrences.filter((occurrence) => occurrence.status === "snoozed").length;
+  const adherenceRate = totalScheduled > 0 ? Number(((totalConfirmed / totalScheduled) * 100).toFixed(1)) : 100;
+  const reminderResponseRate = totalScheduled > 0 ? Number((((totalConfirmed + totalSnoozed) / totalScheduled) * 100).toFixed(1)) : 100;
+  const dailyBreakdown = buildDailyBreakdown(adherenceDays, occurrences);
+  const midpoint = Math.floor(dailyBreakdown.length / 2);
+  const firstHalf = dailyBreakdown.slice(0, midpoint);
+  const secondHalf = dailyBreakdown.slice(midpoint);
+  const firstConfirmed = firstHalf.reduce((sum, day) => sum + day.confirmed, 0);
+  const firstScheduled = firstHalf.reduce((sum, day) => sum + day.scheduled, 0);
+  const secondConfirmed = secondHalf.reduce((sum, day) => sum + day.confirmed, 0);
+  const secondScheduled = secondHalf.reduce((sum, day) => sum + day.scheduled, 0);
+  const firstRate = firstScheduled > 0 ? firstConfirmed / firstScheduled : 0;
+  const secondRate = secondScheduled > 0 ? secondConfirmed / secondScheduled : 0;
+  const trend = secondRate > firstRate ? "membaik" : secondRate < firstRate ? "menurun" : "stabil";
+
+  return {
+    adherenceRate,
+    totalScheduled,
+    totalConfirmed,
+    totalMissed,
+    totalSnoozed,
+    dailyBreakdown,
+    trend,
+    reminderResponseRate,
+  };
+};
+
+export const buildAdherenceStatsByPatientId = (
+  patientIds: readonly string[],
+  period: string,
+  schedules: AdherenceScheduleRow[],
+  logs: AdherenceLogRow[],
+) => {
+  const schedulesByPatientId = new Map<string, AdherenceScheduleRow[]>();
+  const logsByPatientId = new Map<string, AdherenceLogRow[]>();
+
+  for (const schedule of schedules) {
+    if (!schedule.patientId) continue;
+    const patientSchedules = schedulesByPatientId.get(schedule.patientId) ?? [];
+    patientSchedules.push(schedule);
+    schedulesByPatientId.set(schedule.patientId, patientSchedules);
+  }
+
+  for (const log of logs) {
+    if (!log.patientId) continue;
+    const patientLogs = logsByPatientId.get(log.patientId) ?? [];
+    patientLogs.push(log);
+    logsByPatientId.set(log.patientId, patientLogs);
+  }
+
+  return Array.from(new Set(patientIds)).reduce((statsByPatientId, patientId) => {
+    statsByPatientId.set(
+      patientId,
+      buildAdherenceStatsSnapshot(
+        period,
+        schedulesByPatientId.get(patientId) ?? [],
+        logsByPatientId.get(patientId) ?? [],
+      ),
+    );
+    return statsByPatientId;
+  }, new Map<string, AdherenceStatsSnapshot>());
 };
 
 const getPatientName = async (patientId?: string) => {
@@ -272,39 +374,13 @@ export const getAdherenceStats = async (query: AdherenceQuery, user?: AccessUser
       .where(logConditions.length > 0 ? and(...logConditions) : undefined),
   ]);
 
-  const adherenceDays = periodDays ?? getAllTimeOccurrenceDays(schedules, logs);
-  const occurrences = buildScheduledOccurrences(adherenceDays, schedules, logs);
-
-  const totalScheduled = occurrences.length;
-  const totalConfirmed = occurrences.filter((occurrence) => occurrence.status === "confirmed").length;
-  const totalMissed = occurrences.filter((occurrence) => occurrence.status === "missed").length;
-  const totalSnoozed = occurrences.filter((occurrence) => occurrence.status === "snoozed").length;
-  const adherenceRate = totalScheduled > 0 ? Number(((totalConfirmed / totalScheduled) * 100).toFixed(1)) : 100;
-  const reminderResponseRate = totalScheduled > 0 ? Number((((totalConfirmed + totalSnoozed) / totalScheduled) * 100).toFixed(1)) : 100;
-  const dailyBreakdown = buildDailyBreakdown(adherenceDays, occurrences);
-  const midpoint = Math.floor(dailyBreakdown.length / 2);
-  const firstHalf = dailyBreakdown.slice(0, midpoint);
-  const secondHalf = dailyBreakdown.slice(midpoint);
-  const firstConfirmed = firstHalf.reduce((sum, day) => sum + day.confirmed, 0);
-  const firstScheduled = firstHalf.reduce((sum, day) => sum + day.scheduled, 0);
-  const secondConfirmed = secondHalf.reduce((sum, day) => sum + day.confirmed, 0);
-  const secondScheduled = secondHalf.reduce((sum, day) => sum + day.scheduled, 0);
-  const firstRate = firstScheduled > 0 ? firstConfirmed / firstScheduled : 0;
-  const secondRate = secondScheduled > 0 ? secondConfirmed / secondScheduled : 0;
-  const trend = secondRate > firstRate ? "membaik" : secondRate < firstRate ? "menurun" : "stabil";
+  const stats = buildAdherenceStatsSnapshot(period, schedules, logs);
 
   return {
     patientId: patientId || null,
     patientName: await getPatientName(patientId),
     period,
-    adherenceRate,
-    totalScheduled,
-    totalConfirmed,
-    totalMissed,
-    totalSnoozed,
-    dailyBreakdown,
-    trend,
-    reminderResponseRate,
+    ...stats,
   };
 };
 
@@ -325,6 +401,7 @@ const emptyAggregateStats = (period: string) => ({
 
 export const __test__ = {
   buildScheduledOccurrences,
+  buildAdherenceStatsSnapshot,
 };
 
 export const getAggregateAdherenceStats = async (query: AdherenceQuery = {}, user?: AccessUser) => {

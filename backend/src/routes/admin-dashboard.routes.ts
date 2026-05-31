@@ -42,8 +42,9 @@ router.use(authenticateToken);
  *                         totalNurses:
  *                           type: integer
  *                           example: 5
- *                         totalActivePatients:
+ *                         totalPatients:
  *                           type: integer
+ *                           description: Total seluruh pasien yang berada dalam scope admin, termasuk aktif dan nonaktif.
  *                           example: 8
  *                         totalActiveSchedules:
  *                           type: integer

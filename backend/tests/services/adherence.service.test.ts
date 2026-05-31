@@ -1,18 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { __test__ } from "../../src/services/adherence.service";
+import { __test__, buildAdherenceStatsByPatientId } from "../../src/services/adherence.service";
+import { addAppDays, getAppDateKey, getAppDateStartUtc, getTodayAppDateStartUtc } from "../../src/utils/app-timezone";
 
 describe("adherence service", () => {
   it("stops scheduled occurrences after a medication schedule is completed", () => {
     const completedDay = new Date();
     completedDay.setUTCHours(12, 0, 0, 0);
     completedDay.setUTCDate(completedDay.getUTCDate() - 1);
-    const completedDateKey = completedDay.toISOString().slice(0, 10);
+    const completedDateKey = getAppDateKey(completedDay);
 
     const occurrences = __test__.buildScheduledOccurrences(
       3,
       [{
         id: "schedule-1",
-        createdAt: new Date(`${completedDateKey}T00:00:00.000Z`),
+        createdAt: getAppDateStartUtc(completedDateKey),
         completedAt: completedDay,
         scheduledTimes: ["08:00", "20:00"],
         frequency: 2,
@@ -20,48 +21,39 @@ describe("adherence service", () => {
       [],
     );
 
-    expect(occurrences.map((occurrence) => occurrence.scheduledTime.toISOString().slice(0, 10))).toEqual([completedDateKey, completedDateKey]);
+    expect(occurrences.map((occurrence) => getAppDateKey(occurrence.scheduledTime))).toEqual([completedDateKey, completedDateKey]);
   });
 
   it("uses the latest medication log date when completedAt is later than the last dose date", () => {
-    const today = new Date();
-    today.setUTCHours(12, 0, 0, 0);
-    today.setUTCDate(today.getUTCDate() - 1);
-    const createdAt = new Date(today);
-    createdAt.setUTCDate(createdAt.getUTCDate() - 4);
-    createdAt.setUTCHours(0, 0, 0, 0);
-    const lastDoseDate = new Date(createdAt);
-    lastDoseDate.setUTCDate(createdAt.getUTCDate() + 2);
-    lastDoseDate.setUTCHours(8, 0, 0, 0);
+    const today = getTodayAppDateStartUtc();
+    const completedAt = addAppDays(today, -1);
+    const createdAt = addAppDays(today, -4);
+    const lastDoseDate = new Date(addAppDays(createdAt, 2).getTime() + 8 * 60 * 60_000);
 
     const occurrences = __test__.buildScheduledOccurrences(
       6,
       [{
         id: "schedule-1",
         createdAt,
-        completedAt: today,
+        completedAt,
         scheduledTimes: ["08:00"],
         frequency: 1,
       }],
       [{ scheduleId: "schedule-1", scheduledTime: lastDoseDate, status: "confirmed" }],
     );
 
-    expect(occurrences.map((occurrence) => occurrence.scheduledTime.toISOString().slice(0, 10))).toEqual([
-      createdAt.toISOString().slice(0, 10),
-      new Date(createdAt.getTime() + 86_400_000).toISOString().slice(0, 10),
-      lastDoseDate.toISOString().slice(0, 10),
+    expect(occurrences.map((occurrence) => getAppDateKey(occurrence.scheduledTime))).toEqual([
+      getAppDateKey(createdAt),
+      getAppDateKey(addAppDays(createdAt, 1)),
+      getAppDateKey(lastDoseDate),
     ]);
   });
 
   it("starts the schedule window from createdAt even when medication logs predate it", () => {
-    const firstLogDate = new Date();
-    firstLogDate.setUTCHours(8, 0, 0, 0);
-    firstLogDate.setUTCDate(firstLogDate.getUTCDate() - 6);
-    const createdAt = new Date(firstLogDate);
-    createdAt.setUTCDate(firstLogDate.getUTCDate() + 2);
-    const lastLogDate = new Date(firstLogDate);
-    lastLogDate.setUTCDate(firstLogDate.getUTCDate() + 4);
-    lastLogDate.setUTCHours(20, 0, 0, 0);
+    const today = getTodayAppDateStartUtc();
+    const firstLogDate = new Date(addAppDays(today, -6).getTime() + 8 * 60 * 60_000);
+    const createdAt = new Date(addAppDays(today, -4).getTime() + 8 * 60 * 60_000);
+    const lastLogDate = new Date(addAppDays(today, -2).getTime() + 20 * 60 * 60_000);
 
     const occurrences = __test__.buildScheduledOccurrences(
       5,
@@ -80,8 +72,8 @@ describe("adherence service", () => {
       ],
     );
 
-    expect(occurrences[0]?.scheduledTime.toISOString().slice(0, 10)).toBe(createdAt.toISOString().slice(0, 10));
-    expect(occurrences.at(-1)?.scheduledTime.toISOString().slice(0, 10)).toBe(lastLogDate.toISOString().slice(0, 10));
+    expect(occurrences[0] ? getAppDateKey(occurrences[0].scheduledTime) : undefined).toBe(getAppDateKey(createdAt));
+    expect(occurrences.at(-1) ? getAppDateKey(occurrences.at(-1)!.scheduledTime) : undefined).toBe(getAppDateKey(lastLogDate));
     expect(occurrences).toHaveLength(6);
   });
 
@@ -92,9 +84,7 @@ describe("adherence service", () => {
     const createdAt = new Date(today);
     createdAt.setUTCDate(today.getUTCDate() - 31);
     createdAt.setUTCHours(0, 0, 0, 0);
-    const lastVisibleDay = new Date(createdAt);
-    lastVisibleDay.setUTCDate(lastVisibleDay.getUTCDate() + 30);
-    const lastVisibleDateKey = lastVisibleDay.toISOString().slice(0, 10);
+    const lastVisibleDateKey = getAppDateKey(addAppDays(createdAt, 30));
 
     const occurrences = __test__.buildScheduledOccurrences(
       35,
@@ -108,7 +98,7 @@ describe("adherence service", () => {
       [],
     );
 
-    expect(occurrences.at(-1)?.scheduledTime.toISOString().slice(0, 10)).toBe(lastVisibleDateKey);
+    expect(occurrences.at(-1) ? getAppDateKey(occurrences.at(-1)!.scheduledTime) : undefined).toBe(lastVisibleDateKey);
     expect(occurrences).toHaveLength(31);
   });
 
@@ -135,5 +125,55 @@ describe("adherence service", () => {
     );
 
     expect(occurrences).toHaveLength(0);
+  });
+
+  it("builds adherence stats for multiple patients from grouped schedule and log rows", () => {
+    const doseDay = new Date();
+    doseDay.setUTCHours(0, 0, 0, 0);
+    doseDay.setUTCDate(doseDay.getUTCDate() - 1);
+    const doseDateKey = getAppDateKey(doseDay);
+    const scheduledTime = new Date(`${doseDateKey}T08:00:00.000Z`);
+
+    const statsByPatientId = buildAdherenceStatsByPatientId(
+      ["patient-1", "patient-2"],
+      "all",
+      [
+        {
+          id: "schedule-1",
+          patientId: "patient-1",
+          createdAt: doseDay,
+          completedAt: doseDay,
+          startDate: doseDateKey,
+          endDate: doseDateKey,
+          stock: 0,
+          isActive: false,
+          scheduledTimes: ["08:00"],
+          frequency: 1,
+        },
+        {
+          id: "schedule-2",
+          patientId: "patient-2",
+          createdAt: doseDay,
+          completedAt: doseDay,
+          startDate: doseDateKey,
+          endDate: doseDateKey,
+          stock: 0,
+          isActive: false,
+          scheduledTimes: ["08:00"],
+          frequency: 1,
+        },
+      ],
+      [
+        {
+          scheduleId: "schedule-1",
+          patientId: "patient-1",
+          scheduledTime,
+          status: "confirmed",
+        },
+      ],
+    );
+
+    expect(statsByPatientId.get("patient-1")).toMatchObject({ adherenceRate: 100, totalScheduled: 1 });
+    expect(statsByPatientId.get("patient-2")).toMatchObject({ adherenceRate: 0, totalScheduled: 1 });
   });
 });

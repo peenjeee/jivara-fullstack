@@ -109,16 +109,19 @@ router.post("/events", validateTrackNotificationEvent, notificationController.tr
  *         schema:
  *           type: string
  *           format: date
+ *         description: Filter satu tanggal berdasarkan zona waktu aplikasi (Asia/Jakarta). Untuk range gunakan start_date dan end_date.
  *       - in: query
  *         name: start_date
  *         schema:
  *           type: string
  *           format: date
+ *         description: Tanggal awal berdasarkan zona waktu aplikasi (Asia/Jakarta).
  *       - in: query
  *         name: end_date
  *         schema:
  *           type: string
  *           format: date
+ *         description: Tanggal akhir berdasarkan zona waktu aplikasi (Asia/Jakarta).
  *       - in: query
  *         name: status
  *         schema:

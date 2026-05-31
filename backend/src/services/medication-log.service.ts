@@ -11,6 +11,7 @@ import { deleteCachedByPrefix, getCached, setCached } from "./cache.service";
 import { writeAuditLogAsync } from "./audit-log.service";
 import { invalidatePatientCache } from "./patient.service";
 import { invalidateMedicationScheduleCache } from "./medication-schedule.service";
+import { getAppDateRangeFromQuery } from "../utils/app-timezone";
 
 const MED_LOG_CACHE_TTL_MS = Number(process.env.MED_LOG_CACHE_TTL_MS || 15_000);
 const MED_LOG_CACHE_PREFIX = "med-log:";
@@ -46,21 +47,6 @@ const parsePagination = (query: MedicationLogListQuery) => {
   const page = Math.max(Number(query.page || 1), 1);
   const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100);
   return { page, limit, offset: (page - 1) * limit };
-};
-
-const getDateRange = (query: MedicationLogListQuery) => {
-  const startValue = query.startDate || query.start_date || query.date;
-  const endValue = query.endDate || query.end_date || startValue;
-  if (!startValue || !endValue) return null;
-
-  const start = new Date(`${startValue}T00:00:00.000Z`);
-  const end = new Date(`${endValue}T00:00:00.000Z`);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
-
-  const normalizedStart = start <= end ? start : end;
-  const normalizedEnd = start <= end ? end : start;
-  normalizedEnd.setUTCDate(normalizedEnd.getUTCDate() + 1);
-  return { start: normalizedStart, end: normalizedEnd };
 };
 
 const getScheduleById = async (scheduleId: string) => {
@@ -296,7 +282,7 @@ export const listMedicationLogs = async (query: MedicationLogListQuery, user?: A
   const { page, limit, offset } = parsePagination(query);
   const patientId = query.patientId || query.patient_id;
   const conditions = [];
-  const dateRange = getDateRange(query);
+  const dateRange = getAppDateRangeFromQuery(query);
   const scopedFilter = await scopedPatientFilter(medicationLogs.patientId, user, patientId);
 
   if (!scopedFilter.scope.allowed) {

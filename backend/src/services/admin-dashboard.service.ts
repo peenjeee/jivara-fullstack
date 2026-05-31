@@ -1,11 +1,10 @@
 import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { db } from "../db";
-import { activityReads, medicationSchedules, notifications, nurses, patientNurseAssignments, patients, users } from "../db/schema";
+import { activityReads, medicationLogs, medicationSchedules, notifications, nurses, patientNurseAssignments, patients, users } from "../db/schema";
 import { AccessUser, getOrganizationIdForUser, patientScopeCondition, scopedPatientFilter } from "./access-control.service";
-import { getAdherenceStats } from "./adherence.service";
+import { buildAdherenceStatsByPatientId } from "./adherence.service";
 import { getMedicationScheduleSummaryForPatients } from "./medication-schedule.service";
-import { listPatients } from "./patient.service";
 
 type PatientStatus = "On Ideal Schedule" | "Lagging Behind" | "Need Special Attention" | "Complete" | "Nonaktif";
 type ActivityCategory = "Reminder" | "Kepatuhan" | "Scan Makanan" | "Administrasi";
@@ -34,6 +33,26 @@ type ScopedNurseRow = {
   phone: string | null;
   gender: string | null;
   isActive: boolean | null;
+};
+
+type MedicationDashboardScheduleRow = {
+  id: string;
+  patientId: string;
+  createdAt: Date | null;
+  completedAt: Date | null;
+  startDate: string | null;
+  endDate: string | null;
+  stock: number | null;
+  isActive: boolean | null;
+  scheduledTimes: unknown;
+  frequency: number | null;
+};
+
+type MedicationDashboardLogRow = {
+  scheduleId: string;
+  patientId: string;
+  status: string;
+  scheduledTime: Date;
 };
 
 const previewLimit = 5;
@@ -214,6 +233,93 @@ const countScopedPatients = async (user?: AccessUser) => {
   return rows[0]?.total || 0;
 };
 
+const listScopedPatientIds = async (user?: AccessUser) => {
+  const scopedFilter = await scopedPatientFilter(patients.id, user);
+  if (!scopedFilter.scope.allowed) return [];
+
+  const rows = await db
+    .select({ id: patients.id })
+    .from(patients)
+    .where(scopedFilter.condition ?? undefined);
+
+  return rows.map((patient) => patient.id);
+};
+
+const listMedicationDashboardRows = async (patientIds: readonly string[]) => {
+  if (patientIds.length === 0) {
+    return {
+      schedules: [] as MedicationDashboardScheduleRow[],
+      logs: [] as MedicationDashboardLogRow[],
+    };
+  }
+
+  const [schedules, logs] = await Promise.all([
+    db
+      .select({
+        id: medicationSchedules.id,
+        patientId: medicationSchedules.patientId,
+        createdAt: medicationSchedules.createdAt,
+        completedAt: medicationSchedules.completedAt,
+        startDate: medicationSchedules.startDate,
+        endDate: medicationSchedules.endDate,
+        stock: medicationSchedules.stock,
+        isActive: medicationSchedules.isActive,
+        scheduledTimes: medicationSchedules.scheduledTimes,
+        frequency: medicationSchedules.frequency,
+      })
+      .from(medicationSchedules)
+      .where(inArray(medicationSchedules.patientId, [...patientIds])),
+    db
+      .select({
+        scheduleId: medicationLogs.scheduleId,
+        patientId: medicationLogs.patientId,
+        status: medicationLogs.status,
+        scheduledTime: medicationLogs.scheduledTime,
+      })
+      .from(medicationLogs)
+      .where(inArray(medicationLogs.patientId, [...patientIds])),
+  ]);
+
+  return { schedules, logs };
+};
+
+const groupSchedulesByPatientId = (schedules: MedicationDashboardScheduleRow[]) => {
+  const schedulesByPatientId = new Map<string, MedicationDashboardScheduleRow[]>();
+  for (const schedule of schedules) {
+    const patientSchedules = schedulesByPatientId.get(schedule.patientId) ?? [];
+    patientSchedules.push(schedule);
+    schedulesByPatientId.set(schedule.patientId, patientSchedules);
+  }
+  return schedulesByPatientId;
+};
+
+const isMedicationCompleteForPatient = (
+  schedulesByPatientId: Map<string, MedicationDashboardScheduleRow[]>,
+  patientId: string,
+) => {
+  const patientSchedules = schedulesByPatientId.get(patientId) ?? [];
+  return patientSchedules.length > 0
+    && patientSchedules.every((schedule) => schedule.isActive === false || (schedule.stock ?? 0) <= 0);
+};
+
+const getInactiveNurseReassignData = (
+  patientRows: ScopedPatientRow[],
+  nurseRows: ScopedNurseRow[],
+  schedulesByPatientId: Map<string, MedicationDashboardScheduleRow[]>,
+) => {
+  const inactiveNurseIds = new Set(nurseRows.filter((nurse) => nurse.isActive === false).map((nurse) => nurse.id));
+
+  return patientRows.reduce((assignedPatientsByNurse, patient) => {
+    if (!patient.assignedNurseId || !inactiveNurseIds.has(patient.assignedNurseId)) return assignedPatientsByNurse;
+    if (patient.isActive === false || isMedicationCompleteForPatient(schedulesByPatientId, patient.id)) return assignedPatientsByNurse;
+
+    const patientIds = assignedPatientsByNurse.get(patient.assignedNurseId) ?? new Set<string>();
+    patientIds.add(patient.id);
+    assignedPatientsByNurse.set(patient.assignedNurseId, patientIds);
+    return assignedPatientsByNurse;
+  }, new Map<string, Set<string>>());
+};
+
 const listPriorityNotifications = async (user: AccessUser | undefined, patientRows: ScopedPatientRow[]) => {
   const scope = await patientScopeCondition(user);
   if (!scope.allowed) return [];
@@ -255,33 +361,6 @@ const listPriorityNotifications = async (user: AccessUser | undefined, patientRo
   }));
 };
 
-const getInactiveNurseReassignPatients = async (nurseId: string, user?: AccessUser) => {
-  const firstPage = await listPatients({ page: "1", limit: "100", status: "active", nurseId }, user);
-  const patientRows = [...firstPage.data];
-  const totalPages = Math.ceil(firstPage.meta.total / firstPage.meta.limit);
-
-  for (let page = 2; page <= totalPages; page += 1) {
-    const nextPage = await listPatients({ page: String(page), limit: String(firstPage.meta.limit), status: "active", nurseId }, user);
-    patientRows.push(...nextPage.data);
-  }
-
-  return patientRows.filter((patient) => !patient.isMedicationComplete);
-};
-
-const getInactiveNurseReassignData = async (nurseRows: ScopedNurseRow[], user?: AccessUser) => {
-  const inactiveNurses = nurseRows.filter((nurse) => nurse.isActive === false);
-  const inactiveNursePatients = await Promise.all(inactiveNurses.map(async (nurse) => ({
-    nurseId: nurse.id,
-    patients: await getInactiveNurseReassignPatients(nurse.id, user).catch(() => []),
-  })));
-
-  return inactiveNursePatients.reduce((assignedPatientsByNurse, item) => {
-    if (item.patients.length === 0) return assignedPatientsByNurse;
-    assignedPatientsByNurse.set(item.nurseId, new Set(item.patients.map((patient) => patient.id)));
-    return assignedPatientsByNurse;
-  }, new Map<string, Set<string>>());
-};
-
 export const getAdminDashboardData = async (user?: AccessUser) => {
   const [nurseRows, patientRows, totalPatients] = await Promise.all([
     listScopedNurses(user),
@@ -298,41 +377,24 @@ export const getAdminDashboardData = async (user?: AccessUser) => {
     }
     return patientsById;
   }, new Map<string, ScopedPatientRow>()).values());
-  const scheduleSummary = await getMedicationScheduleSummaryForPatients(uniquePatientRows.map((patient) => patient.id));
-  const assignedPatientIdsByNurse = new Map<string, Set<string>>();
-  currentPatientRows.forEach((patient) => {
-    if (!patient.assignedNurseId) return;
-    const patientIds = assignedPatientIdsByNurse.get(patient.assignedNurseId) ?? new Set<string>();
-    patientIds.add(patient.id);
-    assignedPatientIdsByNurse.set(patient.assignedNurseId, patientIds);
-  });
-
-  // Batch check medication completion for all unique patients
   const allUniqueIds = uniquePatientRows.map((patient) => patient.id);
-  const activeSchedules = allUniqueIds.length > 0
-    ? await db
-        .select({
-          patientId: medicationSchedules.patientId,
-          stock: medicationSchedules.stock,
-          isActive: medicationSchedules.isActive,
-        })
-        .from(medicationSchedules)
-        .where(inArray(medicationSchedules.patientId, allUniqueIds))
-    : [];
-  const schedulesByPatientId = new Map<string, Array<{ stock: number | null; isActive: boolean | null }>>();
-  for (const s of activeSchedules) {
-    const patientSchedules = schedulesByPatientId.get(s.patientId) ?? [];
-    patientSchedules.push({ stock: s.stock, isActive: s.isActive });
-    schedulesByPatientId.set(s.patientId, patientSchedules);
-  }
+  const [scheduleSummary, medicationRows] = await Promise.all([
+    getMedicationScheduleSummaryForPatients(allUniqueIds),
+    listMedicationDashboardRows(allUniqueIds),
+  ]);
+  const schedulesByPatientId = groupSchedulesByPatientId(medicationRows.schedules);
+  const adherenceStatsByPatientId = buildAdherenceStatsByPatientId(
+    allUniqueIds,
+    "all",
+    medicationRows.schedules.filter((schedule) => schedule.isActive === true || schedule.completedAt),
+    medicationRows.logs,
+  );
 
-  const patientInsights = await Promise.all(uniquePatientRows.map(async (patient) => {
-    const adherence = await getAdherenceStats({ patientId: patient.id, period: "all" }, user).catch(() => null);
+  const patientInsights = uniquePatientRows.map((patient) => {
+    const adherence = adherenceStatsByPatientId.get(patient.id);
     const adherenceRate = Math.round(adherence?.adherenceRate ?? 100);
     const totalScheduled = adherence?.totalScheduled ?? 0;
-    const patientSchedules = schedulesByPatientId.get(patient.id) ?? [];
-    const isMedicationComplete = patientSchedules.length > 0
-      && patientSchedules.every((schedule) => schedule.isActive === false || (schedule.stock ?? 0) <= 0);
+    const isMedicationComplete = isMedicationCompleteForPatient(schedulesByPatientId, patient.id);
     const status = patient.isActive === false ? "Nonaktif" : getFinalPatientStatus(adherenceRate, totalScheduled, isMedicationComplete);
 
     return {
@@ -350,7 +412,7 @@ export const getAdminDashboardData = async (user?: AccessUser) => {
       assignedNurseId: patient.assignedNurseId ?? undefined,
       assignedNurseName: patient.assignedNurseId ? nurseById.get(patient.assignedNurseId)?.fullName : undefined,
     };
-  }));
+  });
 
   const riskyPatients = patientInsights
     .filter((patient) => patient.status === "Lagging Behind" || patient.status === "Need Special Attention")
@@ -371,7 +433,7 @@ export const getAdminDashboardData = async (user?: AccessUser) => {
     riskyPatientCount.set(patient.assignedNurseId, (riskyPatientCount.get(patient.assignedNurseId) || 0) + 1);
   });
 
-  const inactiveNurseReassignPatientIdsByNurse = await getInactiveNurseReassignData(nurseRows, user);
+  const inactiveNurseReassignPatientIdsByNurse = getInactiveNurseReassignData(currentPatientRows, nurseRows, schedulesByPatientId);
   inactiveNurseReassignPatientIdsByNurse.forEach((patientIds, nurseId) => {
     actionablePatientIdsByNurse.set(nurseId, patientIds);
   });
@@ -406,7 +468,7 @@ export const getNurseDashboardSummary = async (user?: AccessUser) => {
 
   const notificationConditions: SQL[] = [
     inArray(notifications.urgency, ["high", "urgent", "critical"]),
-    eq(notifications.status, "delivered")
+    eq(notifications.status, "delivered"),
   ];
 
   if (scope.patientIds !== null) {
@@ -423,32 +485,35 @@ export const getNurseDashboardSummary = async (user?: AccessUser) => {
   if (user) {
     // Only count UNREAD warning/critical notifications
     notificationConditions.push(
-      sql`not exists (select 1 from ${activityReads} where ${activityReads.userId} = ${user.id} and ${activityReads.activityId} = ('notification-' || ${notifications.id}::text))`
+      sql`not exists (select 1 from ${activityReads} where ${activityReads.userId} = ${user.id} and ${activityReads.activityId} = ('notification-' || ${notifications.id}::text))`,
     );
   }
 
-  const firstPatientPage = await listPatients({ page: "1", limit: "100", status: "all" }, user);
-  const remainingPatientPages = await Promise.all(
-    Array.from({ length: Math.max(Math.ceil(firstPatientPage.meta.total / firstPatientPage.meta.limit) - 1, 0) }, (_, index) => (
-      listPatients({ page: String(index + 2), limit: String(firstPatientPage.meta.limit), status: "all" }, user)
-    )),
+  const patientIds = scope.patientIds ?? (await listScopedPatientIds(user));
+  const [notificationRows, medicationRows] = await Promise.all([
+    db
+      .select({ total: count() })
+      .from(notifications)
+      .where(and(...notificationConditions)),
+    listMedicationDashboardRows(patientIds),
+  ]);
+
+  const adherenceStatsByPatientId = buildAdherenceStatsByPatientId(
+    patientIds,
+    "all",
+    medicationRows.schedules.filter((schedule) => schedule.isActive === true || schedule.completedAt),
+    medicationRows.logs,
   );
-  const patientRows = [firstPatientPage, ...remainingPatientPages].flatMap((page) => page.data);
-
-  const notificationRows = await db
-    .select({ total: count() })
-    .from(notifications)
-    .where(and(...notificationConditions));
-
-  const patientAdherenceRates = patientRows.map((patient) => (
-    patient.totalScheduledAll ? Math.round(patient.adherenceRateAll ?? 0) : 100
-  ));
+  const patientAdherenceRates = patientIds.map((patientId) => {
+    const adherence = adherenceStatsByPatientId.get(patientId);
+    return adherence?.totalScheduled ? Math.round(adherence.adherenceRate) : 100;
+  });
   const overallAdherence = patientAdherenceRates.length > 0
     ? Math.round(patientAdherenceRates.reduce((sum, adherenceRate) => sum + adherenceRate, 0) / patientAdherenceRates.length)
     : 0;
 
   return {
-    totalActivePatients: firstPatientPage.meta.total,
+    totalActivePatients: patientIds.length,
     warningCriticalNotifications: Number(notificationRows[0]?.total || 0),
     overallAdherence,
   };

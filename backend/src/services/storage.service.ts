@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
+import { getAppDateKey } from "../utils/app-timezone";
 
 interface UploadedFile {
   readonly path: string;
@@ -32,7 +33,7 @@ export const uploadFoodScanImage = async (file: UploadedFile) => {
   }
 
   const fileBuffer = await fs.readFile(file.path);
-  const objectPath = `food-scans/${new Date().toISOString().slice(0, 10)}/${file.filename}`;
+  const objectPath = `food-scans/${getAppDateKey(new Date())}/${file.filename}`;
   const uploadUrl = `${config.url}/storage/v1/object/${encodeURIComponent(config.bucket)}/${encodeObjectPath(objectPath)}`;
   const response = await fetch(uploadUrl, {
     method: "PUT",

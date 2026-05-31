@@ -1,4 +1,5 @@
 import { patients, type PatientStatus } from "./patients";
+import { getTodayAppDateKey } from "@/lib/appTimezone";
 
 export type MedicationScheduleStatus = "Aktif" | "Selesai" | "Nonaktif";
 export type MealRule = "Sebelum makan" | "Sesudah makan" | "Tidak tergantung makan";
@@ -42,7 +43,7 @@ export interface PatientScheduleGroup {
   readonly lowStockCount: number;
 }
 
-const today = new Date().toISOString().slice(0, 10);
+const today = getTodayAppDateKey();
 
 export const medicationSchedules: MedicationScheduleRecord[] = [
   {

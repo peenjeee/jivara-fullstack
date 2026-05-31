@@ -38,13 +38,13 @@ router.use(authenticateToken);
  *         schema:
  *           type: string
  *           format: date
- *         description: Format YYYY-MM-DD
+ *         description: Format YYYY-MM-DD berdasarkan zona waktu aplikasi (Asia/Jakarta).
  *       - in: query
  *         name: end_date
  *         schema:
  *           type: string
  *           format: date
- *         description: Format YYYY-MM-DD
+ *         description: Format YYYY-MM-DD berdasarkan zona waktu aplikasi (Asia/Jakarta).
  *       - in: query
  *         name: activity_ids
  *         schema:

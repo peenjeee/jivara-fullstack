@@ -57,17 +57,19 @@ const attachScanIdParam = (req: Request, _res: Response, next: NextFunction) => 
  *         schema:
  *           type: string
  *           format: date
- *         description: Filter satu tanggal dibuat. Untuk range gunakan start_date dan end_date.
+ *         description: Filter satu tanggal dibuat berdasarkan zona waktu aplikasi (Asia/Jakarta). Untuk range gunakan start_date dan end_date.
  *       - in: query
  *         name: start_date
  *         schema:
  *           type: string
  *           format: date
+ *         description: Tanggal awal berdasarkan zona waktu aplikasi (Asia/Jakarta).
  *       - in: query
  *         name: end_date
  *         schema:
  *           type: string
  *           format: date
+ *         description: Tanggal akhir berdasarkan zona waktu aplikasi (Asia/Jakarta).
  *     responses:
  *       200:
  *         description: Daftar scan makanan berhasil diambil

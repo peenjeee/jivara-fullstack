@@ -4,6 +4,7 @@ import type { PatientRecord, PatientStatus } from "@/lib/mocks/patients";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
 import { getActivityDistribution, type PatientDetailData } from "@/helpers/patientDetails";
 import type { AddPatientValues } from "@/components/patients/addPatientFormUtils";
+import { getApiDateKey } from "@/lib/appTimezone";
 import { getFoodScansForPatientFromApi } from "@/lib/foodScanApi";
 
 interface PatientListResponse {
@@ -188,9 +189,8 @@ const formatDate = (value?: string | null, fallback = "-") => {
 };
 
 const getDateOfBirthFromAge = (age: number) => {
-  const date = new Date();
-  date.setFullYear(date.getFullYear() - age, 0, 1);
-  return date.toISOString().slice(0, 10);
+  const year = new Date().getFullYear() - age;
+  return `${year}-01-01`;
 };
 
 const mapGenderToApi = (gender: AddPatientValues["gender"]) => gender === "Wanita" ? "female" : "male";
@@ -242,8 +242,8 @@ const mapMedication = (patient: PatientRecord, medication: PatientMedicationSche
     frequency: `${medication.frequency} kali sehari`,
     times,
     mealRule: (medication.mealRule as MedicationScheduleRecord["mealRule"] | null | undefined) || "Tidak tergantung makan",
-    startDate: medication.startDate?.slice(0, 10) || medication.createdAt?.slice(0, 10) || new Date().toISOString().slice(0, 10),
-    endDate: medication.endDate?.slice(0, 10) || medication.completedAt?.slice(0, 10) || undefined,
+    startDate: getApiDateKey(medication.startDate || medication.createdAt),
+    endDate: medication.endDate ? getApiDateKey(medication.endDate) : medication.completedAt ? getApiDateKey(medication.completedAt) : undefined,
     reminderEnabled: medication.reminderEnabled ?? true,
     instructions: medication.instructions ?? undefined,
     status: stock <= 0 ? "Selesai" : medication.isActive === false ? "Nonaktif" : "Aktif",

@@ -4,6 +4,7 @@ import { medicationReminderJobs, medicationSchedules, patients, users } from "..
 import { AlertListQuery } from "../types/alert.types";
 import { AccessUser, scopedPatientFilter } from "./access-control.service";
 import { writeAuditLogAsync } from "./audit-log.service";
+import { getAppDateRangeFromQuery } from "../utils/app-timezone";
 
 const ALERT_STATUSES = ["urgent", "urgent_failed", "missed"];
 
@@ -19,26 +20,11 @@ const mapSeverityToStatuses = (severity?: string) => {
   return ALERT_STATUSES;
 };
 
-const getDateRange = (query: AlertListQuery) => {
-  const startValue = query.startDate || query.start_date || query.date;
-  const endValue = query.endDate || query.end_date || startValue;
-  if (!startValue || !endValue) return null;
-
-  const start = new Date(`${startValue}T00:00:00.000Z`);
-  const end = new Date(`${endValue}T00:00:00.000Z`);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
-
-  const normalizedStart = start <= end ? start : end;
-  const normalizedEnd = start <= end ? end : start;
-  normalizedEnd.setUTCDate(normalizedEnd.getUTCDate() + 1);
-  return { start: normalizedStart, end: normalizedEnd };
-};
-
 export const listAlerts = async (query: AlertListQuery, user?: AccessUser) => {
   const { page, limit, offset } = parsePagination(query);
   const patientId = query.patientId || query.patient_id;
   const conditions = [];
-  const dateRange = getDateRange(query);
+  const dateRange = getAppDateRangeFromQuery(query);
   const scopedFilter = await scopedPatientFilter(medicationReminderJobs.patientId, user, patientId);
 
   if (!scopedFilter.scope.allowed) {

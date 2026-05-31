@@ -54,7 +54,7 @@ describe("patient schedule helpers", () => {
   });
 
   it("returns active schedules for a date", () => {
-    expect(getSchedulesForDate([activeSchedule, inactiveSchedule], new Date())).toEqual(expect.arrayContaining([activeSchedule]));
+    expect(getSchedulesForDate([activeSchedule, inactiveSchedule], new Date(2026, 4, 9))).toEqual(expect.arrayContaining([activeSchedule]));
     expect(getSchedulesForDate([activeSchedule], new Date(2026, 3, 30))).toEqual([]);
   });
 

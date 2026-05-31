@@ -1,5 +1,6 @@
 import type { PatientRecord } from "@/lib/mocks/patients";
 import type { MealRule, MedicationScheduleRecord, MedicationScheduleStatus, MedicineForm } from "@/lib/mocks/schedules";
+import { getTodayAppDateKey } from "@/lib/appTimezone";
 
 export interface ScheduleMedicineFormValues {
   readonly medicineName: string;
@@ -37,7 +38,7 @@ export const emptyMedicine: ScheduleMedicineFormValues = {
   frequency: "",
   times: ["08:00"],
   mealRule: "",
-  startDate: new Date().toISOString().slice(0, 10),
+  startDate: getTodayAppDateKey(),
   endDate: "",
   reminderEnabled: true,
   instructions: "",

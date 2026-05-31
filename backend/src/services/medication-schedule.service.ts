@@ -6,6 +6,7 @@ import {
   MedicationScheduleListQuery,
   MedicationScheduleUpdateDTO,
 } from "../types/medication-schedule.types";
+import { getAppDateKey } from "../utils/app-timezone";
 import { AccessUser, assertCanAccessPatient, scopedPatientFilter } from "./access-control.service";
 import { diffChanges, writeAuditLogAsync } from "./audit-log.service";
 import { deleteCachedByPrefix, getCached, setCached } from "./cache.service";
@@ -45,9 +46,9 @@ const isDateString = (value: unknown): value is string => typeof value === "stri
 
 const getScheduleStartDate = (dtoStartDate: unknown, fallback?: Date | string | null) => {
   if (isDateString(dtoStartDate)) return dtoStartDate;
-  if (fallback instanceof Date) return fallback.toISOString().slice(0, 10);
+  if (fallback instanceof Date) return getAppDateKey(fallback);
   if (typeof fallback === "string" && fallback) return fallback.slice(0, 10);
-  return new Date().toISOString().slice(0, 10);
+  return getAppDateKey(new Date());
 };
 
 const getScheduleEndDate = (dtoEndDate: unknown) => {
@@ -239,6 +240,7 @@ export const createMedicationSchedule = async (dto: MedicationScheduleCreateDTO,
   if (user) await assertCanAccessPatient(user, dto.patientId);
 
   const stock = dto.stock ?? 0;
+  const completedAt = stock <= 0 ? new Date() : null;
   const [schedule] = await db
     .insert(medicationSchedules)
     .values({
@@ -257,9 +259,9 @@ export const createMedicationSchedule = async (dto: MedicationScheduleCreateDTO,
       instructions: dto.instructions || null,
       reminderEnabled: dto.reminderEnabled ?? true,
       isActive: dto.isActive ?? true,
-      completedAt: stock <= 0 ? new Date() : null,
+      completedAt,
       startDate: getScheduleStartDate(dto.startDate),
-      endDate: getScheduleEndDate(dto.endDate) ?? (stock <= 0 ? new Date().toISOString().slice(0, 10) : null),
+      endDate: getScheduleEndDate(dto.endDate) ?? (completedAt ? getAppDateKey(completedAt) : null),
       createdBy: createdBy || null,
     })
     .returning();
@@ -312,7 +314,7 @@ export const updateMedicationSchedule = async (id: string, dto: MedicationSchedu
   } else if (nextStock <= 0 && !existing.completedAt) {
     const completedAt = new Date();
     updates.completedAt = completedAt;
-    if (dto.endDate === undefined) updates.endDate = completedAt.toISOString().slice(0, 10);
+    if (dto.endDate === undefined) updates.endDate = getAppDateKey(completedAt);
   }
 
   const [schedule] = await db

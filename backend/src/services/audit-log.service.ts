@@ -4,6 +4,7 @@ import { and, count, desc, eq, gte, ilike, inArray, lt, notInArray, or, sql } fr
 import { AuditLogListQuery } from "../types/audit-log.types";
 import { AccessUser, getAssignedPatientIdsForNurse, getOrganizationIdForUser } from "./access-control.service";
 import { emitActivityChanged } from "./activity-event.service";
+import { APP_TIMEZONE, getAppDateRangeFromQuery } from "../utils/app-timezone";
 
 type AuditChange = Record<string, unknown>;
 
@@ -62,34 +63,7 @@ const parsePagination = (query: AuditLogListQuery) => {
   return { page, limit, offset: (page - 1) * limit };
 };
 
-const appTimezoneOffset = "+07:00";
-const appTimezone = "Asia/Jakarta";
-
-const getDateRange = (query: AuditLogListQuery) => {
-  const startValue = query.startDate || query.start_date || query.date;
-  const endValue = query.endDate || query.end_date || startValue;
-  if (!startValue || !endValue) return null;
-
-  const start = new Date(`${startValue}T00:00:00.000${appTimezoneOffset}`);
-  const end = new Date(`${endValue}T00:00:00.000${appTimezoneOffset}`);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
-
-  const normalizedStart = start <= end ? start : end;
-  const normalizedEnd = start <= end ? end : start;
-  normalizedEnd.setDate(normalizedEnd.getDate() + 1);
-  return { start: normalizedStart, end: normalizedEnd };
-};
-
-const getLegacyDateRange = (date?: string) => {
-  if (!date) return null;
-
-  const start = new Date(`${date}T00:00:00.000Z`);
-  if (Number.isNaN(start.getTime())) return null;
-
-  const end = new Date(start);
-  end.setUTCDate(end.getUTCDate() + 1);
-  return { start, end };
-};
+const appTimezone = APP_TIMEZONE;
 
 const parseCsvFilter = (value?: string) => value
   ?.split(",")
@@ -161,7 +135,7 @@ export const listAuditLogs = async (query: AuditLogListQuery, user?: AccessUser)
   const activityCategory = query.activityCategory || query.activity_category;
   const resourceType = query.resourceType || query.resource_type;
   const resourceId = query.resourceId || query.resource_id;
-  const dateRange = getDateRange(query) || getLegacyDateRange(query.date);
+  const dateRange = getAppDateRangeFromQuery(query);
   const baseConditions = [];
 
   if (userRole !== "super_admin") {

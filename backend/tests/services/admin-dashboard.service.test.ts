@@ -6,7 +6,7 @@ vi.mock("../../src/services/access-control.service", () => ({
   patientScopeCondition: vi.fn(),
   scopedPatientFilter: vi.fn(),
 }));
-vi.mock("../../src/services/adherence.service", () => ({ getAdherenceStats: vi.fn() }));
+vi.mock("../../src/services/adherence.service", () => ({ buildAdherenceStatsByPatientId: vi.fn() }));
 vi.mock("../../src/services/medication-schedule.service", () => ({ getMedicationScheduleSummaryForPatients: vi.fn() }));
 
 import { buildNurseFollowUps, selectCurrentPatientAssignmentRows } from "../../src/services/admin-dashboard.service";

@@ -3,6 +3,7 @@ import type { ActivityLogRecord } from "@/lib/mocks/activityLogs";
 import type { PatientRecord } from "@/lib/mocks/patients";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
 import { normalizeAdherenceForVisibleSchedules } from "@/helpers/patientSchedule";
+import { getApiDateKey } from "@/lib/appTimezone";
 import { getFoodScansPageFromApi } from "@/lib/foodScanApi";
 import { clearPatientsCache, getCurrentPatientFromApi } from "@/lib/patientApi";
 import { clearSchedulesCache, getSchedulesForPatientsFromApi } from "@/lib/scheduleApi";
@@ -263,7 +264,26 @@ const getFoodScansForPatientMonth = async (patientId: string, monthDate: Date) =
   ];
 };
 
-const getMedicationLogDateKey = (log: MedicationLogResponse) => (log.scheduledTime || log.confirmedAt || log.createdAt || "").slice(0, 10);
+export const getLatestPatientActivityMonth = async (patientId: string) => {
+  const [logResponse, scanPage] = await Promise.all([
+    api.get<PaginatedResponse<MedicationLogResponse>>("/medication-logs", { params: { patient_id: patientId, limit: 1, page: 1 } }),
+    getFoodScansPageFromApi({ patientId, limit: 5, page: 1 }).catch(() => ({ data: [], meta: { page: 1, limit: 5, total: 0 } })),
+  ]);
+
+  const latestLogTime = logResponse.data.data[0]
+    ? logResponse.data.data[0].scheduledTime || logResponse.data.data[0].confirmedAt || logResponse.data.data[0].createdAt
+    : undefined;
+  const latestScanTime = scanPage.data.find((scan) => scan.hasDetectedFood)?.scannedAt;
+  const latestTimestamp = [latestLogTime, latestScanTime]
+    .filter((timestamp): timestamp is string => Boolean(timestamp && !Number.isNaN(Date.parse(timestamp))))
+    .sort((first, second) => Date.parse(second) - Date.parse(first))[0];
+
+  if (!latestTimestamp) return null;
+  const latestDate = new Date(latestTimestamp);
+  return new Date(latestDate.getFullYear(), latestDate.getMonth(), 1);
+};
+
+const getMedicationLogDateKey = (log: MedicationLogResponse) => getApiDateKey(log.scheduledTime || log.confirmedAt || log.createdAt, "");
 
 const applyCompletedScheduleEndDates = (
   schedules: readonly MedicationScheduleRecord[],
@@ -330,7 +350,7 @@ export const getPatientScheduleData = async (monthDate = new Date(), options: { 
 export const getConfirmedScheduleDates = (logs: readonly MedicationLogResponse[]) => logs.reduce<Record<string, string[]>>((confirmedDates, log) => {
   if (log.status !== "confirmed") return confirmedDates;
 
-  const dateKey = (log.scheduledTime || log.confirmedAt || log.createdAt || "").slice(0, 10);
+  const dateKey = getMedicationLogDateKey(log);
   if (!dateKey) return confirmedDates;
 
   return {
@@ -342,7 +362,7 @@ export const getConfirmedScheduleDates = (logs: readonly MedicationLogResponse[]
 export const getCompletedScheduleDates = (logs: readonly MedicationLogResponse[]) => logs.reduce<Record<string, string[]>>((completedDates, log) => {
   if (log.status !== "confirmed" && log.status !== "missed") return completedDates;
 
-  const dateKey = (log.scheduledTime || log.confirmedAt || log.createdAt || "").slice(0, 10);
+  const dateKey = getMedicationLogDateKey(log);
   if (!dateKey) return completedDates;
 
   return {

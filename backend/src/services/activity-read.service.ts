@@ -1,9 +1,10 @@
 import { db } from "../db";
 import { activityReads, auditLogs, foodScans, medicationLogs, notifications } from "../db/schema";
-import { and, count, eq, gte, inArray, isNotNull, lte, notInArray, sql } from "drizzle-orm";
+import { and, count, eq, gte, inArray, isNotNull, lt, notInArray, sql } from "drizzle-orm";
 import { AccessUser, getAssignedPatientIdsForNurse, getNurseIdForUser, getPatientIdForUser } from "./access-control.service";
 import { deleteCachedByPrefix, getCached, setCached } from "./cache.service";
 import { emitActivityChanged } from "./activity-event.service";
+import { getAppDateRangeFromQuery } from "../utils/app-timezone";
 
 const ACTIVITY_READ_CACHE_TTL_MS = Number(process.env.ACTIVITY_READ_CACHE_TTL_MS || 30_000);
 const hiddenActivityResourceTypes = ["notification", "push_subscription", "user_push_subscription"];
@@ -41,22 +42,15 @@ export const listActivityReads = async (userId: string, query: { page?: unknown;
   if (cached) return cached;
 
   const conditions = [eq(activityReads.userId, userId)];
+  const dateRange = getAppDateRangeFromQuery({ start_date: startDateStr, end_date: endDateStr });
 
   if (activityIds.length > 0) {
     conditions.push(inArray(activityReads.activityId, activityIds));
   }
 
-  if (startDateStr) {
-    const start = new Date(startDateStr);
-    if (!isNaN(start.getTime())) conditions.push(gte(activityReads.readAt, start));
-  }
-  
-  if (endDateStr) {
-    const end = new Date(endDateStr);
-    if (!isNaN(end.getTime())) {
-      end.setHours(23, 59, 59, 999);
-      conditions.push(lte(activityReads.readAt, end));
-    }
+  if (dateRange) {
+    conditions.push(gte(activityReads.readAt, dateRange.start));
+    conditions.push(lt(activityReads.readAt, dateRange.end));
   }
 
   const where = and(...conditions);

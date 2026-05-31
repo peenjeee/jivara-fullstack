@@ -3,6 +3,7 @@ import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
 import { getPatientsFromApi } from "@/lib/patientApi";
 import type { PatientRecord, PatientStatus } from "@/lib/mocks/patients";
 import type { ScheduleMedicineFormValues } from "@/components/schedule/scheduleFormUtils";
+import { getApiDateKey } from "@/lib/appTimezone";
 
 interface ScheduleResponse {
   id: string;
@@ -159,8 +160,8 @@ const mapSchedule = (schedule: ScheduleResponse, patient?: PatientRecord): Medic
   frequency: `${schedule.frequency} kali sehari`,
   times: getScheduledTimes(schedule.scheduledTimes),
   mealRule: (schedule.mealRule as MedicationScheduleRecord["mealRule"] | null | undefined) || "Tidak tergantung makan",
-  startDate: schedule.startDate?.slice(0, 10) || schedule.createdAt?.slice(0, 10) || new Date().toISOString().slice(0, 10),
-  endDate: schedule.endDate?.slice(0, 10) || schedule.completedAt?.slice(0, 10) || undefined,
+  startDate: getApiDateKey(schedule.startDate || schedule.createdAt),
+  endDate: schedule.endDate ? getApiDateKey(schedule.endDate) : schedule.completedAt ? getApiDateKey(schedule.completedAt) : undefined,
   reminderEnabled: schedule.reminderEnabled ?? true,
   instructions: schedule.instructions ?? undefined,
   status: Number(schedule.stock ?? 0) <= 0 ? "Selesai" : schedule.isActive === false ? "Nonaktif" : "Aktif",

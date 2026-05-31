@@ -1,13 +1,12 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { m } from "motion/react";
 import { LogIn } from "lucide-react";
 import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
 import LandingBottomNav from "@/components/landing/LandingBottomNav";
-import Marquee from "@/components/ui/Marquee";
+import TeamShowcase from "@/components/ui/team";
 import PwaTopLogoBar from "@/components/ui/PwaTopLogoBar";
 import { useIsStandalonePwa } from "@/hooks";
 
@@ -28,7 +27,7 @@ export default function TeamPageClient() {
       )}
 
       <main className={`overflow-hidden pt-28 lg:pt-34 ${isStandalonePwa ? "pt-[calc(96px+env(safe-area-inset-top))] pb-28 lg:pt-34 lg:pb-0" : ""}`}>
-        <section className="relative mx-auto flex w-full max-w-[1440px] flex-col items-center px-5 pb-0 pt-10 text-center sm:px-8 sm:pt-12 lg:px-[84px] lg:pt-0">
+        <section className="relative mx-auto flex w-full max-w-[1440px] flex-col items-center px-5 pb-16 pt-10 text-center sm:px-8 sm:pb-20 sm:pt-12 lg:px-[84px] lg:pt-0">
           <m.div
             className="relative z-20 mx-auto max-w-4xl"
             initial={{ opacity: 0, y: 24 }}
@@ -43,10 +42,10 @@ export default function TeamPageClient() {
             </p>
           </m.div>
 
-          <div className="relative mt-10 flex min-h-[330px] w-full items-end justify-center sm:mt-14 sm:min-h-[470px] lg:mt-18 lg:min-h-[620px]">
-            <div className="pointer-events-none absolute inset-x-0 top-6 z-0 overflow-hidden text-center sm:top-4 lg:top-0" aria-hidden="true">
+          <div className="relative mt-10 flex min-h-[340px] w-full items-end justify-center sm:mt-14 sm:min-h-[470px] md:min-h-[540px] lg:mt-18 lg:min-h-[680px]">
+            <div className="pointer-events-none absolute inset-x-0 top-0 z-30 overflow-hidden text-center sm:top-4 lg:top-0" aria-hidden="true">
               <m.p
-                className="whitespace-nowrap text-center font-display text-[clamp(92px,22vw,300px)] font-extrabold leading-none tracking-[-0.035em] text-text-main/[0.08]"
+                className="whitespace-nowrap text-center font-display text-[clamp(92px,22vw,300px)] font-extrabold leading-none tracking-[-0.035em] text-text-main/[0.09]"
                 initial={{ opacity: 0, scale: 0.92, y: 24 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 transition={{ duration: 0.85, ease: [0.16, 1, 0.3, 1], delay: 0.18 }}
@@ -56,26 +55,14 @@ export default function TeamPageClient() {
             </div>
 
             <m.div
-              className="relative z-20 w-full translate-y-2 sm:translate-y-6 lg:translate-y-8"
+              className="relative z-20 w-full -translate-y-8 sm:-translate-y-10 lg:-translate-y-8"
               initial={{ opacity: 0, y: 52, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1], delay: 0.28 }}
             >
-              <div className="relative left-1/2 w-[112vw] -translate-x-1/2 -translate-y-32 sm:w-[108vw] sm:-translate-y-34 lg:w-[104vw] lg:-translate-y-28">
-                <Image
-                  src="/images/team/team.png"
-                  alt="Jivara team"
-                  width={960}
-                  height={242}
-                  priority
-                  sizes="(max-width: 640px) 112vw, (max-width: 1024px) 108vw, 104vw"
-                  className="h-auto w-full max-w-none object-cover"
-                />
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[6%] " aria-hidden="true" />
-              </div>
+              <TeamShowcase />
             </m.div>
           </div>
-          <Marquee className="-mt-32 sm:-mt-34 lg:-mt-28" />
         </section>
       </main>
 

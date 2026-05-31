@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AdherenceRange } from "@/helpers/patientDetails";
 import { getDateKey, getScheduleDoseCount, getSchedulesForDate, getTotalDoseCount } from "@/helpers/patientSchedule";
+import { getApiDateKey } from "@/lib/appTimezone";
 import api from "@/lib/axios";
 import type { PatientRecord } from "@/lib/mocks/patients";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
@@ -320,5 +321,5 @@ function parseDateKey(dateKey: string) {
 }
 
 function getMedicationLogDateKey(log: MedicationLogResponse) {
-  return (log.scheduledTime || log.confirmedAt || log.createdAt || "").slice(0, 10);
+  return getApiDateKey(log.scheduledTime || log.confirmedAt || log.createdAt, "");
 }
