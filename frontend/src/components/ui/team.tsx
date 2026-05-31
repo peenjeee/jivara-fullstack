@@ -107,34 +107,6 @@ export default function Component() {
           </m.article>
         ))}
       </div>
-
-      <style>{`
-        .team-slider-track {
-          animation: team-card-slide 26s linear infinite;
-          will-change: transform;
-        }
-
-        .team-slider-track:has(.team-card:hover) {
-          animation-play-state: paused;
-        }
-
-        :global(.team-member-image) {
-          filter: grayscale(1) sepia(0.12) hue-rotate(74deg) saturate(0.42) brightness(0.9) contrast(0.96);
-        }
-
-        :global(.team-card:hover .team-member-image) {
-          filter: none;
-        }
-
-        @keyframes team-card-slide {
-          from {
-            transform: translate3d(0, 0, 0);
-          }
-          to {
-            transform: translate3d(calc(-50% - 10px), 0, 0);
-          }
-        }
-      `}</style>
     </m.div>
   );
 }
