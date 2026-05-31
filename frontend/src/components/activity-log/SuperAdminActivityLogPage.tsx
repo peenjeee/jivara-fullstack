@@ -177,7 +177,7 @@ export default function SuperAdminActivityLogPage() {
 
   useEffect(() => {
     const timerId = window.setTimeout(() => {
-      void loadPage(1, { forceRefresh: true });
+      void loadPage(1);
     }, 0);
 
     return () => window.clearTimeout(timerId);

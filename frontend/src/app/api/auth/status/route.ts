@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getBackendApiUrl, REFRESH_COOKIE, setAuthCookies } from "../cookies";
+import { getBackendApiUrl, REFRESH_COOKIE, setAuthCookies, setAuthTimingHeaders } from "../cookies";
 import { fetchWithTransientRetry } from "../../proxyRetry";
 
+export const runtime = "edge";
+export const dynamic = "force-dynamic";
+
 export async function POST(request: NextRequest) {
+  const startedAt = Date.now();
   const refreshToken = request.cookies.get(REFRESH_COOKIE)?.value;
   if (!refreshToken) {
-    return NextResponse.json({ status: "gagal", message: "Sesi tidak tersedia" }, { status: 401 });
+    return setAuthTimingHeaders(
+      NextResponse.json({ status: "gagal", message: "Sesi tidak tersedia" }, { status: 401 }),
+      startedAt,
+    );
   }
 
   let backendResponse: Response;
@@ -20,9 +27,12 @@ export async function POST(request: NextRequest) {
   try {
     backendResponse = await fetchWithTransientRetry(`${getBackendApiUrl()}/auth/status`, requestInit);
   } catch {
-    return NextResponse.json(
-      { status: "gagal", message: "Layanan autentikasi sedang tidak merespons. Coba lagi beberapa saat." },
-      { status: 504 },
+    return setAuthTimingHeaders(
+      NextResponse.json(
+        { status: "gagal", message: "Layanan autentikasi sedang tidak merespons. Coba lagi beberapa saat." },
+        { status: 504 },
+      ),
+      startedAt,
     );
   }
 
@@ -40,5 +50,5 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  return response;
+  return setAuthTimingHeaders(response, startedAt);
 }

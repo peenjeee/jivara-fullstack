@@ -10,6 +10,13 @@ export const ROLE_COOKIE = "jivara-role";
 export const ACCOUNT_STATUS_COOKIE = "jivara-account-status";
 export const LOGOUT_COOKIE = "jivara-logged-out";
 
+export const setAuthTimingHeaders = (response: NextResponse, startedAt: number) => {
+  const elapsedMs = Date.now() - startedAt;
+  response.headers.set("Server-Timing", `jivara-auth-proxy;dur=${elapsedMs}`);
+  response.headers.set("X-Jivara-Auth-Proxy-Ms", String(elapsedMs));
+  return response;
+};
+
 const isSecureRequest = (request?: NextRequest) => {
   if (!request) return isProduction;
   return request.nextUrl.protocol === "https:" || request.headers.get("x-forwarded-proto") === "https";

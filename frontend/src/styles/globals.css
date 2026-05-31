@@ -177,14 +177,6 @@ select:-webkit-autofill:focus {
   animation-play-state: paused;
 }
 
-.team-member-image {
-  filter: grayscale(1) sepia(0.12) hue-rotate(74deg) saturate(0.42) brightness(0.9) contrast(0.96);
-}
-
-.team-card:hover .team-member-image {
-  filter: none;
-}
-
 @keyframes team-card-slide {
   from {
     transform: translate3d(0, 0, 0);

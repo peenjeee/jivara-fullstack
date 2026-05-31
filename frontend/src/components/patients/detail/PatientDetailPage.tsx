@@ -39,7 +39,7 @@ export default function PatientDetailPage({ data, patientId }: PatientDetailPage
 
     let isMounted = true;
 
-    getPatientDetailFromApi(patientId, { forceRefresh: true })
+    getPatientDetailFromApi(patientId)
       .then((nextData) => {
         if (!isMounted) return;
         patientDetailViewCache.set(cacheKey, nextData);

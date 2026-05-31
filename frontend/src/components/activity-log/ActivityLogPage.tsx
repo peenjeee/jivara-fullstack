@@ -311,7 +311,7 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
   useEffect(() => {
     let isMounted = true;
 
-    void fetchSummaryData({ readOnly, auditUserRole, todayKey, forceRefresh: true })
+    void fetchSummaryData({ readOnly, auditUserRole, todayKey })
       .then((summaryData) => {
         if (!isMounted) return;
         setUnreadActivityCount(summaryData.unreadCount);
@@ -419,7 +419,7 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
 
   useEffect(() => {
     const timerId = window.setTimeout(() => {
-      void loadPage(1, { forceRefresh: true });
+      void loadPage(1);
     }, 0);
 
     return () => window.clearTimeout(timerId);

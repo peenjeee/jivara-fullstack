@@ -105,7 +105,7 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
 
     dispatch({ type: "patch", payload: { isLoading: true } });
 
-    getPatientActivityLogData(visibleMonth, { forceRefresh: true })
+    getPatientActivityLogData(visibleMonth)
       .then(async (activityData) => {
         const year = visibleMonth.getFullYear();
         const month = String(visibleMonth.getMonth() + 1).padStart(2, "0");

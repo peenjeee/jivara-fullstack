@@ -97,7 +97,7 @@ export default function PatientDashboardPage() {
   useEffect(() => {
     let isMounted = true;
 
-    getPatientDashboardOverviewData({ forceRefresh: true })
+    getPatientDashboardOverviewData()
       .then((data) => {
         if (!isMounted) return;
         patientDashboardCache = { patient: data.patient, schedules: data.schedules, adherenceStats: data.adherenceStats };

@@ -60,7 +60,7 @@ export default function PatientSchedulePage() {
   useEffect(() => {
     let isMounted = true;
 
-    getPatientScheduleData(visibleMonth, { forceRefresh: true })
+    getPatientScheduleData(visibleMonth)
       .then((data) => {
         if (!isMounted) return;
         const nextConfirmedScheduleDates = getConfirmedScheduleDates(data.medicationLogs);

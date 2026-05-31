@@ -242,7 +242,7 @@ export function useNurseDetailPageController(nurseId: string) {
     if (cachedNurse) dispatch({ type: "resolve_nurse", nurse: cachedNurse });
     let isMounted = true;
     dispatch({ type: "set_nurse_loading", value: !cachedNurse });
-    void getNurseByIdFromApi(nurseId, { forceRefresh: true })
+    void getNurseByIdFromApi(nurseId)
       .then((nextNurse) => {
         if (!isMounted) return;
         dispatch({ type: "resolve_nurse", nurse: nextNurse });
@@ -290,13 +290,13 @@ export function useNurseDetailPageController(nurseId: string) {
 
   useEffect(() => {
     if (!hasAuthHydrated || (dashboardRole !== "admin" && dashboardRole !== "nurse")) return;
-    void loadAssignedPatients(state.patientPage, true);
+    void loadAssignedPatients(state.patientPage);
   }, [dashboardRole, hasAuthHydrated, loadAssignedPatients, state.patientPage]);
 
   useEffect(() => {
     if (!hasAuthHydrated || (dashboardRole !== "admin" && dashboardRole !== "nurse")) return;
     if (!state.hasLoadedPatients || state.hasLoadedPatientSummary) return;
-    void loadPatientSummary(true);
+    void loadPatientSummary();
   }, [dashboardRole, hasAuthHydrated, loadPatientSummary, state.hasLoadedPatientSummary, state.hasLoadedPatients]);
 
   const loadActivities = useCallback(async () => {
