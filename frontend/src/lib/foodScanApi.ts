@@ -212,7 +212,7 @@ const detectFoodWithRetry = async (imageId: string, patientId: string) => {
 };
 
 const toFoodName = (items: DetectedItemResponse[]) => {
-  if (items.length === 0) return "Makanan terdeteksi";
+  if (items.length === 0) return "Tidak ada makanan terdeteksi";
   return items.map((item) => item.label_display).join(", ");
 };
 
@@ -437,6 +437,37 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
   const detectResponse = await detectFoodWithRetry(upload.image_id, patientId);
   const detection = detectResponse.data.data;
   const detectedLabels = detection.detected_items.map((item) => item.label);
+  const image = getBackendImageUrl(upload.upload_url);
+
+  if (detectedLabels.length === 0) {
+    await clearFoodScanRelatedCaches();
+
+    return {
+      scan: {
+        id: upload.image_id,
+        patientId,
+        foodName: "Tidak ada makanan terdeteksi",
+        image,
+        scannedAt: upload.timestamp,
+        risk: "Low Risk",
+        hasDetectedFood: false,
+        aiReasoning: `Model ${detection.model_version} tidak mendeteksi makanan yang didukung dalam ${detection.inference_time_ms} ms. Pastikan gambar berisi makanan dan kamera aktif, lalu coba scan ulang.`,
+        result: "Tidak ada makanan yang dapat dianalisis dari gambar ini.",
+        recommendation: "Gunakan foto makanan yang lebih jelas atau upload gambar makanan dari galeri.",
+        detectedItems: [],
+      },
+      patientName: patient.fullName || "Pasien",
+      analyzedMedicationCount: 0,
+      analyzedMedications: [],
+      analyzedMedicationDetails: [],
+      schedules: [],
+      interactions: [],
+      safeFoods: [],
+      recommendedFoods: [],
+      foodsToAvoid: [],
+      overallRisk: "Low Risk",
+    };
+  }
 
   const [interactionResult, recommendationResult, nutritionResult] = await Promise.allSettled([
     api.post<{ data: InteractionResponse }>(`/food-scans/${encodeURIComponent(upload.image_id)}/interactions`, {
@@ -467,7 +498,6 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
     : null;
   const nutritionItems = nutritionData?.items.map(mapNutritionItem) ?? [];
   const risk = toRisk(interactionData.overall_risk_level);
-  const image = getBackendImageUrl(upload.upload_url);
   const foodName = toFoodName(detection.detected_items);
   const analyzedMedicationNames = uniqueStrings([
     ...(recommendationData?.patient_medications || []),
