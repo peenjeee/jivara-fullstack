@@ -28,7 +28,7 @@ export default function FoodScanResultPanel({ analysis, isScanning, result }: Fo
             </div>
             <ActivityDataSkeleton rows={4} />
           </m.div>
-        ) : result ? (
+        ) : result && analysis ? (
           <m.div key="result" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.35 }}><FoodScanAnalysisView scanId={result.id} analysisData={analysis ?? undefined} /></m.div>
         ) : (
           <m.div key="empty" className="flex h-full min-h-[420px] flex-col items-center justify-center gap-6 text-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>

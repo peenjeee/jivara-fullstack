@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import api from "@/lib/axios";
 import { getFoodScanAnalysisFromApi, getFoodScansPageFromApi, scanFoodImage } from "@/lib/foodScanApi";
 
@@ -16,6 +16,10 @@ describe("foodScanApi", () => {
   beforeEach(() => {
     mockedGet.mockReset();
     mockedPost.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("uploads, detects, checks interactions, and maps analysis", async () => {
@@ -71,6 +75,42 @@ describe("foodScanApi", () => {
     expect(analysis.interactions).toHaveLength(1);
     expect(analysis.nutritionItems).toBeUndefined();
     expect(analysis.nutritionTotal).toBeUndefined();
+  });
+
+  it("hides nutrition summary when no nutrition items are available", async () => {
+    mockedGet.mockResolvedValueOnce({ data: { data: { id: "patient-1", fullName: "Budi Santoso" } } });
+    mockedPost
+      .mockResolvedValueOnce({ data: { data: { image_id: "img-1", upload_url: "/uploads/img-1.jpg", timestamp: "2026-05-09T08:00:00.000Z" } } })
+      .mockResolvedValueOnce({ data: { data: { scan_id: "scan-1", detected_items: [{ label: "biskuit-choco-chips", label_display: "Biskuit Choco Chips", confidence: 0.95 }], inference_time_ms: 120, model_version: "v1", timestamp: "2026-05-09T08:00:01.000Z" } } })
+      .mockResolvedValueOnce({ data: { data: { interactions: [], recommended_foods: [], foods_to_avoid: [], overall_risk_level: "low", overall_recommendation: "Aman.", disclaimer: "Konsultasikan ke tenaga kesehatan." } } })
+      .mockResolvedValueOnce({ data: { data: { recommended_foods: [], foods_to_avoid: [] } } })
+      .mockResolvedValueOnce({ data: { data: { items: [], unavailable_items: [{ food_item: "biskuit-choco-chips", reason: "Data gizi belum tersedia" }], total: { calories: 0, protein_g: 0, fat_g: 0, carbs_g: 0 } } } });
+
+    const analysis = await scanFoodImage(new File(["image"], "food.jpg", { type: "image/jpeg" }));
+
+    expect(analysis.scan.foodName).toBe("Biskuit Choco Chips");
+    expect(analysis.nutritionItems).toBeUndefined();
+    expect(analysis.nutritionTotal).toBeUndefined();
+  });
+
+  it("retries food detection once after a transient timeout", async () => {
+    vi.useFakeTimers();
+    mockedGet.mockResolvedValueOnce({ data: { data: { id: "patient-1", fullName: "Budi Santoso" } } });
+    mockedPost
+      .mockResolvedValueOnce({ data: { data: { image_id: "img-1", upload_url: "/uploads/img-1.jpg", timestamp: "2026-05-09T08:00:00.000Z" } } })
+      .mockRejectedValueOnce({ response: { status: 503, data: { error_code: "AI_INFERENCE_TIMEOUT", message: "AI deteksi sedang lambat" } } })
+      .mockResolvedValueOnce({ data: { data: { scan_id: "scan-1", detected_items: [{ label: "kangkung", label_display: "Kangkung", confidence: 0.95 }], inference_time_ms: 120, model_version: "v1", timestamp: "2026-05-09T08:00:01.000Z" } } })
+      .mockResolvedValueOnce({ data: { data: { interactions: [], recommended_foods: [], foods_to_avoid: [], overall_risk_level: "low", overall_recommendation: "Aman.", disclaimer: "Konsultasikan ke tenaga kesehatan." } } })
+      .mockResolvedValueOnce({ data: { data: { recommended_foods: [], foods_to_avoid: [] } } })
+      .mockResolvedValueOnce({ data: { data: { items: [], total: { calories: 0, protein_g: 0, fat_g: 0, carbs_g: 0 } } } });
+
+    const analysisPromise = scanFoodImage(new File(["image"], "food.jpg", { type: "image/jpeg" }));
+    await vi.advanceTimersByTimeAsync(900);
+    const analysis = await analysisPromise;
+
+    expect(mockedPost).toHaveBeenNthCalledWith(2, "/food-scans/img-1/detections", { patientId: "patient-1" });
+    expect(mockedPost).toHaveBeenNthCalledWith(3, "/food-scans/img-1/detections", { patientId: "patient-1" });
+    expect(analysis.scan.foodName).toBe("Kangkung");
   });
 
   it("maps analyzed medication count and recommendations from scan detail API", async () => {

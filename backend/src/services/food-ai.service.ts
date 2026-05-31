@@ -106,6 +106,11 @@ type ReasoningNutritionResponse = {
   };
 };
 
+type NutritionUnavailableItem = {
+  food_item: string;
+  reason: string;
+};
+
 const DEVELOPMENT_DETECTED_ITEMS: DetectionItem[] = [
   {
     label: "nasi-goreng",
@@ -173,7 +178,7 @@ const mapRiskScoreToLevel = (score: number) => {
 
 const getReasoningTimeoutMs = () => Number(process.env.FOOD_REASONING_TIMEOUT_MS || process.env.FOOD_AI_TIMEOUT_MS || 10000);
 
-const getDetectionTimeoutMs = () => Number(process.env.FOOD_AI_TIMEOUT_MS || 30000);
+const getDetectionTimeoutMs = () => Number(process.env.FOOD_AI_TIMEOUT_MS || 25000);
 
 const getDetectionImageMaxSize = () => Number(process.env.FOOD_AI_IMAGE_MAX_SIZE || 960);
 
@@ -260,6 +265,8 @@ const postFoodDetectionMultipart = async (inferenceUrl: string, image: ImageForD
 };
 
 const isServiceError = (error: unknown): error is ServiceError => Boolean(error && typeof error === "object" && typeof (error as ServiceError).status === "number");
+
+const isTimeoutError = (error: unknown) => error instanceof DOMException && ["AbortError", "TimeoutError"].includes(error.name);
 
 const getFallbackInteraction = (yoloClass: string): ReasoningInteractionResponse => ({
   detected_food: yoloClass,
@@ -369,6 +376,30 @@ const getFoodNutrition = async (yoloClass: string, portionGrams = 100) => {
     if (shouldUseDevelopmentFallback()) return getFallbackNutrition(yoloClass, portionGrams);
     throw error;
   }
+};
+
+const toNutritionItem = (nutrition: ReasoningNutritionResponse) => ({
+  food_item: nutrition.yolo_class,
+  food_display: nutrition.matched_food,
+  portion: `${nutrition.portion_grams} gram`,
+  nutrition: {
+    calories: nutrition.nutrition_facts.calories_kcal,
+    protein_g: nutrition.nutrition_facts.proteins_g,
+    fat_g: nutrition.nutrition_facts.fats_g,
+    carbs_g: nutrition.nutrition_facts.carbohydrates_g,
+  },
+  source: "Jivara AI Nutrition",
+});
+
+const toUnavailableNutritionItem = (item: NutritionDTO["detectedItems"][number], error: unknown): NutritionUnavailableItem => {
+  const message = error && typeof error === "object" && "message" in error && typeof (error as { message?: unknown }).message === "string"
+    ? (error as { message: string }).message
+    : "Data gizi belum tersedia untuk label makanan ini.";
+
+  return {
+    food_item: item.label,
+    reason: message,
+  };
 };
 
 const toDetectionItem = (item: Record<string, unknown>): DetectionItem => {
@@ -500,6 +531,9 @@ const runFoodDetection = async (scan: typeof foodScans.$inferSelect): Promise<Fo
   } catch (error) {
     if (shouldUseDevelopmentFallback()) return getDevelopmentDetectionResult();
     if (isServiceError(error)) throw error;
+    if (isTimeoutError(error)) {
+      throw { status: 503, message: "AI deteksi sedang lambat, coba ulang beberapa saat lagi.", code: "AI_INFERENCE_TIMEOUT" };
+    }
     const status = axios.isAxiosError(error) && error.response?.status ? error.response.status : 502;
     throw { status, message: "Service AI gagal memproses gambar makanan", code: "AI_INFERENCE_FAILED" };
   }
@@ -934,22 +968,13 @@ export const recommendFoods = async (dto: FoodRecommendationDTO, user?: AccessUs
 };
 
 export const estimateNutrition = async (dto: NutritionDTO) => {
-  const nutritionResponses = await Promise.all(dto.detectedItems.map((item) => getFoodNutrition(item.label, item.portionGrams || 100)));
-  const items = nutritionResponses.map((nutrition) => ({
-    food_item: nutrition.yolo_class,
-    food_display: nutrition.matched_food,
-    portion: `${nutrition.portion_grams} gram`,
-    nutrition: {
-      calories: nutrition.nutrition_facts.calories_kcal,
-      protein_g: nutrition.nutrition_facts.proteins_g,
-      fat_g: nutrition.nutrition_facts.fats_g,
-      carbs_g: nutrition.nutrition_facts.carbohydrates_g,
-    },
-    source: "Jivara AI Nutrition",
-  }));
+  const nutritionResults = await Promise.allSettled(dto.detectedItems.map((item) => getFoodNutrition(item.label, item.portionGrams || 100)));
+  const items = nutritionResults.flatMap((result) => result.status === "fulfilled" ? [toNutritionItem(result.value)] : []);
+  const unavailable_items = nutritionResults.flatMap((result, index) => result.status === "rejected" ? [toUnavailableNutritionItem(dto.detectedItems[index], result.reason)] : []);
 
   return {
     items,
+    unavailable_items,
     total: {
       calories: items.reduce((sum, item) => sum + item.nutrition.calories, 0),
       protein_g: Number(items.reduce((sum, item) => sum + item.nutrition.protein_g, 0).toFixed(1)),

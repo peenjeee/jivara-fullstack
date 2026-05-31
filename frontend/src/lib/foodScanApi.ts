@@ -189,6 +189,26 @@ const getPatient = async () => {
   return patient;
 };
 
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const isTransientDetectionError = (error: unknown) => {
+  const response = (error as { response?: { status?: number; data?: { error_code?: unknown } } })?.response;
+  const status = response?.status;
+  return status === 502 || status === 503 || status === 504 || response?.data?.error_code === "AI_INFERENCE_TIMEOUT";
+};
+
+const detectFoodWithRetry = async (imageId: string, patientId: string) => {
+  const path = `/food-scans/${encodeURIComponent(imageId)}/detections`;
+
+  try {
+    return await api.post<{ data: DetectResponse }>(path, { patientId });
+  } catch (error) {
+    if (!isTransientDetectionError(error)) throw error;
+    await wait(900);
+    return api.post<{ data: DetectResponse }>(path, { patientId });
+  }
+};
+
 const toFoodName = (items: DetectedItemResponse[]) => {
   if (items.length === 0) return "Makanan terdeteksi";
   return items.map((item) => item.label_display).join(", ");
@@ -402,9 +422,7 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
   });
 
   const upload = uploadResponse.data.data;
-  const detectResponse = await api.post<{ data: DetectResponse }>(`/food-scans/${encodeURIComponent(upload.image_id)}/detections`, {
-    patientId,
-  });
+  const detectResponse = await detectFoodWithRetry(upload.image_id, patientId);
   const detection = detectResponse.data.data;
   const detectedLabels = detection.detected_items.map((item) => item.label);
 
@@ -434,6 +452,7 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
   const nutritionData = nutritionResult.status === "fulfilled"
     ? nutritionResult.value.data.data
     : null;
+  const nutritionItems = nutritionData?.items.map(mapNutritionItem) ?? [];
   const risk = toRisk(interactionData.overall_risk_level);
   const image = getBackendImageUrl(upload.upload_url);
   const foodName = toFoodName(detection.detected_items);
@@ -485,8 +504,8 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
       ?? [],
     schedules: interactions.map((interaction) => interaction.schedule),
     interactions,
-    nutritionItems: nutritionData?.items.map(mapNutritionItem),
-    nutritionTotal: nutritionData
+    nutritionItems: nutritionItems.length > 0 ? nutritionItems : undefined,
+    nutritionTotal: nutritionItems.length > 0 && nutritionData
       ? {
         calories: nutritionData.total.calories,
         proteinG: nutritionData.total.protein_g,

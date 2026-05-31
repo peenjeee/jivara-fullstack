@@ -6,10 +6,11 @@ import { deleteLocalUploadIfExists, uploadFoodScanImage } from "../services/stor
 const sendError = (res: Response, error: unknown) => {
   const err = error as { status?: number; message?: string; code?: string };
   const status = err.status || 500;
+  const exposedServiceErrors = new Set(["AI_INFERENCE_TIMEOUT"]);
 
   return res.status(status).json({
     status: "gagal",
-    message: status >= 500 ? "Terjadi kesalahan pada server" : (err.message || "Terjadi kesalahan"),
+    message: status >= 500 && !exposedServiceErrors.has(err.code || "") ? "Terjadi kesalahan pada server" : (err.message || "Terjadi kesalahan"),
     ...(err.code && { error_code: err.code }),
   });
 };
