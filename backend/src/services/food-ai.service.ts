@@ -136,7 +136,7 @@ const getAiInferenceUrl = () => {
   if (process.env.FOOD_AI_INFERENCE_URL) return process.env.FOOD_AI_INFERENCE_URL;
   if (process.env.AI_INFERENCE_URL) return process.env.AI_INFERENCE_URL;
   if (process.env.FASTAPI_URL) return `${process.env.FASTAPI_URL.replace(/\/$/, "")}/food-scans/detections`;
-  return "https://aljuan14-jivara-food-detection.hf.space/predict";
+  return "https://jivara-ai-api-d948c083975b.herokuapp.com/detect";
 };
 
 const getReasoningApiBaseUrl = () => (process.env.FOOD_REASONING_API_URL || process.env.AI_REASONING_URL || "https://ai.jivara.web.id").replace(/\/+$/, "");
@@ -180,7 +180,7 @@ const getReasoningTimeoutMs = () => Number(process.env.FOOD_REASONING_TIMEOUT_MS
 
 const getDetectionTimeoutMs = () => Number(process.env.FOOD_AI_TIMEOUT_MS || 25000);
 
-const getDetectionImageMaxSize = () => Number(process.env.FOOD_AI_IMAGE_MAX_SIZE || 960);
+const getDetectionImageMaxSize = () => Number(process.env.FOOD_AI_IMAGE_MAX_SIZE || 1280);
 
 const getDetectionImageQuality = () => Number(process.env.FOOD_AI_IMAGE_QUALITY || 75);
 
@@ -404,11 +404,12 @@ const toUnavailableNutritionItem = (item: NutritionDTO["detectedItems"][number],
 
 const toDetectionItem = (item: Record<string, unknown>): DetectionItem => {
   const displayLabel = item.label_display || item.labelDisplay || item.label_final || item.class_name || item.display || item.name || item.label || "Makanan Terdeteksi";
+  const rawConfidence = typeof item.confidence === "number" ? item.confidence : Number(item.score || item.probability || 0);
 
   return {
     label: normalizeFoodClass(item.label || item.label_final || item.class_name || item.class || item.name),
     labelDisplay: String(displayLabel),
-    confidence: typeof item.confidence === "number" ? item.confidence : Number(item.score || item.probability || 0),
+    confidence: rawConfidence > 1 ? rawConfidence / 100 : rawConfidence,
     boundingBox: item.bounding_box || item.boundingBox || item.bbox || (
       ["x1", "y1", "x2", "y2"].every((key) => typeof item[key] === "number")
         ? { x1: item.x1, y1: item.y1, x2: item.x2, y2: item.y2 }

@@ -130,7 +130,7 @@ router.post("/food-scans", authorizeRoles("patient", "nurse", "admin"), uploadSi
  *     summary: Buat hasil deteksi makanan untuk scan
  *     description: |
  *       Backend mengambil gambar dari URL Supabase Storage pada scan, lalu memanggil endpoint
- *       YOLO/inference (`FOOD_AI_INFERENCE_URL`, default Hugging Face `/predict`) sebagai
+ *       YOLO/inference (`FOOD_AI_INFERENCE_URL`, default Jivara AI `/detect`) sebagai
  *       `multipart/form-data` dengan field `file`.
  *     tags: [Food AI]
  *     security:
