@@ -145,13 +145,19 @@ export const validateFoodRecommendations = (req: Request, res: Response, next: N
 };
 
 export const validateNutrition = (req: Request, res: Response, next: NextFunction) => {
-  const { detectedItems, detected_items: detectedItemsSnake } = req.body;
+  const { scanId, scan_id: scanIdSnake, detectedItems, detected_items: detectedItemsSnake } = req.body;
+  const resolvedScanId = scanId || scanIdSnake;
   const resolvedDetectedItems = detectedItems || detectedItemsSnake;
+
+  if (resolvedScanId && !isValidUuid(resolvedScanId)) {
+    return res.status(400).json({ status: "gagal", message: "scanId tidak valid", error_code: "VALIDATION_ERROR" });
+  }
 
   if (!Array.isArray(resolvedDetectedItems) || resolvedDetectedItems.length === 0) {
     return res.status(400).json({ status: "gagal", message: "detectedItems wajib berupa array", error_code: "VALIDATION_ERROR" });
   }
 
+  if (resolvedScanId) req.body.scanId = resolvedScanId;
   req.body.detectedItems = resolvedDetectedItems;
   next();
 };

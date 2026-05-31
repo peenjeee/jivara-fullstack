@@ -227,6 +227,8 @@ export const foodScans = pgTable("food_scans", {
   recommendedFoods: jsonb("recommended_foods"),
   foodsToAvoid: jsonb("foods_to_avoid"),
   recommendationSummary: jsonb("recommendation_summary"),
+  nutritionItems: jsonb("nutrition_items"),
+  nutritionTotal: jsonb("nutrition_total"),
   matchedMedicationCategories: jsonb("matched_medication_categories"),
   recommendationPatientMedications: jsonb("recommendation_patient_medications"),
   analyzedMedicationCount: integer("analyzed_medication_count"),

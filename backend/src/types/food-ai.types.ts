@@ -25,6 +25,7 @@ export interface FoodRecommendationDTO {
 }
 
 export interface NutritionDTO {
+  scanId?: string;
   detectedItems: Array<{
     label: string;
     confidence?: number;

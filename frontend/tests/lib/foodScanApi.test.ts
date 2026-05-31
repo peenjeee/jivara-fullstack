@@ -39,7 +39,7 @@ describe("foodScanApi", () => {
     expect(mockedPost).toHaveBeenNthCalledWith(2, "/food-scans/img-1/detections", { patientId: "patient-1" });
     expect(mockedPost).toHaveBeenNthCalledWith(3, "/food-scans/img-1/interactions", { patientId: "patient-1", detectedItems: ["milk"], includeRecommendations: false });
     expect(mockedPost).toHaveBeenNthCalledWith(4, "/food-scans/img-1/recommendations", { patientId: "patient-1", topN: 100 });
-    expect(mockedPost).toHaveBeenNthCalledWith(5, "/nutrition-estimates", { detectedItems: [{ label: "milk", confidence: 0.95 }] });
+    expect(mockedPost).toHaveBeenNthCalledWith(5, "/nutrition-estimates", { scanId: "img-1", detectedItems: [{ label: "milk", confidence: 0.95 }] });
     expect(analysis).toMatchObject({
       overallRisk: "High Risk",
       scan: { id: "img-1", patientId: "patient-1", foodName: "Susu", risk: "High Risk", detectedItems: [{ label: "milk", labelDisplay: "Susu", confidence: 0.95, boundingBox: { x1: 10, y1: 20, x2: 110, y2: 220 } }] },

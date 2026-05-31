@@ -718,6 +718,8 @@ export const getFoodScanById = async (scanId: string, user?: AccessUser) => {
     recommendedFoods,
     foodsToAvoid,
     recommendationSummary,
+    nutritionItems: scan.nutritionItems || [],
+    nutritionTotal: scan.nutritionTotal || null,
     matchedMedicationCategories: scan.matchedMedicationCategories || {},
     disclaimer: "Ini bukan nasihat medis. Selalu konsultasikan dengan dokter atau apoteker Anda.",
   };
@@ -967,19 +969,27 @@ export const recommendFoods = async (dto: FoodRecommendationDTO, user?: AccessUs
   };
 };
 
-export const estimateNutrition = async (dto: NutritionDTO) => {
+export const estimateNutrition = async (dto: NutritionDTO, user?: AccessUser) => {
   const nutritionResults = await Promise.allSettled(dto.detectedItems.map((item) => getFoodNutrition(item.label, item.portionGrams || 100)));
   const items = nutritionResults.flatMap((result) => result.status === "fulfilled" ? [toNutritionItem(result.value)] : []);
   const unavailable_items = nutritionResults.flatMap((result, index) => result.status === "rejected" ? [toUnavailableNutritionItem(dto.detectedItems[index], result.reason)] : []);
+  const total = {
+    calories: items.reduce((sum, item) => sum + item.nutrition.calories, 0),
+    protein_g: Number(items.reduce((sum, item) => sum + item.nutrition.protein_g, 0).toFixed(1)),
+    fat_g: Number(items.reduce((sum, item) => sum + item.nutrition.fat_g, 0).toFixed(1)),
+    carbs_g: Number(items.reduce((sum, item) => sum + item.nutrition.carbs_g, 0).toFixed(1)),
+  };
+
+  if (dto.scanId) {
+    const scan = await ensureScanExists(dto.scanId);
+    if (user) await assertCanAccessPatient(user, scan.patientId);
+    await db.update(foodScans).set({ nutritionItems: items, nutritionTotal: total }).where(eq(foodScans.id, dto.scanId));
+    deleteCachedByPrefix(FOOD_SCAN_CACHE_PREFIX);
+  }
 
   return {
     items,
     unavailable_items,
-    total: {
-      calories: items.reduce((sum, item) => sum + item.nutrition.calories, 0),
-      protein_g: Number(items.reduce((sum, item) => sum + item.nutrition.protein_g, 0).toFixed(1)),
-      fat_g: Number(items.reduce((sum, item) => sum + item.nutrition.fat_g, 0).toFixed(1)),
-      carbs_g: Number(items.reduce((sum, item) => sum + item.nutrition.carbs_g, 0).toFixed(1)),
-    },
+    total,
   };
 };

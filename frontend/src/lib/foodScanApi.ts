@@ -152,6 +152,8 @@ interface FoodScanDetailResponse {
   patientMedications?: string[];
   patientMedicationDetails?: AnalyzedMedicationDetailResponse[];
   analyzedMedicationCount?: number;
+  nutritionItems?: NutritionItemResponse[];
+  nutritionTotal?: NutritionResponse["total"] | null;
   recommendedFoods?: FoodRecommendationResponse[];
   foodsToAvoid?: FoodRecommendationResponse[];
   disclaimer?: string | null;
@@ -299,6 +301,13 @@ const mapNutritionItem = (item: NutritionItemResponse) => ({
   source: item.source,
 });
 
+const mapNutritionTotal = (total: NutritionResponse["total"]) => ({
+  calories: total.calories,
+  proteinG: total.protein_g,
+  fatG: total.fat_g,
+  carbsG: total.carbs_g,
+});
+
 const uniqueStrings = (values: readonly string[]) => Array.from(values.reduce((uniqueValues, value) => {
   const text = value.trim();
   if (!text) return uniqueValues;
@@ -367,6 +376,7 @@ const mapScanDetail = (detail: FoodScanDetailResponse, patientName = detail.pati
     .flatMap((item) => (riskyFoodItems.has(item.label) ? [] : [{ foodItem: item.label, foodDisplay: item.labelDisplay, status: "aman" }]));
 
   const recommendationGroups = splitRecommendationsByRisk(detail.recommendedFoods || [], detail.foodsToAvoid || []);
+  const nutritionItems = detail.nutritionItems?.map(mapNutritionItem) ?? [];
 
   return {
     scan,
@@ -376,6 +386,8 @@ const mapScanDetail = (detail: FoodScanDetailResponse, patientName = detail.pati
     analyzedMedicationDetails: detail.patientMedicationDetails ?? [],
     schedules: interactions.map((interaction) => interaction.schedule),
     interactions,
+    nutritionItems: nutritionItems.length > 0 ? nutritionItems : undefined,
+    nutritionTotal: nutritionItems.length > 0 && detail.nutritionTotal ? mapNutritionTotal(detail.nutritionTotal) : undefined,
     safeFoods,
     recommendedFoods: recommendationGroups.safeRecommendations,
     foodsToAvoid: recommendationGroups.avoidRecommendations,
@@ -437,6 +449,7 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
       topN: 100,
     }),
     api.post<{ data: NutritionResponse }>("/nutrition-estimates", {
+      scanId: upload.image_id,
       detectedItems: detection.detected_items.map((item) => ({ label: item.label, confidence: item.confidence })),
     }),
   ]);
@@ -505,14 +518,7 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
     schedules: interactions.map((interaction) => interaction.schedule),
     interactions,
     nutritionItems: nutritionItems.length > 0 ? nutritionItems : undefined,
-    nutritionTotal: nutritionItems.length > 0 && nutritionData
-      ? {
-        calories: nutritionData.total.calories,
-        proteinG: nutritionData.total.protein_g,
-        fatG: nutritionData.total.fat_g,
-        carbsG: nutritionData.total.carbs_g,
-    }
-    : undefined,
+    nutritionTotal: nutritionItems.length > 0 && nutritionData ? mapNutritionTotal(nutritionData.total) : undefined,
     safeFoods: (interactionData.safe_items || []).map(mapSafeFood),
     recommendedFoods: recommendationGroups.safeRecommendations,
     foodsToAvoid: recommendationGroups.avoidRecommendations,
