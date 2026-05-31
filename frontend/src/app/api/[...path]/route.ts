@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getBackendApiUrl } from "@/app/api/auth/cookies";
 import { fetchWithTransientRetry } from "@/app/api/proxyRetry";
 
+export const runtime = "edge";
+export const dynamic = "force-dynamic";
+
 interface ProxyRouteContext {
   readonly params: Promise<{
     readonly path: string[];
@@ -63,6 +66,7 @@ const getProxyTimeoutMs = (url: URL) => {
 };
 
 const proxyRequest = async (request: NextRequest, context: ProxyRouteContext) => {
+  const startedAt = Date.now();
   const backendUrl = await buildBackendUrl(request, context);
   const hasBody = request.method !== "GET" && request.method !== "HEAD";
   const canRetry = request.method === "GET" || request.method === "HEAD";
@@ -81,15 +85,26 @@ const proxyRequest = async (request: NextRequest, context: ProxyRouteContext) =>
       ? await fetchWithTransientRetry(backendUrl, requestInit)
       : await fetch(backendUrl, { ...requestInit, cache: "no-store" });
   } catch {
+    const elapsedMs = Date.now() - startedAt;
     return NextResponse.json(
       { status: "gagal", message: "Layanan sedang tidak merespons. Coba lagi beberapa saat." },
-      { status: 504, headers: { "Cache-Control": "no-store, max-age=0" } },
+      {
+        status: 504,
+        headers: {
+          "Cache-Control": "no-store, max-age=0",
+          "Server-Timing": `jivara-proxy;dur=${elapsedMs}`,
+          "X-Jivara-Proxy-Ms": String(elapsedMs),
+        },
+      },
     );
   }
 
+  const elapsedMs = Date.now() - startedAt;
   const responseHeaders = new Headers(response.headers);
   strippedResponseHeaders.forEach((header) => responseHeaders.delete(header));
   responseHeaders.set("Cache-Control", "no-store, max-age=0");
+  responseHeaders.set("Server-Timing", `jivara-proxy;dur=${elapsedMs}`);
+  responseHeaders.set("X-Jivara-Proxy-Ms", String(elapsedMs));
 
   return new NextResponse(response.body, {
     status: response.status,

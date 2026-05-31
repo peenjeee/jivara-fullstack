@@ -13,20 +13,32 @@ const sendError = (res: Response, error: unknown) => {
   });
 };
 
+const setTimingHeaders = (res: Response, startedAt: number) => {
+  const elapsedMs = Date.now() - startedAt;
+  res.setHeader("Server-Timing", `jivara-backend;dur=${elapsedMs}`);
+  res.setHeader("X-Jivara-Backend-Ms", String(elapsedMs));
+};
+
 export const getAdminDashboard = async (req: AuthRequest, res: Response) => {
+  const startedAt = Date.now();
   try {
     const data = await adminDashboardService.getAdminDashboardData(req.user);
+    setTimingHeaders(res, startedAt);
     res.status(200).json({ status: "berhasil", data });
   } catch (error) {
+    setTimingHeaders(res, startedAt);
     sendError(res, error);
   }
 };
 
 export const getNurseDashboardSummary = async (req: AuthRequest, res: Response) => {
+  const startedAt = Date.now();
   try {
     const data = await adminDashboardService.getNurseDashboardSummary(req.user);
+    setTimingHeaders(res, startedAt);
     res.status(200).json({ status: "berhasil", data });
   } catch (error) {
+    setTimingHeaders(res, startedAt);
     sendError(res, error);
   }
 };

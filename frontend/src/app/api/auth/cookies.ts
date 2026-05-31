@@ -2,6 +2,7 @@ import type { NextRequest, NextResponse } from "next/server";
 
 const isProduction = process.env.NODE_ENV === "production";
 const defaultBackendApiUrl = "https://api.jivara.web.id/api/v1";
+const sharedCookieDomain = ".jivara.web.id";
 
 export const ACCESS_COOKIE = "jivara-token";
 export const REFRESH_COOKIE = "jivara-refresh-token";
@@ -14,11 +15,20 @@ const isSecureRequest = (request?: NextRequest) => {
   return request.nextUrl.protocol === "https:" || request.headers.get("x-forwarded-proto") === "https";
 };
 
+const getCookieDomain = (request?: NextRequest) => {
+  const configuredDomain = process.env.AUTH_COOKIE_DOMAIN?.trim();
+  if (configuredDomain) return configuredDomain;
+  const hostname = request?.nextUrl.hostname;
+  if (!hostname) return undefined;
+  return hostname === "jivara.web.id" || hostname.endsWith(".jivara.web.id") ? sharedCookieDomain : undefined;
+};
+
 const getCookieOptions = (request?: NextRequest) => ({
   httpOnly: true,
   secure: isSecureRequest(request),
   sameSite: "strict" as const,
   path: "/",
+  ...(getCookieDomain(request) ? { domain: getCookieDomain(request) } : {}),
 });
 
 export const setAuthCookies = (response: NextResponse, data: { accessToken: string; refreshToken?: string; role?: string | null; accountStatus?: string | null; expiresIn?: number }, request?: NextRequest) => {
@@ -52,10 +62,20 @@ export const setAuthCookies = (response: NextResponse, data: { accessToken: stri
 
 export const clearAuthCookies = (response: NextResponse, request?: NextRequest) => {
   const commonCookieOptions = getCookieOptions(request);
+  const hostOnlyCookieOptions = {
+    httpOnly: commonCookieOptions.httpOnly,
+    secure: commonCookieOptions.secure,
+    sameSite: commonCookieOptions.sameSite,
+    path: commonCookieOptions.path,
+  };
 
   for (const name of [ACCESS_COOKIE, REFRESH_COOKIE, ROLE_COOKIE, ACCOUNT_STATUS_COOKIE]) {
     response.cookies.set(name, "", {
       ...commonCookieOptions,
+      maxAge: 0,
+    });
+    response.cookies.set(name, "", {
+      ...hostOnlyCookieOptions,
       maxAge: 0,
     });
   }

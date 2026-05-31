@@ -2,8 +2,18 @@ import axios from 'axios';
 import { notifyAuthExpired } from '@/lib/authNavigation';
 import { useAuthStore } from '@/store/auth';
 
+const getApiBaseUrl = () => {
+  if (typeof window === 'undefined') return '/api/v1';
+
+  const configuredUrl = process.env.NEXT_PUBLIC_API_URL;
+  const hostname = window.location.hostname;
+  const isJivaraDomain = hostname === 'jivara.web.id' || hostname.endsWith('.jivara.web.id');
+
+  return configuredUrl && isJivaraDomain ? configuredUrl.replace(/\/$/, '') : '/api/v1';
+};
+
 const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL: getApiBaseUrl(),
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',

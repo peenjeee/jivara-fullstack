@@ -4,6 +4,7 @@ import { db } from "../db";
 import { activityReads, medicationLogs, medicationSchedules, notifications, nurses, patientNurseAssignments, patients, users } from "../db/schema";
 import { AccessUser, getOrganizationIdForUser, patientScopeCondition, scopedPatientFilter } from "./access-control.service";
 import { buildAdherenceStatsByPatientId } from "./adherence.service";
+import { getCached, setCached } from "./cache.service";
 import { getMedicationScheduleSummaryForPatients } from "./medication-schedule.service";
 
 type PatientStatus = "On Ideal Schedule" | "Lagging Behind" | "Need Special Attention" | "Complete" | "Nonaktif";
@@ -56,6 +57,8 @@ type MedicationDashboardLogRow = {
 };
 
 const previewLimit = 5;
+const dashboardCacheTtlMs = Number(process.env.ADMIN_DASHBOARD_CACHE_TTL_MS || 15_000);
+const getDashboardCacheScope = (user?: AccessUser) => `${user?.id || "anonymous"}:${user?.role || "none"}`;
 
 type PatientAssignmentCandidate = {
   id: string;
@@ -361,7 +364,7 @@ const listPriorityNotifications = async (user: AccessUser | undefined, patientRo
   }));
 };
 
-export const getAdminDashboardData = async (user?: AccessUser) => {
+const buildAdminDashboardData = async (user?: AccessUser) => {
   const [nurseRows, patientRows, totalPatients] = await Promise.all([
     listScopedNurses(user),
     listScopedPatients(user),
@@ -456,7 +459,17 @@ export const getAdminDashboardData = async (user?: AccessUser) => {
   };
 };
 
-export const getNurseDashboardSummary = async (user?: AccessUser) => {
+export const getAdminDashboardData = async (user?: AccessUser) => {
+  const cacheKey = `admin-dashboard:overview:${getDashboardCacheScope(user)}`;
+  const cached = getCached<Awaited<ReturnType<typeof buildAdminDashboardData>>>(cacheKey);
+  if (cached) return cached;
+
+  const result = await buildAdminDashboardData(user);
+  setCached(cacheKey, result, dashboardCacheTtlMs);
+  return result;
+};
+
+const buildNurseDashboardSummary = async (user?: AccessUser) => {
   const scope = await patientScopeCondition(user);
   if (!scope.allowed) {
     return {
@@ -517,4 +530,14 @@ export const getNurseDashboardSummary = async (user?: AccessUser) => {
     warningCriticalNotifications: Number(notificationRows[0]?.total || 0),
     overallAdherence,
   };
+};
+
+export const getNurseDashboardSummary = async (user?: AccessUser) => {
+  const cacheKey = `admin-dashboard:nurse-summary:${getDashboardCacheScope(user)}`;
+  const cached = getCached<Awaited<ReturnType<typeof buildNurseDashboardSummary>>>(cacheKey);
+  if (cached) return cached;
+
+  const result = await buildNurseDashboardSummary(user);
+  setCached(cacheKey, result, dashboardCacheTtlMs);
+  return result;
 };
