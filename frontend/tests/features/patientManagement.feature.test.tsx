@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import PatientListPage from "@/components/patients/PatientListPage";
+import { __resetPatientListViewCache } from "@/components/patients/usePatientList";
 import { getNursesFromApi } from "@/lib/nurseApi";
 import { assignPatientToNursesViaApi, createPatientViaApi, deactivatePatientViaApi, getPatientPageFromApi, getPatientsFromApi } from "@/lib/patientApi";
 import { showConfirm, showError, showToast } from "@/lib/swal";
@@ -58,6 +59,7 @@ describe("patient management feature", () => {
     vi.mocked(showConfirm).mockReset();
     vi.mocked(showError).mockClear();
     vi.mocked(showToast).mockClear();
+    __resetPatientListViewCache();
     useNurseStore.setState({ nurses: [] });
   });
 

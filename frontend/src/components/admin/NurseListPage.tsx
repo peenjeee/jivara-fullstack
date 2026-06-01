@@ -126,8 +126,10 @@ export default function NurseListPage() {
         currentPage: page,
       };
     } catch {
-      dispatch({ type: "patch", payload: { pageNurses: [], totalNurses: 0 } });
-      setNurses([]);
+      if (!stateRef.current.hasLoadedNurses) {
+        dispatch({ type: "patch", payload: { pageNurses: [], totalNurses: 0 } });
+        setNurses([]);
+      }
     } finally {
       dispatch({ type: "patch", payload: { hasLoadedNurses: true, isLoading: false } });
     }
@@ -136,7 +138,7 @@ export default function NurseListPage() {
   const isInitialLoad = useRef(true);
 
   useEffect(() => {
-    const forceRefresh = isInitialLoad.current;
+    const forceRefresh = isInitialLoad.current && !nurseListViewCache;
     isInitialLoad.current = false;
     void loadNursePage(currentPage, forceRefresh);
   }, [currentPage, loadNursePage]);

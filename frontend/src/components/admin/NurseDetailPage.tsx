@@ -63,17 +63,11 @@ function NurseDetailPageContent({ nurseId }: NurseDetailPageProps) {
     || !controller.state.hasLoadedPatients
     || !controller.state.hasLoadedPatientSummary
     || !controller.state.hasLoadedActivities;
-  const isInitialDetailLoading = !controller.state.hasLoadedPatients
-    || !controller.state.hasLoadedPatientSummary
-    || !controller.state.hasLoadedActivities;
-
   return (
     <DashboardPageShell>
       <DashboardPageHeader title="Detail Perawat" />
 
-      {isInitialDetailLoading
-        ? <NurseOverviewSkeleton />
-        : <NurseOverviewSection nurse={controller.nurse} shouldAnimate={controller.shouldAnimate} isDeleting={controller.state.isDeleting} isDeleteDisabled={isDeleteDisabled} totalAssignedPatientCount={controller.state.totalAssignedPatientCount} onDelete={controller.handleDelete} />}
+      <NurseOverviewSection nurse={controller.nurse} shouldAnimate={controller.shouldAnimate} isDeleting={controller.state.isDeleting} isDeleteDisabled={isDeleteDisabled} totalAssignedPatientCount={controller.state.totalAssignedPatientCount} onDelete={controller.handleDelete} />
 
       {controller.state.isLoadingPatientSummary && !controller.state.hasLoadedPatientSummary
         ? <SummaryCardsSkeleton count={controller.isAdminView ? 3 : 4} />
@@ -113,10 +107,6 @@ function NurseDetailPageContent({ nurseId }: NurseDetailPageProps) {
       <ActivityDetailModal activity={controller.state.selectedActivity} onClose={() => controller.setSelectedActivity(null)} onViewFoodScan={() => controller.setSelectedActivity(null)} onViewSchedule={() => controller.setSelectedActivity(null)} />
     </DashboardPageShell>
   );
-}
-
-function NurseOverviewSkeleton() {
-  return <div className="mt-6 h-52 animate-pulse rounded-[32px] bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)]" />;
 }
 
 function NurseOverviewSection({ nurse, shouldAnimate, isDeleting, isDeleteDisabled, totalAssignedPatientCount, onDelete }: { readonly nurse: NurseRecord; readonly shouldAnimate: boolean; readonly isDeleting: boolean; readonly isDeleteDisabled: boolean; readonly totalAssignedPatientCount: number; readonly onDelete: () => void }) {

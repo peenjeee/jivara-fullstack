@@ -71,6 +71,8 @@ VAPID_SUBJECT=mailto:admin@jivara.app
 | `ACCESS_SCOPE_CACHE_TTL_MS` | Optional | Access-scope lookup cache, default `5000` |
 | `ADHERENCE_CACHE_TTL_MS` | Optional | Expensive adherence calculation cache, default `10000` |
 | `DASHBOARD_CACHE_TTL_MS` | Optional | Admin and nurse dashboard response cache, default `10000` |
+| `API_RATE_LIMIT_MAX` | Optional | Global production API request limit per window, default `600` |
+| `API_RATE_LIMIT_WINDOW_MS` | Optional | Global production API rate-limit window, default `900000` |
 | `FOOD_AI_INFERENCE_URL` | Optional | Endpoint YOLO food detection |
 | `FOOD_AI_TIMEOUT_MS` | Optional | Timeout inference service |
 | `FOOD_AI_ALLOW_LOCAL_FALLBACK` | Optional | `true` hanya untuk local fallback |

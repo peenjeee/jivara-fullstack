@@ -479,12 +479,13 @@ export const getPatientDetailFromApi = async (patientId: string, options: { read
     const detail = response.data.data;
 
     const patientFinal = mapPatient({ ...detail, createdAt: detail.registeredAt ?? detail.createdAt });
-    const schedules = await getPatientSchedulesFromApi(patientFinal)
-      .catch(() => (detail.activeMedications?.map((medication) => mapMedication(patientFinal, { ...medication, patientId: patientFinal.id, stock: 1, reminderEnabled: true, isActive: true })) ?? []));
-
-    const scans = detail.totalFoodScans === 0
-      ? []
-      : await getFoodScansForPatientFromApi(patientId, patientDetailPreviewLimit).catch(() => []);
+    const [schedules, scans] = await Promise.all([
+      getPatientSchedulesFromApi(patientFinal)
+        .catch(() => (detail.activeMedications?.map((medication) => mapMedication(patientFinal, { ...medication, patientId: patientFinal.id, stock: 1, reminderEnabled: true, isActive: true })) ?? [])),
+      detail.totalFoodScans === 0
+        ? Promise.resolve([])
+        : getFoodScansForPatientFromApi(patientId, patientDetailPreviewLimit).catch(() => []),
+    ]);
     const activityResult = await getPatientActivitiesFromApi(patientFinal, scans, detail.totalFoodScans ?? scans.length, patientDetailPreviewLimit)
       .catch(() => ({ activities: [], activityDistribution: getActivityDistribution([]) }));
 

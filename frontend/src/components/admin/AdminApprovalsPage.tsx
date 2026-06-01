@@ -75,8 +75,8 @@ export default function AdminApprovalsPage() {
       </m.div>}
 
       {!approvals.loadError && <m.section className="mt-6 overflow-hidden rounded-3xl bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)]" {...getDashboardEntranceMotion(shouldAnimate, 0.2, 24)}>
-        {approvals.loading ? <ApprovalSkeleton /> : <ApprovalList approvals={approvals.paginatedApprovals} activeFilter={approvals.filter} processingId={approvals.processingId} onApprove={approvals.handleApprove} onActivate={approvals.handleActivate} onSuspend={approvals.handleSuspend} onRestore={approvals.handleRestore} onReject={approvals.setRejectingUser} />}
-        {!approvals.loading && <PatientPagination
+        {approvals.loading && !approvals.hasLoadedApprovals ? <ApprovalSkeleton /> : <ApprovalList approvals={approvals.paginatedApprovals} activeFilter={approvals.filter} processingId={approvals.processingId} onApprove={approvals.handleApprove} onActivate={approvals.handleActivate} onSuspend={approvals.handleSuspend} onRestore={approvals.handleRestore} onReject={approvals.setRejectingUser} />}
+        {approvals.hasLoadedApprovals && <PatientPagination
           currentPage={approvals.currentPage}
           totalPages={approvals.totalPages}
           totalItems={approvals.totalApprovals}

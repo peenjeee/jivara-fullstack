@@ -383,13 +383,15 @@ export const getPatientActivityLogData = async (monthDate = new Date(), options:
   if (activeRequest) return activeRequest;
 
   const request = (async () => {
-    const baseData = await getPatientScheduleBaseData({ scheduleLimit: patientActivityScheduleLimit, forceRefresh: options.forceRefresh, loadAllSchedulePages: true });
-    const [logResponse, scans] = await Promise.all([
-      getMedicationLogsForMonth(baseData.patient.id, monthDate),
-      getFoodScansForPatientMonth(baseData.patient.id, monthDate).catch(() => []),
+    const patient = await getCurrentPatientFromApi();
+    const [schedules, logResponse, scans] = await Promise.all([
+      getSchedulesForPatientsFromApi([patient], { limit: patientActivityScheduleLimit, forceRefresh: options.forceRefresh, loadAllPages: true }),
+      getMedicationLogsForMonth(patient.id, monthDate),
+      getFoodScansForPatientMonth(patient.id, monthDate).catch(() => []),
     ]);
     const data = {
-      ...baseData,
+      patient,
+      schedules: schedules.filter((schedule) => schedule.patientId === patient.id),
       medicationLogs: logResponse,
     };
 

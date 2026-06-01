@@ -59,8 +59,7 @@ export function useAdminApprovals(canLoad: boolean) {
 
   const loadApprovals = useCallback(async (page = currentPage, forceRefresh = false) => {
     const query = debouncedSearch.trim();
-    const canUseVisibleCache = !forceRefresh
-      && approvalsViewCache?.currentPage === page
+    const canUseVisibleCache = approvalsViewCache?.currentPage === page
       && approvalsViewCache.search.trim() === query
       && approvalsViewCache.filter === filter;
     setLoading(!canUseVisibleCache);
@@ -110,20 +109,22 @@ export function useAdminApprovals(canLoad: boolean) {
       };
     } catch (error) {
       setLoadError(true);
-      setApprovals([]);
-      setSummary(emptySummary);
-      setTotalApprovals(0);
+      if (!hasLoadedApprovals) {
+        setApprovals([]);
+        setSummary(emptySummary);
+        setTotalApprovals(0);
+      }
       showError(getApiErrorMessage(error, "Gagal memuat daftar pengajuan admin."));
     } finally {
       setHasLoadedApprovals(true);
       setHasLoadedSummary(true);
       setLoading(false);
     }
-  }, [currentPage, debouncedSearch, filter, search]);
+  }, [currentPage, debouncedSearch, filter, hasLoadedApprovals, search]);
 
   useEffect(() => {
     if (!canLoad) return;
-    const forceRefresh = isInitialLoad.current;
+    const forceRefresh = isInitialLoad.current && !approvalsViewCache;
     isInitialLoad.current = false;
     void Promise.resolve().then(() => loadApprovals(currentPage, forceRefresh));
   }, [canLoad, currentPage, loadApprovals]);

@@ -53,6 +53,7 @@ export function useScheduleManager({ initialPatientId = "", initialPatientName =
   const [hasLoadedSummary, setHasLoadedSummary] = useState(Boolean(scheduleManagerViewCache));
   const hasLoadedSummaryRef = useRef(Boolean(scheduleManagerViewCache));
   const [processingAction, setProcessingAction] = useState<string | null>(null);
+  const isInitialLoad = useRef(true);
   const debouncedSearch = useDebouncedValue(search);
 
   const ensureScheduleFormPatients = useCallback(async () => {
@@ -69,8 +70,7 @@ export function useScheduleManager({ initialPatientId = "", initialPatientName =
     const nextFilter = overrides?.activeFilter ?? activeFilter;
     const status = nextFilter === "Nonaktif" ? "inactive" : nextFilter === "all" ? "all" : "active";
     const adherenceStatus = nextFilter === "all" || nextFilter === "Nonaktif" ? undefined : nextFilter;
-    const canUseVisibleCache = !forceRefresh
-      && scheduleManagerViewCache?.currentPage === page
+    const canUseVisibleCache = scheduleManagerViewCache?.currentPage === page
       && scheduleManagerViewCache.search === nextSearch
       && scheduleManagerViewCache.activeFilter === nextFilter;
     setIsLoading(!canUseVisibleCache);
@@ -104,9 +104,11 @@ export function useScheduleManager({ initialPatientId = "", initialPatientName =
         currentPage: page,
       };
     } catch {
-      setSchedules([]);
-      setPatients([]);
-      setTotalPatients(0);
+      if (!hasLoadedSchedules) {
+        setSchedules([]);
+        setPatients([]);
+        setTotalPatients(0);
+      }
       setIsSummaryLoading(false);
       hasLoadedSummaryRef.current = true;
       setHasLoadedSummary(true);
@@ -114,10 +116,12 @@ export function useScheduleManager({ initialPatientId = "", initialPatientName =
       setHasLoadedSchedules(true);
       setIsLoading(false);
     }
-  }, [activeFilter, debouncedSearch]);
+  }, [activeFilter, debouncedSearch, hasLoadedSchedules]);
 
   useEffect(() => {
-    const id = setTimeout(() => void loadSchedulePage(currentPage, true));
+    const forceRefresh = isInitialLoad.current && !scheduleManagerViewCache;
+    isInitialLoad.current = false;
+    const id = setTimeout(() => void loadSchedulePage(currentPage, forceRefresh));
     return () => clearTimeout(id);
   }, [currentPage, loadSchedulePage]);
 

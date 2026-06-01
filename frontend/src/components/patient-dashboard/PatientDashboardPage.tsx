@@ -97,7 +97,7 @@ export default function PatientDashboardPage() {
   useEffect(() => {
     let isMounted = true;
 
-    getPatientDashboardOverviewData({ forceRefresh: true })
+    getPatientDashboardOverviewData()
       .then((data) => {
         if (!isMounted) return;
         patientDashboardCache = { patient: data.patient, schedules: data.schedules, adherenceStats: data.adherenceStats };
@@ -106,8 +106,10 @@ export default function PatientDashboardPage() {
       })
       .catch(() => {
         if (!isMounted) return;
-        dispatch({ type: "loadFailure" });
-        setPatientId(null);
+        if (!patientDashboardCache) {
+          dispatch({ type: "loadFailure" });
+          setPatientId(null);
+        }
       })
       .finally(() => {
         if (!isMounted) return;

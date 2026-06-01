@@ -188,25 +188,25 @@ function nurseDetailReducer(state: NurseDetailState, action: NurseDetailAction):
     case "reset_patient_filters":
       return { ...state, patientSearch: "", patientFilter: "all", patientPage: 1, selectedPatientIds: [] };
     case "set_activity_controls":
-      return { ...state, activitySearch: action.reset ? "" : action.search ?? state.activitySearch, activityQuickFilter: action.reset ? "all" : action.quickFilter ?? state.activityQuickFilter, activityCategory: action.reset ? "all" : action.category ?? state.activityCategory, activityDate: action.reset ? "" : action.date ?? state.activityDate, visibleActivityCount: loadBatchSize, hasLoadedActivities: false, isLoadingActivities: true };
+      return { ...state, activitySearch: action.reset ? "" : action.search ?? state.activitySearch, activityQuickFilter: action.reset ? "all" : action.quickFilter ?? state.activityQuickFilter, activityCategory: action.reset ? "all" : action.category ?? state.activityCategory, activityDate: action.reset ? "" : action.date ?? state.activityDate, visibleActivityCount: loadBatchSize, isLoadingActivities: true };
     case "patients_loading":
       return { ...state, isLoadingPatients: action.value };
     case "patients_loaded":
       return { ...state, assignedPatients: action.patients, totalPatientResults: action.totalPatientResults, patientPage: action.patientPage, summaryPatients: action.summaryPatients ?? state.summaryPatients, totalAssignedPatientCount: action.totalAssignedPatientCount ?? state.totalAssignedPatientCount, hasLoadedPatients: true, hasLoadedPatientSummary: action.summaryPatients ? true : state.hasLoadedPatientSummary, isLoadingPatients: false, isLoadingPatientSummary: action.summaryPatients ? false : state.isLoadingPatientSummary };
     case "patients_failed":
-      return { ...state, assignedPatients: [], totalPatientResults: 0, hasLoadedPatients: true, isLoadingPatients: false };
+      return state.hasLoadedPatients ? { ...state, isLoadingPatients: false } : { ...state, assignedPatients: [], totalPatientResults: 0, hasLoadedPatients: true, isLoadingPatients: false };
     case "patient_summary_loading":
       return { ...state, isLoadingPatientSummary: action.value };
     case "patient_summary_loaded":
       return { ...state, summaryPatients: action.patients, totalAssignedPatientCount: action.totalAssignedPatientCount, hasLoadedPatientSummary: true, isLoadingPatientSummary: false };
     case "patient_summary_failed":
-      return { ...state, summaryPatients: [], totalAssignedPatientCount: 0, hasLoadedPatientSummary: true, isLoadingPatientSummary: false };
+      return state.hasLoadedPatientSummary ? { ...state, isLoadingPatientSummary: false } : { ...state, summaryPatients: [], totalAssignedPatientCount: 0, hasLoadedPatientSummary: true, isLoadingPatientSummary: false };
     case "activities_loading":
       return { ...state, isLoadingActivities: action.value };
     case "activities_loaded":
       return { ...state, activities: action.activities, activityPage: action.activityPage, totalActivities: action.totalActivities, visibleActivityCount: loadBatchSize, hasLoadedActivities: true, isLoadingActivities: false };
     case "activities_failed":
-      return { ...state, activities: [], activityPage: 1, totalActivities: 0, hasLoadedActivities: true, isLoadingActivities: false };
+      return state.hasLoadedActivities ? { ...state, isLoadingActivities: false } : { ...state, activities: [], activityPage: 1, totalActivities: 0, hasLoadedActivities: true, isLoadingActivities: false };
     case "load_more_activities_start":
       return { ...state, isLoadingMoreActivities: true };
     case "load_more_activities_done":
@@ -242,7 +242,7 @@ export function useNurseDetailPageController(nurseId: string) {
     if (cachedNurse) dispatch({ type: "resolve_nurse", nurse: cachedNurse });
     let isMounted = true;
     dispatch({ type: "set_nurse_loading", value: !cachedNurse });
-    void getNurseByIdFromApi(nurseId, { forceRefresh: true })
+    void getNurseByIdFromApi(nurseId)
       .then((nextNurse) => {
         if (!isMounted) return;
         dispatch({ type: "resolve_nurse", nurse: nextNurse });
@@ -290,13 +290,13 @@ export function useNurseDetailPageController(nurseId: string) {
 
   useEffect(() => {
     if (!hasAuthHydrated || (dashboardRole !== "admin" && dashboardRole !== "nurse")) return;
-    void loadAssignedPatients(state.patientPage, true);
+    void loadAssignedPatients(state.patientPage);
   }, [dashboardRole, hasAuthHydrated, loadAssignedPatients, state.patientPage]);
 
   useEffect(() => {
     if (!hasAuthHydrated || (dashboardRole !== "admin" && dashboardRole !== "nurse")) return;
     if (!state.hasLoadedPatients || state.hasLoadedPatientSummary) return;
-    void loadPatientSummary(true);
+    void loadPatientSummary();
   }, [dashboardRole, hasAuthHydrated, loadPatientSummary, state.hasLoadedPatientSummary, state.hasLoadedPatients]);
 
   const loadActivities = useCallback(async () => {

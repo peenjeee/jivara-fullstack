@@ -56,6 +56,11 @@ const allowedOrigins = (process.env.FRONTEND_URL || defaultAllowedOrigins.join('
   .filter(Boolean);
 const allowedOriginSet = new Set(allowedOrigins);
 
+const getPositiveIntegerEnv = (key: string, fallback: number) => {
+  const value = Number(process.env[key]);
+  return Number.isFinite(value) && value > 0 ? Math.trunc(value) : fallback;
+};
+
 // CORS must run before rate limiting so preflight requests get CORS headers.
 app.use(cors({
   origin: (origin, callback) => {
@@ -80,14 +85,18 @@ app.use(helmet({
 
 // Security: Rate limiting untuk mencegah brute-force & abuse
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 menit
-  max: 100, // Maksimal 100 request per IP per window
+  windowMs: getPositiveIntegerEnv('API_RATE_LIMIT_WINDOW_MS', 15 * 60 * 1000),
+  limit: getPositiveIntegerEnv('API_RATE_LIMIT_MAX', 600),
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => process.env.NODE_ENV !== 'production'
+    || req.method === 'OPTIONS'
+    || req.path === '/v1/activity-events'
     || req.path === '/v1/auth/login'
     || req.path === '/v1/auth/register'
-    || req.path === '/v1/auth/status',
+    || req.path === '/v1/auth/status'
+    || req.path === '/v1/auth/refresh'
+    || req.path === '/v1/auth/logout',
   message: {
     status: 'gagal',
     message: 'Terlalu banyak permintaan, silakan coba lagi nanti.',

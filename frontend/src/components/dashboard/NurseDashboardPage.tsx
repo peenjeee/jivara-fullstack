@@ -25,7 +25,7 @@ export default function NurseDashboardPage() {
   useEffect(() => {
     let isMounted = true;
 
-    getNurseDashboardData({ forceRefresh: true })
+    getNurseDashboardData()
       .then((data) => {
         if (!isMounted) return;
         nurseDashboardCache = data;
