@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gt, ilike, inArray, lte } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray, sql } from "drizzle-orm";
 import { db } from "../db";
 import { medicationSchedules, medicineCatalog, patients } from "../db/schema";
 import {
@@ -86,37 +86,19 @@ const invalidateScheduleDependentCaches = () => {
 export const getMedicationScheduleSummaryForPatients = async (patientIds: readonly string[]) => {
   if (patientIds.length === 0) return { active: 0, completed: 0, reminders: 0 };
 
-  const [activeRows, completedRows, reminderRows] = await Promise.all([
-    db
-      .select({ total: count() })
-      .from(medicationSchedules)
-      .where(and(
-              inArray(medicationSchedules.patientId, [...patientIds]),
-              eq(medicationSchedules.isActive, true),
-              gt(medicationSchedules.stock, 0),
-            )),
-    db
-      .select({ total: count() })
-      .from(medicationSchedules)
-      .where(and(
-        inArray(medicationSchedules.patientId, [...patientIds]),
-        lte(medicationSchedules.stock, 0),
-      )),
-    db
-      .select({ total: count() })
-      .from(medicationSchedules)
-      .where(and(
-        inArray(medicationSchedules.patientId, [...patientIds]),
-        eq(medicationSchedules.reminderEnabled, true),
-        eq(medicationSchedules.isActive, true),
-        gt(medicationSchedules.stock, 0),
-      )),
-  ]);
+  const [summary] = await db
+    .select({
+      active: sql<number>`count(*) filter (where ${medicationSchedules.isActive} = true and ${medicationSchedules.stock} > 0)::int`,
+      completed: sql<number>`count(*) filter (where ${medicationSchedules.stock} <= 0)::int`,
+      reminders: sql<number>`count(*) filter (where ${medicationSchedules.reminderEnabled} = true and ${medicationSchedules.isActive} = true and ${medicationSchedules.stock} > 0)::int`,
+    })
+    .from(medicationSchedules)
+    .where(inArray(medicationSchedules.patientId, [...patientIds]));
 
   return {
-    active: activeRows[0]?.total || 0,
-    completed: completedRows[0]?.total || 0,
-    reminders: reminderRows[0]?.total || 0,
+    active: Number(summary?.active || 0),
+    completed: Number(summary?.completed || 0),
+    reminders: Number(summary?.reminders || 0),
   };
 };
 

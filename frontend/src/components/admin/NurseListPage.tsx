@@ -90,6 +90,7 @@ export default function NurseListPage() {
   });
   const { pageNurses, totalNurses, search, filter, currentPage, isModalOpen, editingNurse, isLoading, hasLoadedNurses, processingAction } = state;
   const stateRef = useRef(state);
+  const requestSeqRef = useRef(0);
   const debouncedSearch = useDebouncedValue(search);
 
   useEffect(() => {
@@ -104,6 +105,8 @@ export default function NurseListPage() {
   const loadNursePage = useCallback(async (page: number, forceRefresh = false) => {
     if (!hasAuthHydrated || (dashboardRole !== "admin" && dashboardRole !== "nurse")) return;
 
+    const requestSeq = requestSeqRef.current + 1;
+    requestSeqRef.current = requestSeq;
     const canUseVisibleCache = nurseListViewCache?.currentPage === page
       && nurseListViewCache.search === debouncedSearch
       && nurseListViewCache.filter === filter;
@@ -116,22 +119,37 @@ export default function NurseListPage() {
         status: getNurseStatusQuery(filter),
         forceRefresh,
       });
-      dispatch({ type: "patch", payload: { pageNurses: result.nurses, totalNurses: result.meta.total } });
-      setNurses(result.nurses);
-      nurseListViewCache = {
-        pageNurses: result.nurses,
-        totalNurses: result.meta.total,
-        search: debouncedSearch,
-        filter,
-        currentPage: page,
-      };
+      if (requestSeq === requestSeqRef.current) {
+        dispatch({ type: "patch", payload: { pageNurses: result.nurses, totalNurses: result.meta.total } });
+        setNurses(result.nurses);
+        const totalPagesForQuery = Math.max(1, Math.ceil(result.meta.total / pageSize));
+        nurseListViewCache = {
+          pageNurses: result.nurses,
+          totalNurses: result.meta.total,
+          search: debouncedSearch,
+          filter,
+          currentPage: page,
+        };
+        if (!forceRefresh) {
+          const status = getNurseStatusQuery(filter);
+          const adjacentPages = [page + 1, page - 1].filter((nextPage) => nextPage >= 1 && nextPage <= totalPagesForQuery);
+          void Promise.all(adjacentPages.map((nextPage) => getNursesPageFromApi({
+            page: nextPage,
+            limit: pageSize,
+            search: debouncedSearch,
+            status,
+          }).catch(() => undefined)));
+        }
+      }
     } catch {
-      if (!stateRef.current.hasLoadedNurses) {
+      if (requestSeq === requestSeqRef.current && !stateRef.current.hasLoadedNurses) {
         dispatch({ type: "patch", payload: { pageNurses: [], totalNurses: 0 } });
         setNurses([]);
       }
     } finally {
-      dispatch({ type: "patch", payload: { hasLoadedNurses: true, isLoading: false } });
+      if (requestSeq === requestSeqRef.current) {
+        dispatch({ type: "patch", payload: { hasLoadedNurses: true, isLoading: false } });
+      }
     }
   }, [dashboardRole, debouncedSearch, filter, hasAuthHydrated, setNurses]);
 

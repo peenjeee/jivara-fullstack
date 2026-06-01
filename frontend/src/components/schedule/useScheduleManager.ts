@@ -54,6 +54,7 @@ export function useScheduleManager({ initialPatientId = "", initialPatientName =
   const hasLoadedSummaryRef = useRef(Boolean(scheduleManagerViewCache));
   const [processingAction, setProcessingAction] = useState<string | null>(null);
   const isInitialLoad = useRef(true);
+  const requestSeqRef = useRef(0);
   const debouncedSearch = useDebouncedValue(search);
 
   const ensureScheduleFormPatients = useCallback(async () => {
@@ -66,6 +67,8 @@ export function useScheduleManager({ initialPatientId = "", initialPatientName =
   }, []);
 
   const loadSchedulePage = useCallback(async (page: number, forceRefresh = false, overrides?: { search?: string; activeFilter?: ScheduleFilter }) => {
+    const requestSeq = requestSeqRef.current + 1;
+    requestSeqRef.current = requestSeq;
     const nextSearch = overrides?.search ?? debouncedSearch;
     const nextFilter = overrides?.activeFilter ?? activeFilter;
     const status = nextFilter === "Nonaktif" ? "inactive" : nextFilter === "all" ? "all" : "active";
@@ -83,38 +86,55 @@ export function useScheduleManager({ initialPatientId = "", initialPatientName =
         adherenceStatus,
         forceRefresh,
       });
-      setPatients(schedulePage.patients);
-      setSchedules(schedulePage.schedules);
-      setTotalPatients(schedulePage.meta.total);
-      const shouldRefreshSummary = !nextSearch && nextFilter === "all";
-      const nextSummary = shouldRefreshSummary
-        ? schedulePage.meta.summary ?? scheduleManagerViewCache?.scheduleSummary ?? defaultScheduleSummary
-        : scheduleManagerViewCache?.scheduleSummary ?? defaultScheduleSummary;
-      if (shouldRefreshSummary || !hasLoadedSummaryRef.current) setScheduleSummary(nextSummary);
-      hasLoadedSummaryRef.current = true;
-      setHasLoadedSummary(true);
-      setIsSummaryLoading(false);
-      scheduleManagerViewCache = {
-        schedules: schedulePage.schedules,
-        patients: schedulePage.patients,
-        totalPatients: schedulePage.meta.total,
-        scheduleSummary: nextSummary,
-        search: nextSearch,
-        activeFilter: nextFilter,
-        currentPage: page,
-      };
+      if (requestSeq === requestSeqRef.current) {
+        setPatients(schedulePage.patients);
+        setSchedules(schedulePage.schedules);
+        setTotalPatients(schedulePage.meta.total);
+        const shouldRefreshSummary = !nextSearch && nextFilter === "all";
+        const nextSummary = shouldRefreshSummary
+          ? schedulePage.meta.summary ?? scheduleManagerViewCache?.scheduleSummary ?? defaultScheduleSummary
+          : scheduleManagerViewCache?.scheduleSummary ?? defaultScheduleSummary;
+        if (shouldRefreshSummary || !hasLoadedSummaryRef.current) setScheduleSummary(nextSummary);
+        hasLoadedSummaryRef.current = true;
+        setHasLoadedSummary(true);
+        setIsSummaryLoading(false);
+        const totalPagesForQuery = Math.max(1, Math.ceil(schedulePage.meta.total / pageSize));
+        scheduleManagerViewCache = {
+          schedules: schedulePage.schedules,
+          patients: schedulePage.patients,
+          totalPatients: schedulePage.meta.total,
+          scheduleSummary: nextSummary,
+          search: nextSearch,
+          activeFilter: nextFilter,
+          currentPage: page,
+        };
+        if (!forceRefresh) {
+          const adjacentPages = [page + 1, page - 1].filter((nextPage) => nextPage >= 1 && nextPage <= totalPagesForQuery);
+          void Promise.all(adjacentPages.map((nextPage) => getSchedulePatientGroupsPageFromApi({
+            page: nextPage,
+            limit: pageSize,
+            search: nextSearch,
+            status,
+            adherenceStatus,
+          }).catch(() => undefined)));
+        }
+      }
     } catch {
-      if (!hasLoadedSchedules) {
+      if (requestSeq === requestSeqRef.current && !hasLoadedSchedules) {
         setSchedules([]);
         setPatients([]);
         setTotalPatients(0);
       }
-      setIsSummaryLoading(false);
-      hasLoadedSummaryRef.current = true;
-      setHasLoadedSummary(true);
+      if (requestSeq === requestSeqRef.current) {
+        setIsSummaryLoading(false);
+        hasLoadedSummaryRef.current = true;
+        setHasLoadedSummary(true);
+      }
     } finally {
-      setHasLoadedSchedules(true);
-      setIsLoading(false);
+      if (requestSeq === requestSeqRef.current) {
+        setHasLoadedSchedules(true);
+        setIsLoading(false);
+      }
     }
   }, [activeFilter, debouncedSearch, hasLoadedSchedules]);
 

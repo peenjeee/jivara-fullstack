@@ -18,7 +18,7 @@ import DashboardBottomNav from "./DashboardBottomNav";
 import DashboardNavbar from "./DashboardNavbar";
 import DashboardRouteFallback from "./DashboardRouteFallback";
 import { getFallbackPathForRole, isPathAllowedForRole } from "./access";
-import { getDashboardRole } from "./navigation";
+import { getDashboardBottomNavItems, getDashboardNavItems, getDashboardRole } from "./navigation";
 
 interface DashboardLayoutProps {
   readonly children: ReactNode;
@@ -40,7 +40,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const isRestoringSessionRef = useRef(false);
   const isStandalonePwa = useIsStandalonePwa();
   const pathname = usePathname();
-  const { replace } = useRouter();
+  const { prefetch, replace } = useRouter();
   const userRole = user?.role;
   const dashboardRole = getDashboardRole(userRole);
 
@@ -209,6 +209,24 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [hasHydrated, syncCurrentUser, userRole]);
+
+  useEffect(() => {
+    if (!hasHydrated || !userRole || isLoggingOut || isNavigatingAwayRef.current) return;
+
+    const dashboardHrefs = new Set<string>([
+      getFallbackPathForRole(userRole),
+      ...getDashboardNavItems(dashboardRole).map((item) => item.href),
+      ...getDashboardBottomNavItems(dashboardRole).map((item) => item.href),
+    ]);
+
+    const timerId = window.setTimeout(() => {
+      dashboardHrefs.forEach((href) => {
+        if (href !== pathname) prefetch?.(href);
+      });
+    }, 250);
+
+    return () => window.clearTimeout(timerId);
+  }, [dashboardRole, hasHydrated, isLoggingOut, pathname, prefetch, userRole]);
 
   useEffect(() => {
     if (!hasHydrated || isLoggingOut || isNavigatingAwayRef.current) return;

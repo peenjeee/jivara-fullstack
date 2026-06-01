@@ -45,6 +45,7 @@ export function usePatientList(onViewPatient: (patientId: string) => void, optio
   const [isLoadingNurses, setIsLoadingNurses] = useState(false);
   const isInitialLoad = useRef(true);
   const hasLoadedPatientsRef = useRef(hasLoadedPatients);
+  const requestSeqRef = useRef(0);
   const debouncedSearch = useDebouncedValue(search);
 
   useEffect(() => {
@@ -52,6 +53,8 @@ export function usePatientList(onViewPatient: (patientId: string) => void, optio
   }, [hasLoadedPatients]);
 
   const loadPatientPage = useCallback(async (page: number, forceRefresh = false, overrides?: { search?: string; activeFilter?: PatientFilter }) => {
+    const requestSeq = requestSeqRef.current + 1;
+    requestSeqRef.current = requestSeq;
     const nextSearch = overrides?.search ?? debouncedSearch;
     const nextFilter = overrides?.activeFilter ?? activeFilter;
     const status = nextFilter === "Nonaktif" ? "inactive" : nextFilter === "all" ? "all" : "active";
@@ -69,23 +72,38 @@ export function usePatientList(onViewPatient: (patientId: string) => void, optio
         adherenceStatus,
         forceRefresh,
       });
-      setPatientRecords(result.patients);
-      setTotalPatients(result.meta.total);
-      patientListViewCache = {
-        patientRecords: result.patients,
-        totalPatients: result.meta.total,
-        search: nextSearch,
-        activeFilter: nextFilter,
-        currentPage: page,
-      };
+      if (requestSeq === requestSeqRef.current) {
+        setPatientRecords(result.patients);
+        setTotalPatients(result.meta.total);
+        const totalPagesForQuery = Math.max(1, Math.ceil(result.meta.total / pageSize));
+        patientListViewCache = {
+          patientRecords: result.patients,
+          totalPatients: result.meta.total,
+          search: nextSearch,
+          activeFilter: nextFilter,
+          currentPage: page,
+        };
+        if (!forceRefresh) {
+          const adjacentPages = [page + 1, page - 1].filter((nextPage) => nextPage >= 1 && nextPage <= totalPagesForQuery);
+          void Promise.all(adjacentPages.map((nextPage) => getPatientPageFromApi({
+            page: nextPage,
+            limit: pageSize,
+            status,
+            search: nextSearch,
+            adherenceStatus,
+          }).catch(() => undefined)));
+        }
+      }
     } catch {
-      if (!hasLoadedPatientsRef.current) {
+      if (requestSeq === requestSeqRef.current && !hasLoadedPatientsRef.current) {
         setPatientRecords([]);
         setTotalPatients(0);
       }
     } finally {
-      setHasLoadedPatients(true);
-      setIsLoading(false);
+      if (requestSeq === requestSeqRef.current) {
+        setHasLoadedPatients(true);
+        setIsLoading(false);
+      }
     }
   }, [activeFilter, debouncedSearch]);
 
