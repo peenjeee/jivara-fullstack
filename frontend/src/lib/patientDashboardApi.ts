@@ -276,7 +276,7 @@ export const getLatestPatientActivityMonth = async (patientId: string) => {
   const latestScanTime = scanPage.data.find((scan) => scan.hasDetectedFood)?.scannedAt;
   const latestTimestamp = [latestLogTime, latestScanTime]
     .filter((timestamp): timestamp is string => Boolean(timestamp && !Number.isNaN(Date.parse(timestamp))))
-    .sort((first, second) => Date.parse(second) - Date.parse(first))[0];
+    .reduce<string | undefined>((latest, timestamp) => (!latest || Date.parse(timestamp) > Date.parse(latest) ? timestamp : latest), undefined);
 
   if (!latestTimestamp) return null;
   const latestDate = new Date(latestTimestamp);

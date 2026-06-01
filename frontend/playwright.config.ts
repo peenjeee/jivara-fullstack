@@ -39,6 +39,7 @@ export default defineConfig({
     reuseExistingServer: false,
     env: {
       NEXT_TELEMETRY_DISABLED: "1",
+      NEXT_IMAGE_UNOPTIMIZED: "1",
       NEXT_PUBLIC_API_URL: "http://127.0.0.1:3001/api",
       NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "test-publishable-key",
