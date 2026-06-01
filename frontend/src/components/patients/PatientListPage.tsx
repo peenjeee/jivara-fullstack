@@ -65,7 +65,7 @@ export default function PatientListPage({ mode = "manage", canDeletePatients = f
         className="mt-6 overflow-hidden rounded-3xl shadow-[0_10px_30px_rgba(15,23,42,0.08)]"
         {...getDashboardEntranceMotion(shouldAnimate, 0.18, 24)}
       >
-        {patientList.isLoading ? <TableDataSkeleton /> : (
+        {patientList.isLoading && !patientList.hasLoadedPatients ? <TableDataSkeleton /> : (
           <>
             <PatientTable patients={patientList.paginatedPatients} actions={patientActions} processingAction={patientList.processingAction} onAction={patientList.handlePatientAction} embedded emptyMessage="Tidak ada data pasien." assignedNurseByPatientId={mode === "readonly" ? patientList.assignedNurseByPatientId : undefined} />
             <PatientPagination currentPage={patientList.currentPage} totalPages={patientList.totalPages} totalItems={patientList.totalPatients} pageSize={patientList.pageSize} onPageChange={patientList.setCurrentPage} />

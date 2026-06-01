@@ -186,7 +186,7 @@ function PatientAssignmentsSection({
       <div className="px-5 pb-5 sm:px-7">
         {loading.isLoading && !loading.hasLoaded ? <ToolbarSkeleton /> : <PatientToolbar search={filters.search} activeFilter={filters.filter} hasActiveFilters={filters.hasActive} framed={false} onSearchChange={onSearchChange} onFilterChange={onFilterChange} onReset={onReset} />}
       </div>
-      {loading.isLoading ? <TableDataSkeleton /> : (
+      {loading.isLoading && !loading.hasLoaded ? <TableDataSkeleton /> : (
         <>
           <div className="overflow-x-auto" data-lenis-prevent>
             <table className="w-full text-left">
@@ -258,7 +258,7 @@ function NurseActivitySection({
         {loading.isLoading && !loading.hasLoaded ? <ToolbarSkeleton /> : <ActivityToolbar search={filters.search} quickFilter={filters.quickFilter} category={filters.category} showNurseFilter={false} showUnreadFilter={false} date={filters.date} hasActiveFilters={filters.hasActive} onSearchChange={onSearchChange} onQuickFilterChange={onQuickFilterChange} onCategoryChange={onCategoryChange} onDateChange={onDateChange} onReset={onReset} />}
       </div>
       <div className="mt-6">
-        {loading.isLoading ? <ActivityDataSkeleton /> : <ActivityFeed activities={data.activities} visibleCount={data.visibleCount} readOnly={data.isAdminView} hasMore={data.hasMore} isLoadingMore={loading.isLoadingMore} onLoadMore={onLoadMore} onMarkRead={onMarkRead} onViewDetail={onViewDetail} />}
+        {loading.isLoading && !loading.hasLoaded ? <ActivityDataSkeleton /> : <ActivityFeed activities={data.activities} visibleCount={data.visibleCount} readOnly={data.isAdminView} hasMore={data.hasMore} isLoadingMore={loading.isLoadingMore} onLoadMore={onLoadMore} onMarkRead={onMarkRead} onViewDetail={onViewDetail} />}
       </div>
     </m.section>
   );

@@ -104,8 +104,7 @@ export default function NurseListPage() {
   const loadNursePage = useCallback(async (page: number, forceRefresh = false) => {
     if (!hasAuthHydrated || (dashboardRole !== "admin" && dashboardRole !== "nurse")) return;
 
-    const canUseVisibleCache = !forceRefresh
-      && nurseListViewCache?.currentPage === page
+    const canUseVisibleCache = nurseListViewCache?.currentPage === page
       && nurseListViewCache.search === debouncedSearch
       && nurseListViewCache.filter === filter;
     dispatch({ type: "patch", payload: { isLoading: !canUseVisibleCache } });
@@ -227,7 +226,7 @@ export default function NurseListPage() {
       </m.div>
 
       <m.section className="mt-6 overflow-hidden rounded-3xl bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)]" {...getDashboardEntranceMotion(shouldAnimate, 0.18, 24)}>
-        {isLoading ? <TableDataSkeleton /> : <>
+        {isLoading && !hasLoadedNurses ? <TableDataSkeleton /> : <>
         <div className="hidden overflow-x-auto sm:block" data-lenis-prevent>
           <table className="w-full text-left">
             <thead className="bg-surface text-xs font-extrabold uppercase tracking-[0.08em] text-muted">

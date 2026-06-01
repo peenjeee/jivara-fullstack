@@ -260,7 +260,7 @@ export function useNurseDetailPageController(nurseId: string) {
 
   const loadAssignedPatients = useCallback(async (page: number, forceRefresh = false) => {
     const cached = nurseDetailViewCache.get(nurseId);
-    const canUseVisibleCache = !forceRefresh && cached?.patientPage === page && cached.patientSearch === debouncedPatientSearch && cached.patientFilter === state.patientFilter;
+    const canUseVisibleCache = cached?.patientPage === page && cached.patientSearch === debouncedPatientSearch && cached.patientFilter === state.patientFilter;
     const patientStatus = state.patientFilter === "Nonaktif" ? "inactive" : state.patientFilter === "all" ? "all" : "active";
     const adherenceStatus = state.patientFilter === "all" || state.patientFilter === "Nonaktif" ? undefined : state.patientFilter;
     dispatch({ type: "patients_loading", value: !canUseVisibleCache });

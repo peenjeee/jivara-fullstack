@@ -46,8 +46,7 @@ export function usePatientList(onViewPatient: (patientId: string) => void, optio
     const nextFilter = overrides?.activeFilter ?? activeFilter;
     const status = nextFilter === "Nonaktif" ? "inactive" : nextFilter === "all" ? "all" : "active";
     const adherenceStatus = nextFilter === "all" || nextFilter === "Nonaktif" ? undefined : nextFilter;
-    const canUseVisibleCache = !forceRefresh
-      && patientListViewCache?.currentPage === page
+    const canUseVisibleCache = patientListViewCache?.currentPage === page
       && patientListViewCache.search === nextSearch
       && patientListViewCache.activeFilter === nextFilter;
     setIsLoading(!canUseVisibleCache);
