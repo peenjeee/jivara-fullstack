@@ -17,6 +17,7 @@ vi.mock("@/lib/axios", () => ({
 }));
 
 vi.mock("@/lib/patientApi", () => ({
+  getCachedCurrentPatientFromApi: vi.fn(() => null),
   getCurrentPatientFromApi: vi.fn(async () => patient),
   getPatientsFromApi: vi.fn(async () => [patient]),
   getPatientDetailFromApi: vi.fn(async () => ({ patient, schedules: [], activities: [], scans: [] })),

@@ -364,9 +364,14 @@ export const getPatientsFromApi = async () => {
   return patientsRequest;
 };
 
-export const getCurrentPatientFromApi = async (): Promise<PatientRecord> => {
+export const getCachedCurrentPatientFromApi = (): PatientRecord | null => {
   const now = Date.now();
-  if (currentPatientCache && currentPatientCache.expiresAt > now) return currentPatientCache.data;
+  return currentPatientCache && currentPatientCache.expiresAt > now ? currentPatientCache.data : null;
+};
+
+export const getCurrentPatientFromApi = async (): Promise<PatientRecord> => {
+  const cachedPatient = getCachedCurrentPatientFromApi();
+  if (cachedPatient) return cachedPatient;
   if (currentPatientRequest) return currentPatientRequest;
 
   currentPatientRequest = api.get<{ data: PatientDetailResponse }>("/patients/me")
