@@ -31,7 +31,7 @@
     "react-webcam": "^7.2.0",
     "sweetalert2": "^11.26.24",
     "sweetalert2-react-content": "^5.1.2",
-    "three": "^0.184.0",
+    "three": "^0.182.0",
     "zustand": "^5.0.12"
   },
   "devDependencies": {
