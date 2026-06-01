@@ -5,6 +5,7 @@ import { AuditLogListQuery } from "../types/audit-log.types";
 import { AccessUser, getAssignedPatientIdsForNurse, getOrganizationIdForUser } from "./access-control.service";
 import { emitActivityChanged } from "./activity-event.service";
 import { APP_TIMEZONE, getAppDateRangeFromQuery } from "../utils/app-timezone";
+import { hiddenActivityActions, hiddenActivityResourceTypes } from "./activity-visibility.service";
 
 type AuditChange = Record<string, unknown>;
 
@@ -77,8 +78,6 @@ const activityCategoryResourceTypes: Record<NonNullable<AuditLogListQuery["activ
   administration: ["user", "admin_approval", "nurse"],
 };
 
-const hiddenActivityResourceTypes = ["notification", "push_subscription", "user_push_subscription"];
-
 const isWarningOrCriticalAction = (action: string) => /failed|critical|missed|deactivated|deleted|warning|updated|resolved|snoozed/i.test(action);
 
 const getSeverityCondition = (severity?: AuditLogListQuery["severity"]) => {
@@ -140,6 +139,7 @@ export const listAuditLogs = async (query: AuditLogListQuery, user?: AccessUser)
 
   if (userRole !== "super_admin") {
     baseConditions.push(notInArray(auditLogs.resourceType, hiddenActivityResourceTypes));
+    baseConditions.push(notInArray(auditLogs.action, hiddenActivityActions));
   }
 
   if (user?.role === "nurse") {

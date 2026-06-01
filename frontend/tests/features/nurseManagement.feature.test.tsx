@@ -4,7 +4,6 @@ import NurseDetailPage from "@/components/admin/NurseDetailPage";
 import NurseListPage from "@/components/admin/NurseListPage";
 import { getNurseByIdFromApi, getNursesFromApi, getNursesPageFromApi, updateNurseViaApi } from "@/lib/nurseApi";
 import { getAuditActivityPageFromApi } from "@/lib/auditLogApi";
-import { getNotificationActivityPageFromApi } from "@/lib/notificationActivitiesApi";
 import { getPatientPageFromApi } from "@/lib/patientApi";
 import { showConfirm, showToast, showWarning } from "@/lib/swal";
 import { useAuthStore } from "@/store/auth";
@@ -33,11 +32,6 @@ vi.mock("@/lib/nurseApi", () => ({
 vi.mock("@/lib/auditLogApi", () => ({
   getCachedAuditActivityPageFromApi: vi.fn(() => null),
   getAuditActivityPageFromApi: vi.fn(),
-}));
-
-vi.mock("@/lib/notificationActivitiesApi", () => ({
-  getCachedNotificationActivityPageFromApi: vi.fn(() => null),
-  getNotificationActivityPageFromApi: vi.fn(),
 }));
 
 vi.mock("@/lib/patientApi", () => ({
@@ -96,7 +90,6 @@ describe("nurse management feature", () => {
     vi.mocked(updateNurseViaApi).mockReset();
     vi.mocked(getPatientPageFromApi).mockReset();
     vi.mocked(getAuditActivityPageFromApi).mockReset();
-    vi.mocked(getNotificationActivityPageFromApi).mockReset();
     vi.mocked(showConfirm).mockReset();
     vi.mocked(showToast).mockClear();
     vi.mocked(showWarning).mockClear();
@@ -143,7 +136,6 @@ describe("nurse management feature", () => {
     vi.mocked(getNurseByIdFromApi).mockResolvedValue(inactiveNurse);
     vi.mocked(getPatientPageFromApi).mockResolvedValue({ patients, meta: { page: 1, limit: 1000, total: 4 } });
     vi.mocked(getAuditActivityPageFromApi).mockResolvedValue({ activities: [], meta: { page: 1, limit: 10, total: 0 } });
-    vi.mocked(getNotificationActivityPageFromApi).mockResolvedValue({ activities: [], meta: { page: 1, limit: 10, total: 0 } });
 
     render(<NurseDetailPage nurseId="NRS-001" />);
 

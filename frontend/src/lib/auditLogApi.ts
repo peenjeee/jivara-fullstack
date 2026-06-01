@@ -1,4 +1,5 @@
 import api from "@/lib/axios";
+import { applyKnownActivityReadState } from "@/lib/activityReadApi";
 import { getDateRangeParams } from "@/lib/dateRange";
 import type { ActivityCategory, ActivityLogRecord, ActivitySeverity } from "@/lib/mocks/activityLogs";
 
@@ -258,7 +259,7 @@ const mapAuditActivityPage = ({ data: logs, meta }: AuditLogPage): ActivityLogPa
     read: false,
   }));
 
-  return { activities, meta };
+  return { activities: applyKnownActivityReadState(activities), meta };
 };
 
 export const getAuditActivityPageFromApi = async (params: { page?: number; limit?: number; status?: string; severityFilter?: string; category?: ActivityCategory | "all"; date?: string; userRole?: string; nurseId?: string; severity?: "success" | "info" | "critical" | "warning"; search?: string; forceRefresh?: boolean } = {}): Promise<ActivityLogPage> => {
@@ -335,7 +336,7 @@ export const getSuperAdminApprovalActivityPageFromApi = async (params: { page?: 
       }];
     });
 
-  return { activities, meta };
+  return { activities: applyKnownActivityReadState(activities), meta };
 };
 
 export const getCachedSuperAdminApprovalActivityPageFromApi = (params: { page?: number; limit?: number; status?: ApprovalLogStatus; severity?: ApprovalLogSeverity; date?: string; search?: string } = {}): ActivityLogPage | null => {
@@ -376,5 +377,5 @@ export const getCachedSuperAdminApprovalActivityPageFromApi = (params: { page?: 
     }];
   });
 
-  return { activities, meta: cached.meta };
+  return { activities: applyKnownActivityReadState(activities), meta: cached.meta };
 };

@@ -53,6 +53,72 @@ describe("foodScanApi", () => {
     });
   });
 
+  it("keeps each food-medication interaction pair and deduplicates exact duplicates", async () => {
+    const duplicateInteraction = {
+      food_item: "rendang",
+      food_display: "Rendang",
+      medication: "Simvastatin",
+      severity: "low",
+      severity_label: "Rendah",
+      interaction_description: "Kombinasi makanan dan obat ini diprediksi aman.",
+      recommendation: "Pantau gejala setelah makan.",
+    };
+    const sameCardFromAnotherFood = {
+      ...duplicateInteraction,
+      food_item: "nasi-goreng",
+      food_display: "Nasi Goreng",
+    };
+    mockedGet.mockResolvedValueOnce({ data: { data: { id: "patient-1", fullName: "Budi Santoso" } } });
+    mockedPost
+      .mockResolvedValueOnce({ data: { data: { image_id: "img-1", upload_url: "/uploads/img-1.jpg", timestamp: "2026-05-09T08:00:00.000Z" } } })
+      .mockResolvedValueOnce({
+        data: {
+          data: {
+            scan_id: "scan-1",
+            detected_items: [
+              { label: "rendang", label_display: "Rendang", confidence: 0.95 },
+              { label: "rendang", label_display: "Rendang", confidence: 0.42 },
+              { label: "nasi-goreng", label_display: "Nasi Goreng", confidence: 0.9 },
+            ],
+            inference_time_ms: 120,
+            model_version: "v1",
+            timestamp: "2026-05-09T08:00:01.000Z",
+          },
+        },
+      })
+      .mockResolvedValueOnce({ data: { data: { interactions: [duplicateInteraction, duplicateInteraction, sameCardFromAnotherFood], patient_medications: ["SIMVASTATIN"], analyzed_medications_count: 1, recommended_foods: [], foods_to_avoid: [], overall_risk_level: "low", overall_recommendation: "Aman.", disclaimer: "Konsultasikan ke tenaga kesehatan." } } })
+      .mockResolvedValueOnce({ data: { data: { recommended_foods: [], foods_to_avoid: [], patient_medications: ["SIMVASTATIN"], analyzed_medications_count: 1 } } })
+      .mockResolvedValueOnce({ data: { data: { items: [], total: { calories: 0, protein_g: 0, fat_g: 0, carbs_g: 0 } } } });
+
+    const analysis = await scanFoodImage(new File(["image"], "food.jpg", { type: "image/jpeg" }));
+
+    expect(mockedPost).toHaveBeenNthCalledWith(3, "/food-scans/img-1/interactions", { patientId: "patient-1", detectedItems: ["rendang", "nasi-goreng"], includeRecommendations: false });
+    expect(analysis.interactions).toHaveLength(2);
+    expect(analysis.schedules).toHaveLength(2);
+    expect(analysis.interactions[0]?.schedule.medicineName).toBe("Simvastatin");
+    expect(analysis.interactions.map((interaction) => interaction.foodDisplay)).toEqual(["Rendang", "Nasi Goreng"]);
+  });
+
+  it("maps medium severity to high risk without marking safe pairs as high", async () => {
+    mockedGet.mockResolvedValueOnce({ data: { data: { id: "patient-1", fullName: "Budi Santoso" } } });
+    mockedPost
+      .mockResolvedValueOnce({ data: { data: { image_id: "img-1", upload_url: "/uploads/img-1.jpg", timestamp: "2026-05-09T08:00:00.000Z" } } })
+      .mockResolvedValueOnce({ data: { data: { scan_id: "scan-1", detected_items: [{ label: "nasi-goreng", label_display: "Nasi Goreng", confidence: 0.95 }], inference_time_ms: 120, model_version: "v1", timestamp: "2026-05-09T08:00:01.000Z" } } })
+      .mockResolvedValueOnce({ data: { data: { interactions: [
+        { food_item: "nasi-goreng", food_display: "Nasi Goreng", medication: "Celestar", severity: "sedang", severity_label: "Sedang", interaction_description: "Perlu perhatian.", recommendation: "Pantau gejala." },
+        { food_item: "nasi-goreng", food_display: "Nasi Goreng", medication: "Simvastatin", severity: "aman", severity_label: "Aman", interaction_description: "Aman.", recommendation: "Lanjutkan pemantauan." },
+      ], patient_medications: ["CELESTAR", "SIMVASTATIN"], analyzed_medications_count: 2, recommended_foods: [], foods_to_avoid: [], overall_risk_level: "sedang", overall_recommendation: "Ditemukan potensi interaksi obat-makanan. Ikuti alternatif makanan aman dari rekomendasi AI.", disclaimer: "Konsultasikan ke tenaga kesehatan." } } })
+      .mockResolvedValueOnce({ data: { data: { recommended_foods: [], foods_to_avoid: [], patient_medications: ["CELESTAR", "SIMVASTATIN"], analyzed_medications_count: 2 } } })
+      .mockResolvedValueOnce({ data: { data: { items: [], total: { calories: 0, protein_g: 0, fat_g: 0, carbs_g: 0 } } } });
+
+    const analysis = await scanFoodImage(new File(["image"], "food.jpg", { type: "image/jpeg" }));
+
+    expect(analysis.overallRisk).toBe("High Risk");
+    expect(analysis.scan.result).toBe("Ditemukan potensi interaksi obat-makanan.");
+    expect(analysis.scan.recommendation).toBe("Ditemukan potensi interaksi obat-makanan. Ikuti alternatif makanan aman dari rekomendasi AI.");
+    expect(analysis.interactions.map((interaction) => interaction.risk)).toEqual(["High Risk", "Low Risk"]);
+  });
+
   it("throws when current patient is unavailable", async () => {
     mockedGet.mockResolvedValueOnce({ data: { data: null } });
 
@@ -107,6 +173,7 @@ describe("foodScanApi", () => {
       hasDetectedFood: false,
       detectedItems: [],
     });
+    expect(analysis.overallRisk).toBe("Low Risk");
     expect(analysis.scan.result).toBe("Tidak ada makanan yang dapat dianalisis dari gambar ini.");
     expect(analysis.interactions).toEqual([]);
     expect(analysis.recommendedFoods).toEqual([]);
@@ -182,6 +249,34 @@ describe("foodScanApi", () => {
     const page = await getFoodScansPageFromApi({ patientId: "patient-1", limit: 100 });
 
     expect(page.data[0]).toMatchObject({ id: "scan-1", hasDetectedFood: true, risk: "Low Risk" });
+  });
+
+  it("maps scan details with an explicit empty detection list as no detected food", async () => {
+    mockedGet.mockResolvedValueOnce({
+      data: {
+        data: {
+          id: "scan-empty",
+          patientId: "patient-1",
+          imageUrl: "/uploads/scan-empty.jpg",
+          overallRiskLevel: null,
+          modelVersion: "v1",
+          inferenceTimeMs: 120,
+          createdAt: "2026-05-09T08:00:00.000Z",
+          detectedItems: [],
+          interactions: [],
+        },
+      },
+    });
+
+    const analysis = await getFoodScanAnalysisFromApi("scan-empty");
+
+    expect(analysis.scan).toMatchObject({
+      foodName: "Tidak ada makanan terdeteksi",
+      hasDetectedFood: false,
+      result: "Tidak ada makanan yang dapat dianalisis dari gambar ini.",
+      recommendation: "Gunakan foto makanan yang lebih jelas atau upload gambar makanan dari galeri.",
+      detectedItems: [],
+    });
   });
 
   it("maps safe foods when no interactions are returned", async () => {

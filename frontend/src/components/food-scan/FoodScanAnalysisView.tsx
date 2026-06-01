@@ -52,6 +52,7 @@ export default function FoodScanAnalysisView({ scanId, imageSizes = "(max-width:
   if (!analysis) return null;
 
   const analyzedMedicationCount = analysis.analyzedMedicationCount ?? analysis.analyzedMedications?.length ?? analysis.interactions.length;
+  const hasDetectedFood = analysis.scan.hasDetectedFood !== false;
 
   return (
     <div className="space-y-5">
@@ -63,9 +64,9 @@ export default function FoodScanAnalysisView({ scanId, imageSizes = "(max-width:
         <DetailItem label="Obat Dianalisis" value={`${analyzedMedicationCount} obat`} />
       </m.div>
 
-      <FoodInsightCard icon={<BrainCircuit size={20} />} title="AI Detection & Reasoning" text={analysis.scan.aiReasoning} risk={analysis.overallRisk} delay={0.12} shouldAnimate={shouldAnimate} />
+      <FoodInsightCard icon={<BrainCircuit size={20} />} title="AI Detection & Reasoning" text={analysis.scan.aiReasoning} risk={analysis.overallRisk} hasDetectedFood={hasDetectedFood} delay={0.12} shouldAnimate={shouldAnimate} />
 
-      <InteractionAnalysisCard interactions={analysis.interactions} analyzedMedications={analysis.analyzedMedications ?? []} analyzedMedicationDetails={analysis.analyzedMedicationDetails ?? []} safeFoods={analysis.safeFoods ?? []} disclaimer={analysis.disclaimer} shouldAnimate={shouldAnimate} />
+      {hasDetectedFood && <InteractionAnalysisCard interactions={analysis.interactions} analyzedMedications={analysis.analyzedMedications ?? []} analyzedMedicationDetails={analysis.analyzedMedicationDetails ?? []} safeFoods={analysis.safeFoods ?? []} overallRecommendation={analysis.scan.recommendation} disclaimer={analysis.disclaimer} shouldAnimate={shouldAnimate} />}
 
       <NutritionCard items={analysis.nutritionItems ?? []} total={analysis.nutritionTotal} shouldAnimate={shouldAnimate} />
 
@@ -78,6 +79,9 @@ function FoodScanHero({ scan, risk, imageSizes, shouldAnimate }: { readonly scan
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
   const imageWidth = imageDimensions?.width ?? 1280;
   const imageHeight = imageDimensions?.height ?? 1280;
+  const hasDetectedFood = scan.hasDetectedFood !== false;
+  const statusLabel = hasDetectedFood ? risk : "Tidak Terdeteksi";
+  const statusClass = hasDetectedFood ? riskTextClass[risk] : "text-muted";
 
   return (
     <m.section className="overflow-hidden rounded-3xl bg-surface" {...getDashboardEntranceMotion(shouldAnimate, 0, 16)}>
@@ -96,19 +100,19 @@ function FoodScanHero({ scan, risk, imageSizes, shouldAnimate }: { readonly scan
             }
           }}
         />
-        <DetectionOverlay items={scan.detectedItems ?? []} imageWidth={imageWidth} imageHeight={imageHeight} />
+        {imageDimensions && <DetectionOverlay items={scan.detectedItems ?? []} imageWidth={imageWidth} imageHeight={imageHeight} />}
       </div>
 
       <div className="p-5">
         <div className="flex items-start gap-3">
-          <div className={`inline-flex h-11 w-8 shrink-0 items-start justify-center pt-0.5 ${riskTextClass[risk]}`}>
+          <div className={`inline-flex h-11 w-8 shrink-0 items-start justify-center pt-0.5 ${statusClass}`}>
             <ShieldAlert size={20} strokeWidth={2.4} />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-extrabold text-leaf">Scan Makanan</span>
               <span className="text-xs font-extrabold text-line">-</span>
-              <span className={`text-xs font-extrabold ${riskTextClass[risk]}`}>{risk}</span>
+              <span className={`text-xs font-extrabold ${statusClass}`}>{statusLabel}</span>
             </div>
             <h3 className="mt-2 font-display text-2xl font-extrabold tracking-[-0.04em] text-text-main sm:text-3xl">{scan.foodName}</h3>
           </div>
@@ -118,21 +122,76 @@ function FoodScanHero({ scan, risk, imageSizes, shouldAnimate }: { readonly scan
   );
 }
 
+type FlexibleFoodScanBoundingBox = FoodScanBoundingBox & {
+  readonly cx?: number;
+  readonly cy?: number;
+  readonly centerX?: number;
+  readonly centerY?: number;
+  readonly xCenter?: number;
+  readonly yCenter?: number;
+  readonly x_center?: number;
+  readonly y_center?: number;
+  readonly imageWidth?: number;
+  readonly imageHeight?: number;
+  readonly image_width?: number;
+  readonly image_height?: number;
+  readonly coordinateWidth?: number;
+  readonly coordinateHeight?: number;
+  readonly coordinate_width?: number;
+  readonly coordinate_height?: number;
+};
+
+const toBoxNumber = (value: unknown) => {
+  const numberValue = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  return Number.isFinite(numberValue) ? numberValue : undefined;
+};
+
+const clampPercent = (value: number) => Math.max(0, Math.min(100, value));
+const formatPercent = (value: number) => `${Number(clampPercent(value).toFixed(4))}%`;
+const parsePercent = (value: string) => Number.parseFloat(value.replace("%", ""));
+const getDetectionFoodLabel = (item: FoodScanDetectedItem) => item.labelDisplay?.trim() || formatFoodName(item.label);
+
 function getBoxRect(box: FoodScanBoundingBox, imageWidth: number, imageHeight: number) {
-  const left = box.x1 ?? box.x ?? 0;
-  const top = box.y1 ?? box.y ?? 0;
-  const right = box.x2 ?? (box.x !== undefined && box.width !== undefined ? box.x + box.width : undefined);
-  const bottom = box.y2 ?? (box.y !== undefined && box.height !== undefined ? box.y + box.height : undefined);
-  const width = right !== undefined ? right - left : box.width ?? 0;
-  const height = bottom !== undefined ? bottom - top : box.height ?? 0;
+  const flexibleBox = box as FlexibleFoodScanBoundingBox;
+  const rawWidth = toBoxNumber(flexibleBox.width);
+  const rawHeight = toBoxNumber(flexibleBox.height);
+  const rawCenterX = toBoxNumber(flexibleBox.cx ?? flexibleBox.centerX ?? flexibleBox.xCenter ?? flexibleBox.x_center);
+  const rawCenterY = toBoxNumber(flexibleBox.cy ?? flexibleBox.centerY ?? flexibleBox.yCenter ?? flexibleBox.y_center);
+  const usesCenterPoint = rawCenterX !== undefined && rawCenterY !== undefined && rawWidth !== undefined && rawHeight !== undefined;
+
+  const left = usesCenterPoint
+    ? rawCenterX - rawWidth / 2
+    : toBoxNumber(flexibleBox.x1 ?? flexibleBox.x) ?? 0;
+  const top = usesCenterPoint
+    ? rawCenterY - rawHeight / 2
+    : toBoxNumber(flexibleBox.y1 ?? flexibleBox.y) ?? 0;
+  const right = toBoxNumber(flexibleBox.x2) ?? (rawWidth !== undefined ? left + rawWidth : undefined);
+  const bottom = toBoxNumber(flexibleBox.y2) ?? (rawHeight !== undefined ? top + rawHeight : undefined);
+  const width = right !== undefined ? right - left : rawWidth ?? 0;
+  const height = bottom !== undefined ? bottom - top : rawHeight ?? 0;
 
   if (width <= 0 || height <= 0 || imageWidth <= 0 || imageHeight <= 0) return null;
 
+  const boxImageWidth = toBoxNumber(flexibleBox.imageWidth ?? flexibleBox.image_width ?? flexibleBox.coordinateWidth ?? flexibleBox.coordinate_width) ?? imageWidth;
+  const boxImageHeight = toBoxNumber(flexibleBox.imageHeight ?? flexibleBox.image_height ?? flexibleBox.coordinateHeight ?? flexibleBox.coordinate_height) ?? imageHeight;
+  const values = [left, top, right ?? left + width, bottom ?? top + height];
+  const usesNormalizedCoordinates = values.every((value) => value >= 0 && value <= 1);
+  const toXPercent = (value: number) => usesNormalizedCoordinates ? value * 100 : (value / boxImageWidth) * 100;
+  const toYPercent = (value: number) => usesNormalizedCoordinates ? value * 100 : (value / boxImageHeight) * 100;
+  const leftPercent = clampPercent(toXPercent(left));
+  const topPercent = clampPercent(toYPercent(top));
+  const rightPercent = clampPercent(toXPercent(left + width));
+  const bottomPercent = clampPercent(toYPercent(top + height));
+  const widthPercent = rightPercent - leftPercent;
+  const heightPercent = bottomPercent - topPercent;
+
+  if (widthPercent <= 0 || heightPercent <= 0) return null;
+
   return {
-    left: `${Math.max(0, Math.min(100, (left / imageWidth) * 100))}%`,
-    top: `${Math.max(0, Math.min(100, (top / imageHeight) * 100))}%`,
-    width: `${Math.max(0, Math.min(100, (width / imageWidth) * 100))}%`,
-    height: `${Math.max(0, Math.min(100, (height / imageHeight) * 100))}%`,
+    left: formatPercent(leftPercent),
+    top: formatPercent(topPercent),
+    width: formatPercent(widthPercent),
+    height: formatPercent(heightPercent),
   };
 }
 
@@ -150,10 +209,21 @@ function DetectionOverlay({ items, imageWidth, imageHeight }: { readonly items: 
     <div className="pointer-events-none absolute inset-0">
       {boxes.map(({ item, index, rect }) => {
         const color = detectionBoxColors[index % detectionBoxColors.length];
+        const leftPercent = parsePercent(rect.left);
+        const topPercent = parsePercent(rect.top);
+        const rightPercent = leftPercent + parsePercent(rect.width);
+        const alignLabelLeft = !Number.isFinite(leftPercent) || leftPercent < 2;
+        const keepLabelInsideTop = Number.isFinite(topPercent) && topPercent < 6;
+        const alignLabelRight = Number.isFinite(rightPercent) && rightPercent > 88;
+        const horizontalLabelClass = alignLabelRight ? "right-0" : alignLabelLeft ? "left-0" : "-left-0.5";
+        const labelClassName = keepLabelInsideTop
+          ? `absolute top-0 z-20 max-w-[180px] truncate px-2 py-1 text-[10px] font-black leading-none text-white shadow-sm ${alignLabelRight ? "right-0 rounded-bl-md" : "left-0 rounded-br-md"}`
+          : `absolute -top-6 z-20 max-w-[180px] truncate rounded-t-md px-2 py-1 text-[10px] font-black leading-none text-white shadow-sm ${horizontalLabelClass}`;
+        const label = getDetectionFoodLabel(item);
         return (
-          <div key={`${item.label}-${item.confidence}-${rect.left}-${rect.top}-${rect.width}-${rect.height}`} className="absolute border-2" style={{ ...rect, borderColor: color }}>
-            <div className="absolute -left-0.5 -top-6 max-w-[180px] truncate rounded-t-md px-2 py-1 text-[10px] font-black leading-none text-white shadow-sm" style={{ backgroundColor: color }}>
-              {item.labelDisplay} {Math.round(item.confidence * 100)}%
+          <div key={`${item.label}-${item.confidence}-${rect.left}-${rect.top}-${rect.width}-${rect.height}`} data-food-detection-box className="absolute border-2" style={{ ...rect, borderColor: color }}>
+            <div data-food-detection-label className={labelClassName} title={`${label} ${Math.round(item.confidence * 100)}%`} style={{ backgroundColor: color }}>
+              {label} {Math.round(item.confidence * 100)}%
             </div>
           </div>
         );
@@ -318,7 +388,8 @@ function SafeFoodList({ items }: { readonly items: NonNullable<FoodScanAnalysis[
   );
 }
 
-function InteractionAnalysisCard({ interactions, analyzedMedications, analyzedMedicationDetails, safeFoods, disclaimer, shouldAnimate }: { readonly interactions: FoodScanAnalysis["interactions"]; readonly analyzedMedications: NonNullable<FoodScanAnalysis["analyzedMedications"]>; readonly analyzedMedicationDetails: NonNullable<FoodScanAnalysis["analyzedMedicationDetails"]>; readonly safeFoods: NonNullable<FoodScanAnalysis["safeFoods"]>; readonly disclaimer?: string; readonly shouldAnimate: boolean }) {
+function InteractionAnalysisCard({ interactions, analyzedMedications, analyzedMedicationDetails, safeFoods, overallRecommendation, disclaimer, shouldAnimate }: { readonly interactions: FoodScanAnalysis["interactions"]; readonly analyzedMedications: NonNullable<FoodScanAnalysis["analyzedMedications"]>; readonly analyzedMedicationDetails: NonNullable<FoodScanAnalysis["analyzedMedicationDetails"]>; readonly safeFoods: NonNullable<FoodScanAnalysis["safeFoods"]>; readonly overallRecommendation?: string; readonly disclaimer?: string; readonly shouldAnimate: boolean }) {
+  const overallRecommendationText = overallRecommendation?.trim();
   const disclaimerText = disclaimer?.trim() || defaultMedicalDisclaimer;
 
   return (
@@ -356,14 +427,18 @@ function InteractionAnalysisCard({ interactions, analyzedMedications, analyzedMe
         </article>
       ) : (
         <div className="space-y-3">
-          {interactions.map((interaction) => (
-            <article key={`food-interaction-${interaction.schedule.id}`} className="rounded-3xl bg-surface p-4">
+          {interactions.map((interaction, index) => (
+            <article key={`food-interaction-${interaction.schedule.id}-${(interaction.foodItem ?? getInteractionFoodDisplay(interaction)) || index}`} className="rounded-3xl bg-surface p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`text-xs font-extrabold ${riskTextClass[interaction.risk]}`}>{interaction.risk}</span>
-                    <span className="text-xs font-extrabold text-line">-</span>
-                    <span className="text-xs font-extrabold text-muted">{interaction.schedule.mealRule}</span>
+                    {getInteractionFoodDisplay(interaction) && (
+                      <>
+                        <span className="text-xs font-extrabold text-line">-</span>
+                        <span className="text-xs font-extrabold text-muted">Dengan {getInteractionFoodDisplay(interaction)}</span>
+                      </>
+                    )}
                   </div>
                   <h4 className="mt-2 font-display text-xl font-extrabold tracking-[-0.04em] text-text-main">{interaction.schedule.medicineName}</h4>
                   <p className="mt-1 text-sm font-bold text-muted">{formatScheduleSummary(interaction.schedule.dose, interaction.schedule.frequency)}</p>
@@ -380,6 +455,13 @@ function InteractionAnalysisCard({ interactions, analyzedMedications, analyzedMe
         </div>
       )}
 
+      {overallRecommendationText && (
+        <article className="rounded-3xl bg-surface p-4">
+          <p className="text-xs font-extrabold uppercase tracking-[0.08em] text-primary">Rekomendasi keseluruhan</p>
+          <p className="mt-2 text-sm font-bold leading-6 text-text-main">{overallRecommendationText}</p>
+        </article>
+      )}
+
       {disclaimerText && (
         <p className="mt-4 rounded-3xl bg-surface px-4 py-3 text-sm font-semibold leading-6 text-muted">
           {disclaimerText}
@@ -389,16 +471,22 @@ function InteractionAnalysisCard({ interactions, analyzedMedications, analyzedMe
   );
 }
 
-function FoodInsightCard({ icon, title, text, risk, delay, shouldAnimate }: { readonly icon: ReactNode; readonly title: string; readonly text: string; readonly risk: FoodScanRisk; readonly delay: number; readonly shouldAnimate: boolean }) {
+function FoodInsightCard({ icon, title, text, risk, hasDetectedFood, delay, shouldAnimate }: { readonly icon: ReactNode; readonly title: string; readonly text: string; readonly risk: FoodScanRisk; readonly hasDetectedFood: boolean; readonly delay: number; readonly shouldAnimate: boolean }) {
+  const iconClassName = hasDetectedFood ? riskTextClass[risk] : "text-muted";
+
   return (
     <m.section className="rounded-3xl border-0 bg-surface p-5 shadow-none !border-l-0" {...getDashboardEntranceMotion(shouldAnimate, delay, 18)}>
       <div className="mb-3 flex items-center gap-3">
-        <span className={riskTextClass[risk]}>{icon}</span>
+        <span className={iconClassName}>{icon}</span>
         <h3 className="font-display text-xl font-extrabold tracking-[-0.04em] text-text-main">{title}</h3>
       </div>
       <p className="text-sm font-semibold leading-6 text-muted">{text}</p>
     </m.section>
   );
+}
+
+function getInteractionFoodDisplay(interaction: FoodScanAnalysis["interactions"][number]) {
+  return interaction.foodDisplay?.trim() || (interaction.foodItem ? formatFoodName(interaction.foodItem) : "");
 }
 
 function formatScanTime(value: string) {

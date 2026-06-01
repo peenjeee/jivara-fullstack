@@ -28,6 +28,7 @@ vi.mock("@/lib/auditLogApi", () => ({
 }));
 
 vi.mock("@/lib/activityReadApi", () => ({
+  applyKnownActivityReadState: vi.fn((activities) => activities),
   getActivityReadIdsFromApi: vi.fn(),
   markActivitiesReadViaApi: vi.fn(),
   markAllUnreadViaApi: vi.fn(),
@@ -99,7 +100,7 @@ describe("activity log feature", () => {
     render(<ActivityLogPage />);
 
     expect(await screen.findByText("Kepatuhan kritis")).toBeInTheDocument();
-    expect(getActivityReadIdsFromApi).toHaveBeenCalledWith({ activityIds: ["alert-1"], limit: 1 });
+    expect(getActivityReadIdsFromApi).toHaveBeenCalledWith(expect.objectContaining({ activityIds: ["alert-1"], limit: 1 }));
     expect(getNotificationActivityPageFromApi).not.toHaveBeenCalled();
     expect(getPatientsAssignedToNurseFromApi).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Kritis" }));
@@ -115,6 +116,33 @@ describe("activity log feature", () => {
     await waitFor(() => {
       expect(useActivityLogStore.getState().activities.every((item) => item.read)).toBe(true);
     });
+  });
+
+  it("does not render patient notification activities in nurse log", async () => {
+    const notificationActivity: ActivityLogRecord = {
+      ...activity,
+      id: "notification-1",
+      title: "Dosis obat terlewat",
+      description: "Aidan belum mengonfirmasi obat.",
+      category: "Kepatuhan",
+      severity: "Peringatan",
+      read: false,
+    };
+
+    vi.mocked(getNotificationActivityPageFromApi).mockResolvedValue(paginated([notificationActivity]));
+    vi.mocked(getAuditActivityPageFromApi).mockResolvedValue(paginated([]));
+    vi.mocked(getActivityReadIdsFromApi).mockResolvedValue(new Set());
+    vi.mocked(getPatientsAssignedToNurseFromApi).mockResolvedValue([]);
+
+    render(<ActivityLogPage auditUserRole="nurse" showNurseFilter={false} />);
+
+    expect(await screen.findByText("Tidak ada data aktivitas.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Belum Dibaca" }));
+
+    expect(screen.queryByText("Dosis obat terlewat")).not.toBeInTheDocument();
+    expect(screen.queryByText("Aidan belum mengonfirmasi obat.")).not.toBeInTheDocument();
+    expect(getNotificationActivityPageFromApi).not.toHaveBeenCalled();
+    expect(getActivityReadIdsFromApi).not.toHaveBeenCalledWith(expect.objectContaining({ activityIds: ["notification-1"] }));
   });
 
   it("read-only admin mode only renders audit activities", async () => {

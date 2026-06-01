@@ -135,6 +135,7 @@ interface FoodScanDetailResponse {
   patientId: string;
   imageUrl: string;
   overallRiskLevel?: string | null;
+  overallRecommendation?: string | null;
   modelVersion?: string | null;
   inferenceTimeMs?: number | null;
   createdAt?: string | null;
@@ -236,7 +237,7 @@ const mapDetailDetectedItem = (item: NonNullable<FoodScanDetailResponse["detecte
 });
 
 const toRisk = (riskLevel: string): FoodScanRisk => {
-  if (["tinggi", "critical", "high"].includes(riskLevel.toLowerCase())) return "High Risk";
+  if (["sedang", "menengah", "moderate", "medium", "tinggi", "kritis", "critical", "high"].includes(riskLevel.toLowerCase())) return "High Risk";
   return "Low Risk";
 };
 
@@ -293,6 +294,8 @@ const mapSafeFood = (item: { food_item: string; food_display: string; status: st
   status: item.status,
 });
 
+const formatFoodDisplay = (value: string) => value.replace(/-/g, " ");
+
 const mapNutritionItem = (item: NutritionItemResponse) => ({
   foodItem: item.food_item,
   foodDisplay: item.food_display,
@@ -322,19 +325,52 @@ const uniqueStrings = (values: readonly string[]) => Array.from(values.reduce((u
   return uniqueValues;
 }, new Map<string, string>()).values());
 
-const getAnalyzedMedicationNames = (detail: FoodScanDetailResponse) => uniqueStrings([
+type InteractionDedupeInput = {
+  readonly foodItem?: unknown;
+  readonly food_item?: unknown;
+  readonly medication?: unknown;
+  readonly severity?: unknown;
+  readonly interactionDescription?: unknown;
+  readonly interaction_description?: unknown;
+  readonly recommendation?: unknown;
+};
+
+const normalizeInteractionKeyPart = (value: unknown) => String(value ?? "").trim().toLocaleLowerCase("id-ID");
+
+const getInteractionDedupeKey = (interaction: InteractionDedupeInput) => [
+  normalizeInteractionKeyPart(interaction.foodItem ?? interaction.food_item),
+  normalizeInteractionKeyPart(interaction.medication),
+  normalizeInteractionKeyPart(interaction.severity),
+  normalizeInteractionKeyPart(interaction.interactionDescription ?? interaction.interaction_description),
+  normalizeInteractionKeyPart(interaction.recommendation),
+].join("|");
+
+const dedupeInteractions = <T extends InteractionDedupeInput>(interactions: readonly T[]) => Array.from(interactions.reduce((uniqueInteractions, interaction) => {
+  const key = getInteractionDedupeKey(interaction);
+  if (!uniqueInteractions.has(key)) uniqueInteractions.set(key, interaction);
+  return uniqueInteractions;
+}, new Map<string, T>()).values());
+
+const getAnalyzedMedicationNames = (detail: FoodScanDetailResponse, interactions: readonly NonNullable<FoodScanDetailResponse["interactions"]>[number][] = detail.interactions ?? []) => uniqueStrings([
   ...(detail.patientMedications || []),
   ...(detail.patientMedicationDetails || []).map((medicine) => medicine.drugName),
-  ...(detail.interactions || []).map((interaction) => interaction.medication),
+  ...interactions.map((interaction) => interaction.medication),
 ]);
 
 const getAnalyzedMedicationCount = (explicitCount: number | null | undefined, medicationNames: readonly string[]) => explicitCount ?? medicationNames.length;
 
 const mapScanDetail = (detail: FoodScanDetailResponse, patientName = detail.patientName || "Pasien"): FoodScanAnalysis => {
-  const foodName = detail.detectedItems?.map((item) => item.labelDisplay).join(", ") || "Makanan terdeteksi";
+  const detectedItems = detail.detectedItems ?? [];
+  const rawDetailInteractions = detail.interactions || [];
+  const detailInteractions = dedupeInteractions(rawDetailInteractions);
+  const hasDetectedFood = detail.detectedItems ? detectedItems.length > 0 : Boolean(detail.overallRiskLevel);
+  const foodName = detectedItems.length > 0
+    ? detectedItems.map((item) => item.labelDisplay).join(", ")
+    : hasDetectedFood ? "Makanan terdeteksi" : "Tidak ada makanan terdeteksi";
   const risk = toRisk(detail.overallRiskLevel || "rendah");
-  const analyzedMedicationNames = getAnalyzedMedicationNames(detail);
+  const analyzedMedicationNames = getAnalyzedMedicationNames(detail, detailInteractions);
   const analyzedMedicationCount = getAnalyzedMedicationCount(detail.analyzedMedicationCount, analyzedMedicationNames);
+  const hasRiskyInteractions = detailInteractions.some((interaction) => toRisk(interaction.severity) === "High Risk");
   const scan: FoodScanRecord = {
     id: detail.id,
     patientId: detail.patientId,
@@ -342,15 +378,23 @@ const mapScanDetail = (detail: FoodScanDetailResponse, patientName = detail.pati
     image: getBackendImageUrl(detail.imageUrl),
     scannedAt: detail.createdAt || new Date().toISOString(),
     risk,
-    hasDetectedFood: detail.detectedItems ? detail.detectedItems.length > 0 : Boolean(detail.overallRiskLevel),
-    aiReasoning: `Model ${detail.modelVersion || "AI"} menganalisis ${foodName}${detail.inferenceTimeMs ? ` dalam ${detail.inferenceTimeMs} ms` : ""}${analyzedMedicationCount > 0 ? " dan mencocokkannya dengan obat aktif pasien" : ""}.`,
-    result: detail.interactions?.length ? "Ditemukan potensi interaksi obat-makanan." : "Tidak ditemukan interaksi signifikan pada makanan yang terdeteksi.",
-    recommendation: detail.interactions?.[0]?.recommendation || "Ikuti jadwal obat dan pantau gejala setelah makan.",
-    detectedItems: detail.detectedItems?.map(mapDetailDetectedItem) ?? [],
+    hasDetectedFood,
+    aiReasoning: hasDetectedFood
+      ? `Model ${detail.modelVersion || "AI"} menganalisis ${foodName}${detail.inferenceTimeMs ? ` dalam ${detail.inferenceTimeMs} ms` : ""}${analyzedMedicationCount > 0 ? " dan mencocokkannya dengan obat aktif pasien" : ""}.`
+      : `Model ${detail.modelVersion || "AI"} tidak mendeteksi makanan yang didukung${detail.inferenceTimeMs ? ` dalam ${detail.inferenceTimeMs} ms` : ""}. Pastikan gambar berisi makanan dan kamera aktif, lalu coba scan ulang.`,
+    result: hasDetectedFood
+      ? hasRiskyInteractions ? "Ditemukan potensi interaksi obat-makanan." : "Tidak ditemukan interaksi signifikan pada makanan yang terdeteksi."
+      : "Tidak ada makanan yang dapat dianalisis dari gambar ini.",
+    recommendation: hasDetectedFood
+      ? detail.overallRecommendation || (hasRiskyInteractions ? "Ditemukan potensi interaksi obat-makanan. Ikuti alternatif makanan aman dari rekomendasi AI." : "Tidak ditemukan interaksi signifikan pada makanan yang terdeteksi.")
+      : "Gunakan foto makanan yang lebih jelas atau upload gambar makanan dari galeri.",
+    detectedItems: detectedItems.map(mapDetailDetectedItem),
   };
-  const interactions = (detail.interactions || []).map((interaction) => {
+  const interactions = detailInteractions.map((interaction) => {
     const medicationDetail = findMedicationDetail(detail.patientMedicationDetails, interaction.medication);
     return {
+      foodItem: interaction.foodItem,
+      foodDisplay: formatFoodDisplay(interaction.foodItem),
       schedule: {
         id: interaction.id,
         patientId: detail.patientId,
@@ -376,7 +420,7 @@ const mapScanDetail = (detail: FoodScanDetailResponse, patientName = detail.pati
       recommendation: interaction.recommendation || "Ikuti rekomendasi tenaga kesehatan.",
     };
   });
-  const riskyFoodItems = new Set((detail.interactions || []).map((interaction) => interaction.foodItem));
+  const riskyFoodItems = new Set(rawDetailInteractions.map((interaction) => interaction.foodItem));
   const safeFoods = (detail.detectedItems || [])
     .flatMap((item) => (riskyFoodItems.has(item.label) ? [] : [{ foodItem: item.label, foodDisplay: item.labelDisplay, status: "aman" }]));
 
@@ -397,7 +441,7 @@ const mapScanDetail = (detail: FoodScanDetailResponse, patientName = detail.pati
     recommendedFoods: recommendationGroups.safeRecommendations,
     foodsToAvoid: recommendationGroups.avoidRecommendations,
     disclaimer: detail.disclaimer || undefined,
-    overallRisk: interactions.some((interaction) => interaction.risk === "High Risk") ? "High Risk" : risk,
+    overallRisk: hasDetectedFood && interactions.some((interaction) => interaction.risk === "High Risk") ? "High Risk" : risk,
   };
 };
 
@@ -441,7 +485,7 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
   const upload = uploadResponse.data.data;
   const detectResponse = await detectFoodWithRetry(upload.image_id, patientId);
   const detection = detectResponse.data.data;
-  const detectedLabels = detection.detected_items.map((item) => item.label);
+  const detectedLabels = uniqueStrings(detection.detected_items.map((item) => item.label));
   const image = getBackendImageUrl(upload.upload_url);
 
   if (detectedLabels.length === 0) {
@@ -495,6 +539,7 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
   }
 
   const interactionData = interactionResult.value.data.data;
+  const uniqueInteractions = dedupeInteractions(interactionData.interactions);
   const recommendationData = recommendationResult.status === "fulfilled"
     ? recommendationResult.value.data.data
     : null;
@@ -509,7 +554,7 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
     ...(interactionData.patient_medications || []),
     ...(recommendationData?.patient_medication_details || []).map((medicine) => medicine.drugName),
     ...(interactionData.patient_medication_details || []).map((medicine) => medicine.drugName),
-    ...interactionData.interactions.map((interaction) => interaction.medication),
+    ...uniqueInteractions.map((interaction) => interaction.medication),
   ]);
   const analyzedMedicationCount = getAnalyzedMedicationCount(
     recommendationData?.analyzed_medications_count ?? interactionData.analyzed_medications_count,
@@ -524,13 +569,15 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
     risk,
     hasDetectedFood: detection.detected_items.length > 0,
     aiReasoning: `Model ${detection.model_version} mendeteksi ${foodName} dalam ${detection.inference_time_ms} ms${analyzedMedicationCount > 0 ? " dan mencocokkannya dengan obat aktif pasien" : ""}.`,
-    result: interactionData.interactions.length > 0 ? "Ditemukan potensi interaksi obat-makanan." : "Tidak ditemukan interaksi signifikan pada makanan yang terdeteksi.",
+    result: risk === "High Risk" ? "Ditemukan potensi interaksi obat-makanan." : "Tidak ditemukan interaksi signifikan pada makanan yang terdeteksi.",
     recommendation: interactionData.overall_recommendation || interactionData.disclaimer,
     detectedItems: detection.detected_items.map(mapDetectedItem),
   };
-  const interactions = interactionData.interactions.map((interaction, index) => ({
+  const interactions = uniqueInteractions.map((interaction, index) => ({
+    foodItem: interaction.food_item,
+    foodDisplay: interaction.food_display || formatFoodDisplay(interaction.food_item),
     schedule: createSchedule(interaction, patient, index, interactionData.patient_medication_details),
-    risk: risk,
+    risk: toRisk(interaction.severity),
     reasoning: interaction.interaction_description,
     recommendation: interaction.recommendation,
   }));

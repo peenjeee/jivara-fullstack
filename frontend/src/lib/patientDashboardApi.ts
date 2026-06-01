@@ -1,4 +1,5 @@
 import api from "@/lib/axios";
+import { applyKnownActivityReadState } from "@/lib/activityReadApi";
 import type { ActivityLogRecord } from "@/lib/mocks/activityLogs";
 import type { PatientRecord } from "@/lib/mocks/patients";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
@@ -68,6 +69,7 @@ export interface PatientActivityLogData {
   schedules: MedicationScheduleRecord[];
   activities: ActivityLogRecord[];
   monthKey: string;
+  readStateHydrated?: boolean;
 }
 
 type PatientDashboardRequestOptions = {
@@ -421,13 +423,14 @@ export const getPatientActivityLogData = async (monthDate = new Date(), options:
       read: false,
     }] : []));
 
-    const activities = [...medicationActivities, ...scanActivities]
+    const activities = applyKnownActivityReadState([...medicationActivities, ...scanActivities])
       .sort((first, second) => Date.parse(second.timestamp) - Date.parse(first.timestamp));
     const result = {
       patient: data.patient,
       schedules: data.schedules,
       activities,
       monthKey: cacheKey,
+      readStateHydrated: false,
     };
     activitiesCache.set(cacheKey, { data: result });
     return result;
@@ -441,6 +444,47 @@ export const getPatientActivityLogData = async (monthDate = new Date(), options:
 
 export const getCachedPatientActivityLogData = (monthDate = new Date()): PatientActivityLogData | null => {
   return activitiesCache.get(getMonthLogRange(monthDate).cacheKey)?.data ?? null;
+};
+
+const markPatientActivityLogDataRead = (data: PatientActivityLogData, activityIds: readonly string[] = []) => {
+  const readIds = new Set(activityIds.filter(Boolean));
+  const shouldMarkAll = readIds.size === 0;
+
+  return {
+    ...data,
+    activities: data.activities.map((activity) => (shouldMarkAll || readIds.has(activity.id) ? { ...activity, read: true } : activity)),
+    readStateHydrated: shouldMarkAll ? true : data.readStateHydrated,
+  };
+};
+
+export const hydrateCachedPatientActivityLogReadState = (monthDate = new Date(), readIds: ReadonlySet<string>) => {
+  const { cacheKey } = getMonthLogRange(monthDate);
+  const cached = activitiesCache.get(cacheKey);
+  if (!cached) return;
+
+  activitiesCache.set(cacheKey, {
+    data: {
+      ...cached.data,
+      activities: cached.data.activities.map((activity) => (activity.read || readIds.has(activity.id) ? { ...activity, read: true } : activity)),
+      readStateHydrated: true,
+    },
+  });
+};
+
+export const markCachedPatientActivityLogActivitiesRead = (monthDate = new Date(), activityIds: readonly string[] = []) => {
+  const { cacheKey } = getMonthLogRange(monthDate);
+  const cached = activitiesCache.get(cacheKey);
+  if (!cached) return;
+
+  activitiesCache.set(cacheKey, {
+    data: markPatientActivityLogDataRead(cached.data, activityIds),
+  });
+};
+
+export const markAllCachedPatientActivityLogActivitiesRead = () => {
+  activitiesCache.forEach((cached, cacheKey) => {
+    activitiesCache.set(cacheKey, { data: markPatientActivityLogDataRead(cached.data) });
+  });
 };
 
 export const getPatientActivitiesFromApi = async (monthDate = new Date()): Promise<ActivityLogRecord[]> => {

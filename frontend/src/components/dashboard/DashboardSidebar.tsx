@@ -3,6 +3,7 @@ import DashboardNavItem from "./DashboardNavItem";
 import { getDashboardNavItems, type DashboardNavLabel, type DashboardRole } from "./navigation";
 import Image from "next/image";
 import { useActivityLogStore } from "@/store/activityLog";
+import { useAuthStore } from "@/store/auth";
 
 interface DashboardSidebarProps {
   readonly activeItem?: DashboardNavLabel;
@@ -12,9 +13,13 @@ interface DashboardSidebarProps {
 }
 
 export default function DashboardSidebar({ activeItem, role, onLogout, onNavigate }: DashboardSidebarProps) {
+  const userId = useAuthStore((state) => state.user?.id);
+  const badgeScopeKey = userId && (role === "patient" || role === "nurse") ? `${role}:${userId}` : null;
   const globalUnreadActivityCount = useActivityLogStore((state) => state.unreadActivityCount);
+  const unreadActivityScopeKey = useActivityLogStore((state) => state.unreadActivityScopeKey);
   const unreadActivityCount = useActivityLogStore((state) => {
     if (role === "super_admin" || role === "admin") return 0;
+    if (state.unreadActivityScopeKey !== badgeScopeKey) return 0;
     return state.unreadActivityCount ?? 0;
   });
   const isActivityLogLoading = useActivityLogStore((state) => state.isLoading);
@@ -42,7 +47,7 @@ export default function DashboardSidebar({ activeItem, role, onLogout, onNavigat
             item={item}
             isActive={activeItem === item.label}
             badgeCount={item.href === "/activity-log" ? unreadActivityCount : 0}
-            isBadgeLoading={item.href === "/activity-log" && (role === "patient" || role === "nurse") && globalUnreadActivityCount === null && isActivityLogLoading}
+            isBadgeLoading={item.href === "/activity-log" && Boolean(badgeScopeKey) && unreadActivityScopeKey === badgeScopeKey && globalUnreadActivityCount === null && isActivityLogLoading}
             onSelect={() => onNavigate?.()}
           />
         ))}

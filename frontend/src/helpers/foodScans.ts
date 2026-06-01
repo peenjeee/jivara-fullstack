@@ -11,6 +11,8 @@ export interface AnalyzedMedicationDetail {
 }
 
 export interface FoodDrugInteraction {
+  readonly foodItem?: string;
+  readonly foodDisplay?: string;
   readonly schedule: MedicationScheduleRecord;
   readonly risk: FoodScanRisk;
   readonly reasoning: string;

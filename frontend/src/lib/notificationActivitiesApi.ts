@@ -1,4 +1,5 @@
 import api from "@/lib/axios";
+import { applyKnownActivityReadState } from "@/lib/activityReadApi";
 import { getDateRangeParams } from "@/lib/dateRange";
 import type { ActivityCategory, ActivityLogRecord } from "@/lib/mocks/activityLogs";
 
@@ -114,7 +115,7 @@ export const getNotificationActivityPageFromApi = async (params: NotificationAct
         read: Boolean(notification.readAt),
       }));
       const data = {
-        activities,
+        activities: applyKnownActivityReadState(activities),
         meta: response.data.meta ?? { page, limit, total: activities.length },
       };
       notificationActivityCache.set(cacheKey, { data });

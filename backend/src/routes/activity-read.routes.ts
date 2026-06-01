@@ -90,10 +90,22 @@ router.get("/unread-count", authorizeRoles("patient", "nurse"), activityReadCont
  * /api/v1/activity-reads/mark-all-unread:
  *   post:
  *     summary: Tandai semua aktivitas belum dibaca sebagai sudah dibaca
- *     description: Menandai seluruh log aktivitas (medication logs, food scans, notifikasi) yang belum dibaca oleh user saat ini sebagai sudah dibaca. Berguna untuk tombol "Tandai Semua Dibaca" agar badge benar-benar 0.
+ *     description: Menandai seluruh log aktivitas (medication logs, food scans, notifikasi, audit log yang tampil) yang belum dibaca oleh user saat ini sebagai sudah dibaca. Client dapat mengirim activityIds yang sedang tampil agar cache stale-while-revalidate tetap sinkron setelah navigasi/filter. Berguna untuk tombol "Tandai Semua Dibaca" agar badge benar-benar 0.
  *     tags: [Activity Reads]
  *     security:
  *       - bearerAuth: []
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               activityIds:
+ *                 type: array
+ *                 description: ID aktivitas tambahan dari halaman yang sedang terlihat untuk ikut ditandai dibaca.
+ *                 items:
+ *                   type: string
  *     responses:
  *       200:
  *         description: Semua aktivitas berhasil ditandai dibaca
@@ -111,6 +123,10 @@ router.get("/unread-count", authorizeRoles("patient", "nurse"), activityReadCont
  *                     count:
  *                       type: number
  *                       example: 12
+ *                     activityIds:
+ *                       type: array
+ *                       items:
+ *                         type: string
  *                 message:
  *                   type: string
  *                   example: "12 aktivitas ditandai sudah dibaca"

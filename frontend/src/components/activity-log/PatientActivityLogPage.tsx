@@ -13,11 +13,11 @@ import { FoodScanDetailModal } from "@/components/food-scan";
 import PatientMedicineDetailModal from "@/components/schedule/PatientMedicineDetailModal";
 import { addMonths, getDateKey } from "@/helpers/patientSchedule";
 import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
-import { getActivityReadIdsFromApi, markActivitiesReadViaApi, markAllUnreadViaApi } from "@/lib/activityReadApi";
+import { applyKnownActivityReadState, getActivityReadIdsFromApi, markActivitiesReadViaApi, markAllUnreadViaApi } from "@/lib/activityReadApi";
 import { isDateInRange } from "@/lib/dateRange";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
 import type { ActivityCategory, ActivityLogRecord } from "@/lib/mocks/activityLogs";
-import { getCachedPatientActivityLogData, getPatientActivityLogData, type PatientActivityLogData } from "@/lib/patientDashboardApi";
+import { getCachedPatientActivityLogData, getPatientActivityLogData, hydrateCachedPatientActivityLogReadState, markAllCachedPatientActivityLogActivitiesRead, markCachedPatientActivityLogActivitiesRead, type PatientActivityLogData } from "@/lib/patientDashboardApi";
 import { showToast } from "@/lib/swal";
 import { useActivityLogStore } from "@/store/activityLog";
 import { useAuthStore } from "@/store/auth";
@@ -51,6 +51,7 @@ interface PatientActivityLogState {
   readonly selectedFoodScanId: string | null;
   readonly isLoading: boolean;
   readonly hasLoadedActivities: boolean;
+  readonly isReadStateHydrating: boolean;
   readonly isMarkingAllRead: boolean;
 }
 
@@ -64,7 +65,6 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
   const shouldAnimate = useDashboardEntranceMotion();
   const currentUserId = useAuthStore((state) => state.user?.id);
   const cacheIsValid = patientActivityLogViewCache !== null && patientActivityLogViewCache.cachedUserId === (currentUserId ?? null);
-  const unreadActivityCount = useActivityLogStore((state) => state.unreadActivityCount);
   const activities = useActivityLogStore((state) => state.activities);
   const setActivities = useActivityLogStore((state) => state.setActivities);
   const setActivityLogLoading = useActivityLogStore((state) => state.setLoading);
@@ -81,9 +81,10 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
     selectedFoodScanId: null,
     isLoading: !cacheIsValid,
     hasLoadedActivities: cacheIsValid,
+    isReadStateHydrating: false,
     isMarkingAllRead: false,
   });
-  const { search, quickFilter, category, date, visibleMonth, selectedActivity, selectedSchedule, selectedFoodScanId, isLoading, hasLoadedActivities, isMarkingAllRead } = state;
+  const { search, quickFilter, category, date, visibleMonth, selectedActivity, selectedSchedule, selectedFoodScanId, isLoading, hasLoadedActivities, isReadStateHydrating, isMarkingAllRead } = state;
   const stateRef = useRef(state);
   const schedulesRef = useRef<MedicationScheduleRecord[]>(cacheIsValid ? (patientActivityLogViewCache?.schedules ?? []) : []);
   const deferredSearch = useDeferredValue(search);
@@ -103,23 +104,32 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
   }, [currentUserId]);
 
   const applyCachedActivityLogData = useCallback((activityData: PatientActivityLogData) => {
-    setActivities(activityData.activities);
+    setActivities(applyKnownActivityReadState(activityData.activities));
     schedulesRef.current = activityData.schedules;
     syncPatientActivityLogViewCache(activityData.schedules);
-    dispatch({ type: "patch", payload: { hasLoadedActivities: true, isLoading: true } });
+    dispatch({
+      type: "patch",
+      payload: {
+        hasLoadedActivities: true,
+        isLoading: true,
+        isReadStateHydrating: activityData.activities.length > 0 && activityData.readStateHydrated !== true,
+      },
+    });
   }, [setActivities, syncPatientActivityLogViewCache]);
 
-  const applyFreshActivityLogData = useCallback((activityData: PatientActivityLogData, readIds: Set<string>) => {
-    setActivities(activityData.activities.map((activity) => ({ ...activity, read: readIds.has(activity.id) || activity.read })));
+  const applyFreshActivityLogData = useCallback((monthDate: Date, activityData: PatientActivityLogData, readIds: Set<string>) => {
+    const nextActivities = activityData.activities.map((activity) => ({ ...activity, read: readIds.has(activity.id) || activity.read }));
+    hydrateCachedPatientActivityLogReadState(monthDate, readIds);
+    setActivities(nextActivities);
     schedulesRef.current = activityData.schedules;
     syncPatientActivityLogViewCache(activityData.schedules);
-    dispatch({ type: "patch", payload: { hasLoadedActivities: true, isLoading: false } });
+    dispatch({ type: "patch", payload: { hasLoadedActivities: true, isLoading: false, isReadStateHydrating: false } });
   }, [setActivities, syncPatientActivityLogViewCache]);
 
   const clearFailedActivityLogData = useCallback(() => {
     setActivities([]);
     schedulesRef.current = [];
-    dispatch({ type: "patch", payload: { hasLoadedActivities: true, isLoading: false } });
+    dispatch({ type: "patch", payload: { hasLoadedActivities: true, isLoading: false, isReadStateHydrating: false } });
   }, [setActivities]);
 
   useEffect(() => {
@@ -142,22 +152,25 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
     if (cachedData) {
       applyCachedActivityLogData(cachedData);
     } else {
-      dispatch({ type: "patch", payload: { isLoading: true } });
+      setActivities([]);
+      schedulesRef.current = [];
+      dispatch({ type: "patch", payload: { hasLoadedActivities: false, isLoading: true, isReadStateHydrating: false } });
     }
 
-    Promise.all([
-      getPatientActivityLogData(visibleMonth),
-      (async () => {
-        const year = visibleMonth.getFullYear();
-        const month = String(visibleMonth.getMonth() + 1).padStart(2, "0");
-        const startDate = `${year}-${month}-01`;
-        const endDate = `${year}-${month}-31`;
-        return getActivityReadIdsFromApi({ startDate, endDate }).catch(() => new Set<string>());
-      })(),
-    ])
+    const activityDataRequest = getPatientActivityLogData(visibleMonth);
+    const readIdsRequest = activityDataRequest
+      .then((activityData) => {
+        const activityIds = activityData.activities.map((activity) => activity.id);
+        return activityIds.length > 0
+          ? getActivityReadIdsFromApi({ activityIds, limit: Math.min(activityIds.length, 100), paginateAll: true })
+          : new Set<string>();
+      })
+      .catch(() => new Set<string>());
+
+    Promise.all([activityDataRequest, readIdsRequest])
       .then(([activityData, readIds]) => {
         if (!isMounted) return;
-        applyFreshActivityLogData(activityData, readIds);
+        applyFreshActivityLogData(visibleMonth, activityData, readIds);
         void Promise.all([
           getPatientActivityLogData(addMonths(visibleMonth, 1)),
           getPatientActivityLogData(addMonths(visibleMonth, -1)),
@@ -169,13 +182,13 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
           clearFailedActivityLogData();
           return;
         }
-        dispatch({ type: "patch", payload: { hasLoadedActivities: true, isLoading: false } });
+        dispatch({ type: "patch", payload: { hasLoadedActivities: true, isLoading: false, isReadStateHydrating: false } });
       });
 
     return () => {
       isMounted = false;
     };
-  }, [applyCachedActivityLogData, applyFreshActivityLogData, clearFailedActivityLogData, visibleMonth]);
+  }, [applyCachedActivityLogData, applyFreshActivityLogData, clearFailedActivityLogData, setActivities, visibleMonth]);
 
   useEffect(() => {
     if (!hasLoadedActivities) return;
@@ -191,23 +204,27 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
   }, [category, currentUserId, date, hasLoadedActivities, quickFilter, search, visibleMonth]);
 
   const patientActivities = useMemo(() => activities, [activities]);
+  const readSafePatientActivities = useMemo(() => {
+    if (!isReadStateHydrating) return patientActivities;
+    return patientActivities.map((activity) => (activity.read ? activity : { ...activity, read: true }));
+  }, [isReadStateHydrating, patientActivities]);
 
   const summaryStats = useMemo(() => {
-    const unread = patientActivities.filter((activity) => !activity.read).length;
-    const warningCritical = patientActivities.filter((activity) => activity.severity === "Peringatan" || activity.severity === "Kritis").length;
-    const todayTotal = patientActivities.filter((activity) => getDateKey(new Date(activity.timestamp)) === todayKey).length;
+    const unread = readSafePatientActivities.filter((activity) => !activity.read).length;
+    const warningCritical = readSafePatientActivities.filter((activity) => activity.severity === "Peringatan" || activity.severity === "Kritis").length;
+    const todayTotal = readSafePatientActivities.filter((activity) => getDateKey(new Date(activity.timestamp)) === todayKey).length;
 
     return [
       { label: "Notifikasi Belum Dibaca", value: String(unread), tone: "neutral" as const, color: "pine" as const, icon: Bell },
       { label: "Notifikasi Peringatan/Kritis", value: String(warningCritical), tone: "critical" as const, color: "lime" as const, icon: AlertTriangle },
       { label: "Total Aktivitas Hari Ini", value: String(todayTotal), tone: "safe" as const, color: "leaf" as const, icon: ClipboardList },
     ];
-  }, [patientActivities, todayKey]);
+  }, [readSafePatientActivities, todayKey]);
 
   const filteredActivities = useMemo(() => {
     const query = deferredSearch.trim().toLowerCase();
 
-    return patientActivities.filter((activity) => {
+    return readSafePatientActivities.filter((activity) => {
       const matchesSearch = !query || [activity.title, activity.description, activity.medicineName ?? "", activity.category]
         .some((value) => value.toLowerCase().includes(query));
       const matchesQuickFilter = quickFilter === "all"
@@ -221,10 +238,10 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
 
       return matchesSearch && matchesQuickFilter && matchesCategory && matchesDate;
     });
-  }, [category, date, deferredSearch, patientActivities, quickFilter]);
+  }, [category, date, deferredSearch, readSafePatientActivities, quickFilter]);
 
-  const hasUnread = patientActivities.some((activity) => !activity.read);
-  const showMarkAllButton = hasUnread || (unreadActivityCount ?? 0) > 0;
+  const hasUnread = readSafePatientActivities.some((activity) => !activity.read);
+  const showMarkAllButton = hasUnread;
   const hasActiveFilters = Boolean(search || quickFilter !== "all" || category !== "all" || date);
   const isUpdatingActivities = isLoading && hasLoadedActivities;
 
@@ -235,7 +252,9 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
   const markAllAsRead = async () => {
     dispatch({ type: "patch", payload: { isMarkingAllRead: true } });
     try {
-      await markAllUnreadViaApi();
+      const activityIds = patientActivities.map((activity) => activity.id);
+      await markAllUnreadViaApi(activityIds);
+      markAllCachedPatientActivityLogActivitiesRead();
       markAllActivitiesAsRead();
       showToast("Semua aktivitas ditandai sudah dibaca.");
     } catch {
@@ -249,6 +268,7 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
     if (!activity.read) {
       try {
         await markActivitiesReadViaApi([activity.id]);
+        markCachedPatientActivityLogActivitiesRead(visibleMonth, [activity.id]);
         markActivityAsRead(activity.id);
       } catch {
         showToast("Gagal menandai aktivitas sebagai dibaca.", "error");

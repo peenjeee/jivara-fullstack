@@ -46,7 +46,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const isCurrentRouteAllowed = isPathAllowedForRole(pathname, userRole);
   const fallbackPath = getFallbackPathForRole(userRole);
-  useActivityBadgeSync({ enabled: hasHydrated && Boolean(user) && !isLoggingOut, role: dashboardRole });
+  useActivityBadgeSync({ enabled: hasHydrated && Boolean(user) && !isLoggingOut, role: dashboardRole, userId: user?.id });
 
   const redirectToLogin = useCallback(() => {
     replace("/login?loggedOut=1");
