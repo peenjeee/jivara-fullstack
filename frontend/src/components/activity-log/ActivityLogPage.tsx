@@ -110,9 +110,9 @@ function activityLogPageReducer(state: ActivityLogPageState, action: ActivityLog
     case "patch":
       return { ...state, ...action.payload };
     case "set-filters":
-      return { ...state, ...action.payload, visibleCount: loadBatchSize, isLoading: true };
+      return { ...state, ...action.payload, visibleCount: loadBatchSize, isLoading: true, isLoadingMore: false };
     case "reset-filters":
-      return { ...state, search: "", quickFilter: "all", category: "all", nurseId: "all", date: "", visibleCount: loadBatchSize, isLoading: true };
+      return { ...state, search: "", quickFilter: "all", category: "all", nurseId: "all", date: "", visibleCount: loadBatchSize, isLoading: true, isLoadingMore: false };
     case "increase-visible-count":
       return { ...state, visibleCount: state.visibleCount + loadBatchSize };
     case "mark-summary-read":
@@ -285,6 +285,7 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
   const hasValidViewCache = initialQueryKey !== null;
   const loadedQueryRef = useRef<string | null>(initialQueryKey);
   const failedQueryRef = useRef<string | null>(null);
+  const latestRequestKeyRef = useRef<string | null>(initialQueryKey);
 
   // Sync stateRef after render, biar gak kena stale closure di async handler
   useEffect(() => {
@@ -357,7 +358,8 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
     if (loadingPagesRef.current.has(pageKey)) return;
 
     loadingPagesRef.current.add(pageKey);
-    dispatch({ type: "patch", payload: page === 1 ? { isLoading: true } : { isLoadingMore: true } });
+    latestRequestKeyRef.current = pageKey;
+    dispatch({ type: "patch", payload: page === 1 ? { isLoading: true, isLoadingMore: false } : { isLoadingMore: true } });
 
     try {
       const activityData = await fetchActivityPageData({
@@ -373,29 +375,44 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
         fallbackTotal: current.serverActivityTotal ?? current.activities.length,
         forceRefresh,
       });
+      if (latestRequestKeyRef.current === pageKey) {
+        const visibleActivities = page === 1 ? activityData.activities : [...stateRef.current.activities, ...activityData.activities];
+        const visibleAssignments = page === 1 ? activityData.assignments : { ...stateRef.current.patientAssignments, ...activityData.assignments };
 
-      const visibleActivities = page === 1 ? activityData.activities : [...stateRef.current.activities, ...activityData.activities];
-      const visibleAssignments = page === 1 ? activityData.assignments : { ...stateRef.current.patientAssignments, ...activityData.assignments };
+        if (page === 1) {
+          loadedQueryRef.current = pageKey;
+          failedQueryRef.current = null;
+        }
 
-      if (page === 1) {
-        loadedQueryRef.current = pageKey;
-        failedQueryRef.current = null;
+        dispatch({
+          type: "patch",
+          payload: {
+            activities: visibleActivities,
+            patientAssignments: visibleAssignments,
+            serverActivityTotal: activityData.total,
+            serverWarningCriticalTotal: activityData.warningCriticalTotal,
+            serverTodayTotal: activityData.todayTotal,
+            activityPage: page,
+            visibleCount: visibleActivities.length,
+          },
+        });
+        if (!forceRefresh && page * serverPageSize < activityData.total) {
+          void fetchActivityPageData({
+            page: page + 1,
+            readOnly,
+            auditUserRole,
+            showNurseFilter,
+            nurseId: current.nurseId,
+            category: current.category,
+            date: current.date,
+            quickFilter: effectiveQuickFilter,
+            search: debouncedSearch,
+            fallbackTotal: activityData.total,
+          }).catch(() => undefined);
+        }
       }
-
-      dispatch({
-        type: "patch",
-        payload: {
-          activities: visibleActivities,
-          patientAssignments: visibleAssignments,
-          serverActivityTotal: activityData.total,
-          serverWarningCriticalTotal: activityData.warningCriticalTotal,
-          serverTodayTotal: activityData.todayTotal,
-          activityPage: page,
-          visibleCount: visibleActivities.length,
-        },
-      });
     } catch {
-      if (page === 1) {
+      if (latestRequestKeyRef.current === pageKey && page === 1) {
         failedQueryRef.current = pageKey;
         dispatch({
           type: "patch",
@@ -409,12 +426,14 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
             visibleCount: loadBatchSize,
           },
         });
-      } else {
+      } else if (latestRequestKeyRef.current === pageKey) {
         showToast("Gagal memuat aktivitas tambahan.", "error");
       }
     } finally {
       loadingPagesRef.current.delete(pageKey);
-      dispatch({ type: "patch", payload: page === 1 ? { isLoading: false, hasLoadedActivities: true } : { isLoadingMore: false } });
+      if (latestRequestKeyRef.current === pageKey) {
+        dispatch({ type: "patch", payload: page === 1 ? { isLoading: false, hasLoadedActivities: true } : { isLoadingMore: false } });
+      }
     }
   }, [auditUserRole, debouncedSearch, effectiveQuickFilter, readOnly, showNurseFilter]);
 

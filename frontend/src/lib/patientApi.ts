@@ -484,17 +484,33 @@ export const getPatientDetailFromApi = async (patientId: string, options: { read
     const detail = response.data.data;
 
     const patientFinal = mapPatient({ ...detail, createdAt: detail.registeredAt ?? detail.createdAt });
-    const [schedules, scans] = await Promise.all([
+    const totalFoodScans = detail.totalFoodScans ?? 0;
+    const [schedules, scans, activityResult] = await Promise.all([
       getPatientSchedulesFromApi(patientFinal)
         .catch(() => (detail.activeMedications?.map((medication) => mapMedication(patientFinal, { ...medication, patientId: patientFinal.id, stock: 1, reminderEnabled: true, isActive: true })) ?? [])),
-      detail.totalFoodScans === 0
+      totalFoodScans === 0
         ? Promise.resolve([])
         : getFoodScansForPatientFromApi(patientId, patientDetailPreviewLimit).catch(() => []),
+      getPatientActivitiesFromApi(patientFinal, [], totalFoodScans, patientDetailPreviewLimit)
+        .catch(() => ({ activities: [], activityDistribution: getActivityDistribution([]) })),
     ]);
-    const activityResult = await getPatientActivitiesFromApi(patientFinal, scans, detail.totalFoodScans ?? scans.length, patientDetailPreviewLimit)
-      .catch(() => ({ activities: [], activityDistribution: getActivityDistribution([]) }));
+    const scanActivities = scans.map((scan): ActivityLogRecord => ({
+      id: `food-scan-${scan.id}`,
+      title: scan.risk === "High Risk" ? "Scan makanan berisiko" : "Scan makanan selesai",
+      description: scan.result,
+      category: "Scan Makanan",
+      severity: scan.risk === "High Risk" ? "Peringatan" : "Sukses",
+      timestamp: scan.scannedAt,
+      patientId: scan.patientId,
+      patientName: patientFinal.name,
+      patientAvatar: patientFinal.avatar,
+      scanId: scan.id,
+      read: false,
+    }));
+    const activities = [...activityResult.activities, ...scanActivities]
+      .sort((first, second) => Date.parse(second.timestamp) - Date.parse(first.timestamp));
 
-    const result = { patient: patientFinal, schedules, activities: activityResult.activities, activityDistribution: activityResult.activityDistribution, scans };
+    const result = { patient: patientFinal, schedules, activities, activityDistribution: activityResult.activityDistribution, scans };
     patientDetailCache.set(patientId, { data: result, expiresAt: Date.now() + patientDetailCacheTtl });
     return result;
   })().finally(() => {

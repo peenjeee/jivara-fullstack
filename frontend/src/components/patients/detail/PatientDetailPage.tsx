@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Bell, ClipboardList, TrendingUp } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
@@ -33,20 +33,23 @@ export default function PatientDetailPage({ data, patientId }: PatientDetailPage
     loaded: !(Boolean(patientId) && !patientDetailViewCache.has(cacheKey)),
   }));
   const { data: detailData, loaded: isLoaded } = detail;
+  const requestSeqRef = useRef(0);
 
   useEffect(() => {
     if (!patientId) return;
 
     let isMounted = true;
+    const requestSeq = requestSeqRef.current + 1;
+    requestSeqRef.current = requestSeq;
 
     getPatientDetailFromApi(patientId)
       .then((nextData) => {
-        if (!isMounted) return;
+        if (!isMounted || requestSeq !== requestSeqRef.current) return;
         patientDetailViewCache.set(cacheKey, nextData);
         setDetail({ data: nextData, loaded: true });
       })
       .catch(() => {
-        if (isMounted) setDetail((prev) => ({ ...prev, loaded: true }));
+        if (isMounted && requestSeq === requestSeqRef.current) setDetail((prev) => ({ ...prev, loaded: true }));
       });
 
     return () => {
@@ -61,8 +64,11 @@ export default function PatientDetailPage({ data, patientId }: PatientDetailPage
       const patientIds = (event as CustomEvent<{ patientIds?: string[] }>).detail?.patientIds;
       if (patientIds && patientIds.length > 0 && !patientIds.includes(patientId)) return;
 
+      const requestSeq = requestSeqRef.current + 1;
+      requestSeqRef.current = requestSeq;
       getPatientDetailFromApi(patientId, { forceRefresh: true })
         .then((nextData) => {
+          if (requestSeq !== requestSeqRef.current) return;
           patientDetailViewCache.set(cacheKey, nextData);
           setDetail({ data: nextData, loaded: true });
         })

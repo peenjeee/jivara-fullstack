@@ -5,6 +5,12 @@ import { m } from "motion/react";
 
 const teamMembers = [
   {
+    image: "/images/team/rizky.jpeg",
+    linkedin: "https://www.linkedin.com/in/rizki-pangestu-a52200318/",
+    name: "Rizki Pangestu",
+    role: "Data Scientist",
+  },
+  {
     image: "/images/team/rama.jpeg",
     linkedin: "https://www.linkedin.com/in/ramadanadipa/",
     name: "Rama Danadipa Putra Wijaya",
@@ -15,12 +21,6 @@ const teamMembers = [
     linkedin: "https://www.linkedin.com/in/panjiihsanudinfajri/",
     name: "Panji Ihsanudin Fajri",
     role: "Fullstack Developer",
-  },
-  {
-    image: "/images/team/rizky.jpeg",
-    linkedin: "https://www.linkedin.com/in/rizki-pangestu-a52200318/",
-    name: "Rizki Pangestu",
-    role: "Data Scientist",
   },
   {
     image: "/images/team/rayan.jpeg",

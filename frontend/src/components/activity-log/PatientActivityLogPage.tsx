@@ -10,7 +10,7 @@ import { PatientActivityCalendarSkeleton, SummaryCardsSkeleton, ToolbarSkeleton 
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import { FoodScanDetailModal } from "@/components/food-scan";
 import PatientMedicineDetailModal from "@/components/schedule/PatientMedicineDetailModal";
-import { getDateKey } from "@/helpers/patientSchedule";
+import { addMonths, getDateKey } from "@/helpers/patientSchedule";
 import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
 import { getActivityReadIdsFromApi, markActivitiesReadViaApi, markAllUnreadViaApi } from "@/lib/activityReadApi";
 import { isDateInRange } from "@/lib/dateRange";
@@ -130,6 +130,10 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
           cachedUserId: currentUserId ?? null,
         };
         dispatch({ type: "patch", payload: { hasLoadedActivities: true, isLoading: false } });
+        void Promise.all([
+          getPatientActivityLogData(addMonths(visibleMonth, 1)),
+          getPatientActivityLogData(addMonths(visibleMonth, -1)),
+        ]).catch(() => undefined);
       })
       .catch(() => {
         if (!isMounted) return;

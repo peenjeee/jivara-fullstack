@@ -52,12 +52,15 @@ export function useAdminApprovals(canLoad: boolean) {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [rejectingUser, setRejectingUser] = useState<User | null>(null);
   const isInitialLoad = useRef(true);
+  const requestSeqRef = useRef(0);
   const debouncedSearch = useDebouncedValue(search);
 
   const totalPages = Math.max(1, Math.ceil(totalApprovals / pageSize));
   const paginatedApprovals = approvals;
 
   const loadApprovals = useCallback(async (page = currentPage, forceRefresh = false) => {
+    const requestSeq = requestSeqRef.current + 1;
+    requestSeqRef.current = requestSeq;
     const query = debouncedSearch.trim();
     const canUseVisibleCache = approvalsViewCache?.currentPage === page
       && approvalsViewCache.search.trim() === query
@@ -94,6 +97,7 @@ export function useAdminApprovals(canLoad: boolean) {
         approvalsRequests.set(cacheKey, request);
         data = await request;
       }
+      if (requestSeq !== requestSeqRef.current) return;
 
       setLoadError(false);
       setApprovals(data.users);
@@ -107,7 +111,31 @@ export function useAdminApprovals(canLoad: boolean) {
         filter,
         currentPage: page,
       };
+      if (!forceRefresh) {
+        const totalPagesForQuery = Math.max(1, Math.ceil(data.meta.total / pageSize));
+        const adjacentPages = [page + 1, page - 1].filter((nextPage) => nextPage >= 1 && nextPage <= totalPagesForQuery);
+        void Promise.all(adjacentPages.map((nextPage) => {
+          const adjacentCacheKey = `${nextPage}:${pageSize}:${query}:${filter}`;
+          if (approvalsCache.has(adjacentCacheKey) || approvalsRequests.has(adjacentCacheKey)) return Promise.resolve();
+          const request = api.get("/auth/admin-approvals", { params: { page: nextPage, limit: pageSize, ...(query ? { search: query } : {}), ...(filter !== "all" ? { status: filter } : {}) } })
+            .then((response) => {
+              const result = {
+                users: response.data.data.users ?? [],
+                summary: response.data.data.summary ?? emptySummary,
+                meta: response.data.meta ?? { page: nextPage, limit: pageSize, total: response.data.data.users?.length ?? 0 },
+              };
+              approvalsCache.set(adjacentCacheKey, { data: result, expiresAt: Date.now() + approvalsCacheTtl });
+              return result;
+            })
+            .finally(() => {
+              approvalsRequests.delete(adjacentCacheKey);
+            });
+          approvalsRequests.set(adjacentCacheKey, request);
+          return request.catch(() => undefined);
+        }));
+      }
     } catch (error) {
+      if (requestSeq !== requestSeqRef.current) return;
       setLoadError(true);
       if (!hasLoadedApprovals) {
         setApprovals([]);
@@ -116,9 +144,11 @@ export function useAdminApprovals(canLoad: boolean) {
       }
       showError(getApiErrorMessage(error, "Gagal memuat daftar pengajuan admin."));
     } finally {
-      setHasLoadedApprovals(true);
-      setHasLoadedSummary(true);
-      setLoading(false);
+      if (requestSeq === requestSeqRef.current) {
+        setHasLoadedApprovals(true);
+        setHasLoadedSummary(true);
+        setLoading(false);
+      }
     }
   }, [currentPage, debouncedSearch, filter, hasLoadedApprovals, search]);
 

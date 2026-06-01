@@ -96,8 +96,10 @@ export default function SuperAdminActivityLogPage() {
   });
   const { activities, search, filter, date, selectedActivity, isLoading, hasLoadedActivities, hasLoadedSummary, isLoadingMore, activityPage, totalAuditLogCount, totalFilteredLogCount, totalIncomingApprovalCount, totalProcessedTodayCount } = state;
   const loadingPagesRef = useRef(new Set<string>());
-  const loadedQueryRef = useRef<string | null>(cacheIsValid ? `${superAdminLogViewCache!.activityPage}:${superAdminLogViewCache!.filter}:${superAdminLogViewCache!.date}:${superAdminLogViewCache!.search}` : null);
+  const initialLoadedQueryKey = cacheIsValid ? `${superAdminLogViewCache!.activityPage}:${superAdminLogViewCache!.filter}:${superAdminLogViewCache!.date}:${superAdminLogViewCache!.search}` : null;
+  const loadedQueryRef = useRef<string | null>(initialLoadedQueryKey);
   const failedQueryRef = useRef<string | null>(null);
+  const latestRequestKeyRef = useRef<string | null>(initialLoadedQueryKey);
   const loadedSummaryRef = useRef(cacheIsValid);
   const stateRef = useRef(state);
   const debouncedSearch = useDebouncedValue(search);
@@ -115,7 +117,8 @@ export default function SuperAdminActivityLogPage() {
     if (loadingPagesRef.current.has(pageKey)) return;
 
     loadingPagesRef.current.add(pageKey);
-    dispatch({ type: "patch", payload: page === 1 ? { isLoading: true } : { isLoadingMore: true } });
+    latestRequestKeyRef.current = pageKey;
+    dispatch({ type: "patch", payload: page === 1 ? { isLoading: true, isLoadingMore: false } : { isLoadingMore: true } });
 
     try {
       const response = await getSuperAdminApprovalActivityPageFromApi({
@@ -126,52 +129,64 @@ export default function SuperAdminActivityLogPage() {
         search: debouncedSearch,
         forceRefresh,
       });
+      if (latestRequestKeyRef.current === pageKey) {
+        const visibleActivities = page === 1 ? response.activities : [...currentState.activities, ...response.activities];
+        const hasActiveFilters = Boolean(currentState.search || currentState.date || currentState.filter !== "all");
+        const shouldRefreshSummary = page === 1 && (!hasActiveFilters || !loadedSummaryRef.current);
 
-      const visibleActivities = page === 1 ? response.activities : [...currentState.activities, ...response.activities];
-      const hasActiveFilters = Boolean(currentState.search || currentState.date || currentState.filter !== "all");
-      const shouldRefreshSummary = page === 1 && (!hasActiveFilters || !loadedSummaryRef.current);
+        if (page === 1) {
+          loadedQueryRef.current = pageKey;
+          failedQueryRef.current = null;
+          if (shouldRefreshSummary) loadedSummaryRef.current = true;
+        }
 
-      if (page === 1) {
-        loadedQueryRef.current = pageKey;
-        failedQueryRef.current = null;
-        if (shouldRefreshSummary) loadedSummaryRef.current = true;
-      }
+        dispatch({
+          type: "patch",
+          payload: {
+            activities: visibleActivities,
+            activityPage: page,
+            totalFilteredLogCount: response.meta.total,
+            ...(shouldRefreshSummary ? {
+              hasLoadedSummary: true,
+              totalAuditLogCount: response.meta.total,
+              totalIncomingApprovalCount: response.meta.summary?.pending ?? 0,
+              totalProcessedTodayCount: response.meta.summary?.processedToday ?? 0,
+            } : {}),
+          },
+        });
 
-      dispatch({
-        type: "patch",
-        payload: {
+        superAdminLogViewCache = {
           activities: visibleActivities,
+          search: currentState.search,
+          filter: currentState.filter,
+          date: currentState.date,
           activityPage: page,
+          totalAuditLogCount: shouldRefreshSummary ? response.meta.total : (superAdminLogViewCache?.totalAuditLogCount ?? currentState.totalAuditLogCount),
           totalFilteredLogCount: response.meta.total,
-          ...(shouldRefreshSummary ? {
-            hasLoadedSummary: true,
-            totalAuditLogCount: response.meta.total,
-            totalIncomingApprovalCount: response.meta.summary?.pending ?? 0,
-            totalProcessedTodayCount: response.meta.summary?.processedToday ?? 0,
-          } : {}),
-        },
-      });
-
-      superAdminLogViewCache = {
-        activities: visibleActivities,
-        search: currentState.search,
-        filter: currentState.filter,
-        date: currentState.date,
-        activityPage: page,
-        totalAuditLogCount: shouldRefreshSummary ? response.meta.total : (superAdminLogViewCache?.totalAuditLogCount ?? currentState.totalAuditLogCount),
-        totalFilteredLogCount: response.meta.total,
-        totalIncomingApprovalCount: shouldRefreshSummary ? (response.meta.summary?.pending ?? 0) : (superAdminLogViewCache?.totalIncomingApprovalCount ?? currentState.totalIncomingApprovalCount),
-        totalProcessedTodayCount: shouldRefreshSummary ? (response.meta.summary?.processedToday ?? 0) : (superAdminLogViewCache?.totalProcessedTodayCount ?? currentState.totalProcessedTodayCount),
-        cachedUserId: currentUserId ?? null,
-      };
+          totalIncomingApprovalCount: shouldRefreshSummary ? (response.meta.summary?.pending ?? 0) : (superAdminLogViewCache?.totalIncomingApprovalCount ?? currentState.totalIncomingApprovalCount),
+          totalProcessedTodayCount: shouldRefreshSummary ? (response.meta.summary?.processedToday ?? 0) : (superAdminLogViewCache?.totalProcessedTodayCount ?? currentState.totalProcessedTodayCount),
+          cachedUserId: currentUserId ?? null,
+        };
+        if (!forceRefresh && page * pageSize < response.meta.total) {
+          void getSuperAdminApprovalActivityPageFromApi({
+            page: page + 1,
+            limit: pageSize,
+            status: currentState.filter === "all" ? undefined : currentState.filter,
+            date: currentState.date,
+            search: debouncedSearch,
+          }).catch(() => undefined);
+        }
+      }
     } catch {
-      if (page === 1) {
+      if (latestRequestKeyRef.current === pageKey && page === 1) {
         failedQueryRef.current = pageKey;
         dispatch({ type: "patch", payload: { activities: [], totalFilteredLogCount: 0 } });
       }
     } finally {
       loadingPagesRef.current.delete(pageKey);
-      dispatch({ type: "patch", payload: page === 1 ? { hasLoadedActivities: true, isLoading: false } : { isLoadingMore: false } });
+      if (latestRequestKeyRef.current === pageKey) {
+        dispatch({ type: "patch", payload: page === 1 ? { hasLoadedActivities: true, isLoading: false } : { isLoadingMore: false } });
+      }
     }
   }, [currentUserId, debouncedSearch]);
 
@@ -198,7 +213,7 @@ export default function SuperAdminActivityLogPage() {
 
   const resetFilters = () => {
     loadedQueryRef.current = null;
-    dispatch({ type: "patch", payload: { search: "", filter: "all", date: "" } });
+    dispatch({ type: "patch", payload: { search: "", filter: "all", date: "", isLoadingMore: false } });
   };
 
   const loadMoreActivities = () => {

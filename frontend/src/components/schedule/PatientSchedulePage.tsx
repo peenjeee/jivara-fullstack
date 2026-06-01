@@ -7,7 +7,7 @@ import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import { PatientScheduleContentSkeleton, SummaryCardsSkeleton } from "@/components/ui/PageSkeletons";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import type { SummaryCardItem } from "@/components/ui/SummaryCard";
-import { getDateKey, getMonthStart, getScheduleDoseWindow, getSchedulesForDate, isSameDate } from "@/helpers/patientSchedule";
+import { addMonths, getDateKey, getMonthStart, getScheduleDoseWindow, getSchedulesForDate, isSameDate } from "@/helpers/patientSchedule";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
 import { confirmMedicationScheduleViaApi, getConfirmedScheduleDates, getPatientScheduleData } from "@/lib/patientDashboardApi";
 import { showConfirm, showToast } from "@/lib/swal";
@@ -72,6 +72,10 @@ export default function PatientSchedulePage() {
           patientSchedules: data.schedules,
           confirmedScheduleDates: nextConfirmedScheduleDates,
         };
+        void Promise.all([
+          getPatientScheduleData(addMonths(visibleMonth, 1)),
+          getPatientScheduleData(addMonths(visibleMonth, -1)),
+        ]).catch(() => undefined);
       })
       .catch(() => {
         if (!isMounted) return;
