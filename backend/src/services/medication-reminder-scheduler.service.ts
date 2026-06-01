@@ -1,6 +1,7 @@
 import { and, eq, inArray, lte } from "drizzle-orm";
 import { db } from "../db";
 import { medicationLogs, medicationReminderJobs, medicationSchedules } from "../db/schema";
+import { deleteCachedByPrefix, invalidateAdherenceCache, invalidateDashboardCache, invalidatePatientReadCache } from "./cache.service";
 import { sendCareTeamCriticalPushNotification, sendPushNotification } from "./notification.service";
 
 const DEFAULT_INTERVAL_MS = 60_000;
@@ -485,13 +486,21 @@ export const processDueMedicationReminders = async (now = new Date()) => {
       }
     }
 
+    if (processed > 0) {
+      deleteCachedByPrefix("med-log:");
+      deleteCachedByPrefix("medication-schedules:");
+      invalidatePatientReadCache();
+      invalidateAdherenceCache();
+      invalidateDashboardCache();
+    }
+
     return { processed, skipped: false };
   } finally {
     isProcessing = false;
   }
 };
 
-export const startMedicationReminderScheduler = () => {
+export const startMedicationReminderScheduler = (options: { keepProcessAlive?: boolean } = {}) => {
   if (process.env.ENABLE_REMINDER_SCHEDULER === "false") return null;
   if (intervalHandle) return intervalHandle;
 
@@ -503,7 +512,7 @@ export const startMedicationReminderScheduler = () => {
 
   tick();
   intervalHandle = setInterval(tick, getIntervalMs());
-  intervalHandle.unref?.();
+  if (!options.keepProcessAlive) intervalHandle.unref?.();
 
   return intervalHandle;
 };

@@ -9,7 +9,7 @@ import {
 import { getAppDateKey } from "../utils/app-timezone";
 import { AccessUser, assertCanAccessPatient, scopedPatientFilter } from "./access-control.service";
 import { diffChanges, writeAuditLogAsync } from "./audit-log.service";
-import { deleteCachedByPrefix, getCached, setCached } from "./cache.service";
+import { deleteCachedByPrefix, getCached, invalidateAdherenceCache, invalidateDashboardCache, setCached } from "./cache.service";
 import { invalidatePatientCache, listPatients } from "./patient.service";
 
 const CACHE_PREFIX = "medication-schedules:";
@@ -79,6 +79,8 @@ export const invalidateMedicationScheduleCache = () => deleteCachedByPrefix(CACH
 const invalidateScheduleDependentCaches = () => {
   invalidateMedicationScheduleCache();
   invalidatePatientCache();
+  invalidateAdherenceCache();
+  invalidateDashboardCache();
 };
 
 export const getMedicationScheduleSummaryForPatients = async (patientIds: readonly string[]) => {

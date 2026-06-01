@@ -6,6 +6,9 @@ import { useActivityLogStore } from "@/store/activityLog";
 import type { DashboardRole } from "@/components/dashboard/navigation";
 
 const ACTIVITY_BADGE_FOCUS_SYNC_STALE_MS = 5 * 60_000;
+const ACTIVITY_EVENTS_URL = process.env.NEXT_PUBLIC_API_URL
+  ? `${process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, "")}/activity-events`
+  : "/api/v1/activity-events";
 
 interface UseActivityBadgeSyncOptions {
   readonly enabled: boolean;
@@ -53,7 +56,7 @@ export function useActivityBadgeSync({ enabled, role }: UseActivityBadgeSyncOpti
       }, 500);
     };
 
-    const eventSource = new EventSource("/api/v1/activity-events");
+    const eventSource = new EventSource(ACTIVITY_EVENTS_URL, { withCredentials: true });
     eventSource.addEventListener("activity:changed", syncFromRealtimeEvent);
 
     const syncIfStale = () => {

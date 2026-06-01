@@ -114,6 +114,7 @@ const nextConfig: NextConfig = {
     root: path.resolve(__dirname)
   },
   images: {
+    unoptimized: process.env.NEXT_IMAGE_UNOPTIMIZED === "1",
     remotePatterns: [
       {
         protocol: "https",

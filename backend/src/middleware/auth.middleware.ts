@@ -7,6 +7,7 @@ import { users } from "../db/schema";
 dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET as string;
+const AUTH_USER_CACHE_TTL_MS = Math.max(Number(process.env.AUTH_USER_CACHE_TTL_MS || (process.env.NODE_ENV === "test" ? 0 : 5_000)), 0);
 
 if (!JWT_SECRET) {
   throw new Error("FATAL ERROR: JWT_SECRET is not defined in environment variables.");
@@ -27,6 +28,49 @@ export interface AuthRequest extends Request {
     role: string;
   };
 }
+
+type AuthenticatedUser = NonNullable<AuthRequest["user"]>;
+type AuthenticatedUserRow = AuthenticatedUser & {
+  isActive: boolean | null;
+  accountStatus: string;
+};
+
+const authenticatedUserCache = new Map<string, { user: AuthenticatedUserRow; expiresAt: number }>();
+const authenticatedUserRequests = new Map<string, Promise<AuthenticatedUserRow | null>>();
+
+const getAuthenticatedUser = async (userId: string) => {
+  const cached = authenticatedUserCache.get(userId);
+  if (cached && cached.expiresAt > Date.now()) return cached.user;
+  if (cached) authenticatedUserCache.delete(userId);
+
+  const activeRequest = authenticatedUserRequests.get(userId);
+  if (activeRequest) return activeRequest;
+
+  const request = db
+    .select({
+      id: users.id,
+      email: users.email,
+      role: users.role,
+      isActive: users.isActive,
+      accountStatus: users.accountStatus,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+    .then((rows) => {
+      const user = rows[0] ?? null;
+      if (user && AUTH_USER_CACHE_TTL_MS > 0) {
+        authenticatedUserCache.set(userId, { user, expiresAt: Date.now() + AUTH_USER_CACHE_TTL_MS });
+      }
+      return user;
+    })
+    .finally(() => {
+      authenticatedUserRequests.delete(userId);
+    });
+
+  authenticatedUserRequests.set(userId, request);
+  return request;
+};
 
 /**
  * Middleware: Verifikasi JWT access token dari header Authorization
@@ -58,19 +102,7 @@ export const authenticateToken = async (
       role: string;
     };
 
-    const userRows = await db
-      .select({
-        id: users.id,
-        email: users.email,
-        role: users.role,
-        isActive: users.isActive,
-        accountStatus: users.accountStatus,
-      })
-      .from(users)
-      .where(eq(users.id, decoded.id))
-      .limit(1);
-
-    const currentUser = userRows[0];
+    const currentUser = await getAuthenticatedUser(decoded.id);
     if (!currentUser || !currentUser.isActive || currentUser.accountStatus !== "active") {
       return res.status(401).json({
         status: "gagal",

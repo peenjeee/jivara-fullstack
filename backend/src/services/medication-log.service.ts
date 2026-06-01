@@ -7,7 +7,7 @@ import {
   MedicationSnoozeDTO,
 } from "../types/medication-log.types";
 import { AccessUser, assertCanAccessPatient, scopedPatientFilter } from "./access-control.service";
-import { deleteCachedByPrefix, getCached, setCached } from "./cache.service";
+import { deleteCachedByPrefix, getCached, invalidateAdherenceCache, invalidateDashboardCache, setCached } from "./cache.service";
 import { writeAuditLogAsync } from "./audit-log.service";
 import { invalidatePatientCache } from "./patient.service";
 import { invalidateMedicationScheduleCache } from "./medication-schedule.service";
@@ -25,6 +25,14 @@ const getMedLogListCacheKey = (query: MedicationLogListQuery, user?: AccessUser)
 };
 
 const invalidateMedLogCache = () => deleteCachedByPrefix(MED_LOG_CACHE_PREFIX);
+
+const invalidateMedicationLogDependentCaches = () => {
+  invalidateMedLogCache();
+  invalidatePatientCache();
+  invalidateMedicationScheduleCache();
+  invalidateAdherenceCache();
+  invalidateDashboardCache();
+};
 
 type MedLogListResult = {
   data: Array<{
@@ -249,9 +257,7 @@ export const createMedicationLog = async (dto: MedicationLogCreateDTO, user?: Ac
     return [createdLog];
   });
 
-  invalidateMedLogCache();
-  invalidatePatientCache();
-  invalidateMedicationScheduleCache();
+  invalidateMedicationLogDependentCaches();
 
   if (dto.reminderJobId && dto.status === "confirmed") {
     await db
@@ -389,8 +395,7 @@ export const snoozeMedicationReminder = async (dto: MedicationSnoozeDTO, user?: 
     return [createdLog, createdJob];
   });
 
-  invalidateMedLogCache();
-  invalidatePatientCache();
+  invalidateMedicationLogDependentCaches();
 
   writeAuditLogAsync({
     userId: user?.id || null,

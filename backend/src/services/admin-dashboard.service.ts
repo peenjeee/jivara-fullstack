@@ -4,8 +4,8 @@ import { db } from "../db";
 import { activityReads, medicationLogs, medicationSchedules, notifications, nurses, patientNurseAssignments, patients, users } from "../db/schema";
 import { AccessUser, getOrganizationIdForUser, patientScopeCondition, scopedPatientFilter } from "./access-control.service";
 import { buildAdherenceStatsByPatientId } from "./adherence.service";
-import { getCached, setCached } from "./cache.service";
 import { getMedicationScheduleSummaryForPatients } from "./medication-schedule.service";
+import { getOrSetCached } from "./cache.service";
 
 type PatientStatus = "On Ideal Schedule" | "Lagging Behind" | "Need Special Attention" | "Complete" | "Nonaktif";
 type ActivityCategory = "Reminder" | "Kepatuhan" | "Scan Makanan" | "Administrasi";
@@ -57,8 +57,12 @@ type MedicationDashboardLogRow = {
 };
 
 const previewLimit = 5;
-const dashboardCacheTtlMs = Number(process.env.ADMIN_DASHBOARD_CACHE_TTL_MS || 15_000);
-const getDashboardCacheScope = (user?: AccessUser) => `${user?.id || "anonymous"}:${user?.role || "none"}`;
+const DASHBOARD_CACHE_TTL_MS = Math.max(Number(process.env.DASHBOARD_CACHE_TTL_MS || (process.env.NODE_ENV === "test" ? 0 : 10_000)), 0);
+const DASHBOARD_CACHE_PREFIX = "dashboard:v1:";
+
+const getDashboardCacheKey = (scope: string, user?: AccessUser) => (
+  `${DASHBOARD_CACHE_PREFIX}${scope}:${user?.id || "anon"}:${user?.role || "anon"}`
+);
 
 type PatientAssignmentCandidate = {
   id: string;
@@ -364,7 +368,7 @@ const listPriorityNotifications = async (user: AccessUser | undefined, patientRo
   }));
 };
 
-const buildAdminDashboardData = async (user?: AccessUser) => {
+const loadAdminDashboardData = async (user?: AccessUser) => {
   const [nurseRows, patientRows, totalPatients] = await Promise.all([
     listScopedNurses(user),
     listScopedPatients(user),
@@ -459,17 +463,11 @@ const buildAdminDashboardData = async (user?: AccessUser) => {
   };
 };
 
-export const getAdminDashboardData = async (user?: AccessUser) => {
-  const cacheKey = `admin-dashboard:overview:${getDashboardCacheScope(user)}`;
-  const cached = getCached<Awaited<ReturnType<typeof buildAdminDashboardData>>>(cacheKey);
-  if (cached) return cached;
+export const getAdminDashboardData = async (user?: AccessUser) => (
+  getOrSetCached(getDashboardCacheKey("admin", user), DASHBOARD_CACHE_TTL_MS, () => loadAdminDashboardData(user))
+);
 
-  const result = await buildAdminDashboardData(user);
-  setCached(cacheKey, result, dashboardCacheTtlMs);
-  return result;
-};
-
-const buildNurseDashboardSummary = async (user?: AccessUser) => {
+const loadNurseDashboardSummary = async (user?: AccessUser) => {
   const scope = await patientScopeCondition(user);
   if (!scope.allowed) {
     return {
@@ -532,12 +530,6 @@ const buildNurseDashboardSummary = async (user?: AccessUser) => {
   };
 };
 
-export const getNurseDashboardSummary = async (user?: AccessUser) => {
-  const cacheKey = `admin-dashboard:nurse-summary:${getDashboardCacheScope(user)}`;
-  const cached = getCached<Awaited<ReturnType<typeof buildNurseDashboardSummary>>>(cacheKey);
-  if (cached) return cached;
-
-  const result = await buildNurseDashboardSummary(user);
-  setCached(cacheKey, result, dashboardCacheTtlMs);
-  return result;
-};
+export const getNurseDashboardSummary = async (user?: AccessUser) => (
+  getOrSetCached(getDashboardCacheKey("nurse", user), DASHBOARD_CACHE_TTL_MS, () => loadNurseDashboardSummary(user))
+);

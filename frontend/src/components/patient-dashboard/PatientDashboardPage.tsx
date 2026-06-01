@@ -106,8 +106,10 @@ export default function PatientDashboardPage() {
       })
       .catch(() => {
         if (!isMounted) return;
-        dispatch({ type: "loadFailure" });
-        setPatientId(null);
+        if (!patientDashboardCache) {
+          dispatch({ type: "loadFailure" });
+          setPatientId(null);
+        }
       })
       .finally(() => {
         if (!isMounted) return;

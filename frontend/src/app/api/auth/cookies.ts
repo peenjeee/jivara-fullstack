@@ -2,7 +2,7 @@ import type { NextRequest, NextResponse } from "next/server";
 
 const isProduction = process.env.NODE_ENV === "production";
 const defaultBackendApiUrl = "https://api.jivara.web.id/api/v1";
-const sharedCookieDomain = ".jivara.web.id";
+const sharedCookieDomain = process.env.AUTH_COOKIE_DOMAIN || ".jivara.web.id";
 
 export const ACCESS_COOKIE = "jivara-token";
 export const REFRESH_COOKIE = "jivara-refresh-token";

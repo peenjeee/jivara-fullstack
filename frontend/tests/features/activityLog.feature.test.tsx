@@ -137,7 +137,7 @@ describe("activity log feature", () => {
     expect(getActivityReadIdsFromApi).not.toHaveBeenCalled();
   });
 
-  it("refreshes page 1 when returning to nurse activity log with cached data", async () => {
+  it("keeps cached page 1 when returning to nurse activity log", async () => {
     const oldActivity = { ...activity, id: "audit-old", title: "Patient Updated Lama", read: true };
     const latestActivity = { ...activity, id: "audit-new", title: "Patient Updated Terbaru", read: false };
     let auditCallCount = 0;
@@ -154,10 +154,11 @@ describe("activity log feature", () => {
     expect(await screen.findByText("Patient Updated Lama")).toBeInTheDocument();
 
     firstRender.unmount();
+    vi.mocked(getAuditActivityPageFromApi).mockClear();
     render(<ActivityLogPage auditUserRole="nurse" showNurseFilter={false} />);
 
-    expect(await screen.findByText("Patient Updated Terbaru")).toBeInTheDocument();
-    expect(screen.queryByText("Patient Updated Lama")).not.toBeInTheDocument();
-    expect(getAuditActivityPageFromApi).toHaveBeenCalledWith(expect.objectContaining({ page: 1, limit: 10, userRole: "nurse", forceRefresh: true }));
+    expect(await screen.findByText("Patient Updated Lama")).toBeInTheDocument();
+    expect(screen.queryByText("Patient Updated Terbaru")).not.toBeInTheDocument();
+    expect(getAuditActivityPageFromApi).not.toHaveBeenCalledWith(expect.objectContaining({ page: 1, limit: 10, userRole: "nurse", forceRefresh: true }));
   });
 });

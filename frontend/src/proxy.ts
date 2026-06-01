@@ -85,6 +85,12 @@ const protectedRoutes = ['/dashboard', '/patients', '/schedule', '/activity-log'
 const authRoutes = ['/login', '/register'];
 const authCookieNames = ['jivara-token', 'jivara-refresh-token', 'jivara-role', 'jivara-account-status'];
 const logoutCookieName = 'jivara-logged-out';
+const sharedCookieDomain = process.env.AUTH_COOKIE_DOMAIN || '.jivara.web.id';
+
+function getCookieDomain(request: NextRequest) {
+  if (process.env.NODE_ENV !== 'production') return undefined;
+  return request.nextUrl.hostname.endsWith('jivara.web.id') ? sharedCookieDomain : undefined;
+}
 
 function setHardeningHeaders(response: NextResponse) {
   response.headers.set('X-Content-Type-Options', 'nosniff');
@@ -94,24 +100,26 @@ function setHardeningHeaders(response: NextResponse) {
   response.headers.set('Cross-Origin-Resource-Policy', 'same-origin');
 }
 
-function expireAuthCookies(response: NextResponse) {
+function expireAuthCookies(response: NextResponse, request: NextRequest) {
   for (const name of authCookieNames) {
     response.cookies.set(name, '', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
       path: '/',
+      domain: getCookieDomain(request),
       maxAge: 0,
     });
   }
 }
 
-function setLogoutMarker(response: NextResponse) {
+function setLogoutMarker(response: NextResponse, request: NextRequest) {
   response.cookies.set(logoutCookieName, '1', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',
     path: '/',
+    domain: getCookieDomain(request),
     maxAge: 5 * 60,
   });
 }
@@ -164,8 +172,8 @@ export async function proxy(request: NextRequest) {
     response.headers.set('Content-Security-Policy', contentSecurityPolicy);
     setHardeningHeaders(response);
     response.headers.set('Cache-Control', 'no-store, max-age=0');
-    expireAuthCookies(response);
-    setLogoutMarker(response);
+    expireAuthCookies(response, request);
+    setLogoutMarker(response, request);
     return response;
   }
 
@@ -175,7 +183,7 @@ export async function proxy(request: NextRequest) {
     const response = NextResponse.redirect(url);
     response.headers.set('Content-Security-Policy', contentSecurityPolicy);
     setHardeningHeaders(response);
-    if (hasLogoutMarker) expireAuthCookies(response);
+    if (hasLogoutMarker) expireAuthCookies(response, request);
     return response;
   }
 
@@ -193,7 +201,7 @@ export async function proxy(request: NextRequest) {
   });
   response.headers.set('Content-Security-Policy', contentSecurityPolicy);
   setHardeningHeaders(response);
-  if (hasLogoutMarker) expireAuthCookies(response);
+  if (hasLogoutMarker) expireAuthCookies(response, request);
   return response;
 }
 

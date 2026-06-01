@@ -21,6 +21,11 @@ let patientListViewCache: {
   currentPage: number;
 } | null = null;
 
+/** Exported for test isolation — resets module-level cache between tests. */
+export function __resetPatientListViewCache(): void {
+  patientListViewCache = null;
+}
+
 export function usePatientList(onViewPatient: (patientId: string) => void, options: { readonly shouldLoadNurses?: boolean; readonly assignAfterCreate?: boolean } = {}) {
   const shouldLoadNurses = options.shouldLoadNurses ?? true;
   const assignAfterCreate = options.assignAfterCreate ?? false;
@@ -39,15 +44,19 @@ export function usePatientList(onViewPatient: (patientId: string) => void, optio
   const [processingAction, setProcessingAction] = useState<string | null>(null);
   const [isLoadingNurses, setIsLoadingNurses] = useState(false);
   const isInitialLoad = useRef(true);
+  const hasLoadedPatientsRef = useRef(hasLoadedPatients);
   const debouncedSearch = useDebouncedValue(search);
+
+  useEffect(() => {
+    hasLoadedPatientsRef.current = hasLoadedPatients;
+  }, [hasLoadedPatients]);
 
   const loadPatientPage = useCallback(async (page: number, forceRefresh = false, overrides?: { search?: string; activeFilter?: PatientFilter }) => {
     const nextSearch = overrides?.search ?? debouncedSearch;
     const nextFilter = overrides?.activeFilter ?? activeFilter;
     const status = nextFilter === "Nonaktif" ? "inactive" : nextFilter === "all" ? "all" : "active";
     const adherenceStatus = nextFilter === "all" || nextFilter === "Nonaktif" ? undefined : nextFilter;
-    const canUseVisibleCache = !forceRefresh
-      && patientListViewCache?.currentPage === page
+    const canUseVisibleCache = patientListViewCache?.currentPage === page
       && patientListViewCache.search === nextSearch
       && patientListViewCache.activeFilter === nextFilter;
     setIsLoading(!canUseVisibleCache);
@@ -70,8 +79,10 @@ export function usePatientList(onViewPatient: (patientId: string) => void, optio
         currentPage: page,
       };
     } catch {
-      setPatientRecords([]);
-      setTotalPatients(0);
+      if (!hasLoadedPatientsRef.current) {
+        setPatientRecords([]);
+        setTotalPatients(0);
+      }
     } finally {
       setHasLoadedPatients(true);
       setIsLoading(false);
@@ -79,7 +90,7 @@ export function usePatientList(onViewPatient: (patientId: string) => void, optio
   }, [activeFilter, debouncedSearch]);
 
   useEffect(() => {
-    const forceRefresh = isInitialLoad.current;
+    const forceRefresh = isInitialLoad.current && !patientListViewCache;
     isInitialLoad.current = false;
     const id = setTimeout(() => void loadPatientPage(currentPage, forceRefresh));
     return () => clearTimeout(id);

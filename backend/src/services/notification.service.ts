@@ -4,9 +4,9 @@ import { db } from "../db";
 import { notifications, nurses, patientNurseAssignments, patients, pushSubscriptions, userNotificationPreferences, userPushSubscriptions, users } from "../db/schema";
 import { NotificationPreferenceDTO, PushSubscriptionDTO, SendNotificationDTO, UserNotificationPreferenceDTO, UserPushSubscriptionDTO } from "../types/notification.types";
 import { AccessUser, assertCanAccessPatient, getAssignedPatientIdsForNurse, getPatientIdForUser, scopedPatientFilter } from "./access-control.service";
-import { deleteCachedByPrefix, getCached, setCached } from "./cache.service";
+import { deleteCachedByPrefix, getCached, invalidateDashboardCache, setCached } from "./cache.service";
 import { writeAuditLogAsync } from "./audit-log.service";
-import { APP_TIMEZONE, getAppDateRangeFromQuery } from "../utils/app-timezone";
+import { addAppDays, getAppDateRangeFromQuery, getTodayAppDateStartUtc } from "../utils/app-timezone";
 
 const NOTIF_CACHE_TTL_MS = Number(process.env.NOTIF_CACHE_TTL_MS || 15_000);
 const NOTIF_CACHE_PREFIX = "notif:";
@@ -29,7 +29,10 @@ const getNotifAnalyticsCacheKey = (query: Record<string, unknown>, user?: Access
   return `${NOTIF_CACHE_PREFIX}analytics:${user?.id || "anon"}:${normalizedQuery}`;
 };
 
-const invalidateNotifCache = () => deleteCachedByPrefix(NOTIF_CACHE_PREFIX);
+const invalidateNotifCache = () => {
+  deleteCachedByPrefix(NOTIF_CACHE_PREFIX);
+  invalidateDashboardCache();
+};
 
 type NotifListResult = {
   data: unknown[];
@@ -75,8 +78,6 @@ const parsePagination = (query: Record<string, unknown>) => {
   const limit = Math.min(Math.max(Number(query.limit || 20), 1), 100);
   return { page, limit, offset: (page - 1) * limit };
 };
-
-const appTimezone = APP_TIMEZONE;
 
 const getNotificationCategoryCondition = (category?: string) => {
   if (category === "food_scan") return ilike(notifications.type, "%food%");
@@ -558,6 +559,8 @@ export const listNotifications = async (query: Record<string, unknown>, user: Ac
   }
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
+  const todayStart = getTodayAppDateStartUtc();
+  const tomorrowStart = addAppDays(todayStart, 1);
 
   const [rows, totalRows, summaryRows, todayRows] = await Promise.all([
     db
@@ -579,8 +582,8 @@ export const listNotifications = async (query: Record<string, unknown>, user: Ac
       .select({ count: sql<number>`COUNT(*)::int` })
       .from(notifications)
       .where(conditions.length > 0
-        ? and(...conditions, sql`(${notifications.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${appTimezone})::date = (CURRENT_TIMESTAMP AT TIME ZONE ${appTimezone})::date`)
-        : sql`(${notifications.createdAt} AT TIME ZONE 'UTC' AT TIME ZONE ${appTimezone})::date = (CURRENT_TIMESTAMP AT TIME ZONE ${appTimezone})::date`),
+        ? and(...conditions, gte(notifications.createdAt, todayStart), lt(notifications.createdAt, tomorrowStart))
+        : and(gte(notifications.createdAt, todayStart), lt(notifications.createdAt, tomorrowStart))),
   ]);
 
   const result = {

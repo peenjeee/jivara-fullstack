@@ -105,17 +105,17 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
 
     dispatch({ type: "patch", payload: { isLoading: true } });
 
-    getPatientActivityLogData(visibleMonth)
-      .then(async (activityData) => {
+    Promise.all([
+      getPatientActivityLogData(visibleMonth),
+      (async () => {
         const year = visibleMonth.getFullYear();
         const month = String(visibleMonth.getMonth() + 1).padStart(2, "0");
         const startDate = `${year}-${month}-01`;
         const endDate = `${year}-${month}-31`;
-        
-        const readIds = await getActivityReadIdsFromApi({ startDate, endDate }).catch(() => new Set<string>());
-        return { activityData, readIds };
-      })
-      .then(({ activityData, readIds }) => {
+        return getActivityReadIdsFromApi({ startDate, endDate }).catch(() => new Set<string>());
+      })(),
+    ])
+      .then(([activityData, readIds]) => {
         if (!isMounted) return;
         setActivities(activityData.activities.map((activity) => ({ ...activity, read: readIds.has(activity.id) || activity.read })));
         schedulesRef.current = activityData.schedules;

@@ -63,17 +63,11 @@ function NurseDetailPageContent({ nurseId }: NurseDetailPageProps) {
     || !controller.state.hasLoadedPatients
     || !controller.state.hasLoadedPatientSummary
     || !controller.state.hasLoadedActivities;
-  const isInitialDetailLoading = !controller.state.hasLoadedPatients
-    || !controller.state.hasLoadedPatientSummary
-    || !controller.state.hasLoadedActivities;
-
   return (
     <DashboardPageShell>
       <DashboardPageHeader title="Detail Perawat" />
 
-      {isInitialDetailLoading
-        ? <NurseOverviewSkeleton />
-        : <NurseOverviewSection nurse={controller.nurse} shouldAnimate={controller.shouldAnimate} isDeleting={controller.state.isDeleting} isDeleteDisabled={isDeleteDisabled} totalAssignedPatientCount={controller.state.totalAssignedPatientCount} onDelete={controller.handleDelete} />}
+      <NurseOverviewSection nurse={controller.nurse} shouldAnimate={controller.shouldAnimate} isDeleting={controller.state.isDeleting} isDeleteDisabled={isDeleteDisabled} totalAssignedPatientCount={controller.state.totalAssignedPatientCount} onDelete={controller.handleDelete} />
 
       {controller.state.isLoadingPatientSummary && !controller.state.hasLoadedPatientSummary
         ? <SummaryCardsSkeleton count={controller.isAdminView ? 3 : 4} />
@@ -113,10 +107,6 @@ function NurseDetailPageContent({ nurseId }: NurseDetailPageProps) {
       <ActivityDetailModal activity={controller.state.selectedActivity} onClose={() => controller.setSelectedActivity(null)} onViewFoodScan={() => controller.setSelectedActivity(null)} onViewSchedule={() => controller.setSelectedActivity(null)} />
     </DashboardPageShell>
   );
-}
-
-function NurseOverviewSkeleton() {
-  return <div className="mt-6 h-52 animate-pulse rounded-[32px] bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)]" />;
 }
 
 function NurseOverviewSection({ nurse, shouldAnimate, isDeleting, isDeleteDisabled, totalAssignedPatientCount, onDelete }: { readonly nurse: NurseRecord; readonly shouldAnimate: boolean; readonly isDeleting: boolean; readonly isDeleteDisabled: boolean; readonly totalAssignedPatientCount: number; readonly onDelete: () => void }) {
@@ -186,7 +176,7 @@ function PatientAssignmentsSection({
       <div className="px-5 pb-5 sm:px-7">
         {loading.isLoading && !loading.hasLoaded ? <ToolbarSkeleton /> : <PatientToolbar search={filters.search} activeFilter={filters.filter} hasActiveFilters={filters.hasActive} framed={false} onSearchChange={onSearchChange} onFilterChange={onFilterChange} onReset={onReset} />}
       </div>
-      {loading.isLoading ? <TableDataSkeleton /> : (
+      {loading.isLoading && !loading.hasLoaded ? <TableDataSkeleton /> : (
         <>
           <div className="overflow-x-auto" data-lenis-prevent>
             <table className="w-full text-left">
@@ -258,7 +248,7 @@ function NurseActivitySection({
         {loading.isLoading && !loading.hasLoaded ? <ToolbarSkeleton /> : <ActivityToolbar search={filters.search} quickFilter={filters.quickFilter} category={filters.category} showNurseFilter={false} showUnreadFilter={false} date={filters.date} hasActiveFilters={filters.hasActive} onSearchChange={onSearchChange} onQuickFilterChange={onQuickFilterChange} onCategoryChange={onCategoryChange} onDateChange={onDateChange} onReset={onReset} />}
       </div>
       <div className="mt-6">
-        {loading.isLoading ? <ActivityDataSkeleton /> : <ActivityFeed activities={data.activities} visibleCount={data.visibleCount} readOnly={data.isAdminView} hasMore={data.hasMore} isLoadingMore={loading.isLoadingMore} onLoadMore={onLoadMore} onMarkRead={onMarkRead} onViewDetail={onViewDetail} />}
+        {loading.isLoading && !loading.hasLoaded ? <ActivityDataSkeleton /> : <ActivityFeed activities={data.activities} visibleCount={data.visibleCount} readOnly={data.isAdminView} hasMore={data.hasMore} isLoadingMore={loading.isLoadingMore} onLoadMore={onLoadMore} onMarkRead={onMarkRead} onViewDetail={onViewDetail} />}
       </div>
     </m.section>
   );

@@ -20,12 +20,19 @@ import {
 } from "../types/food-ai.types";
 import { AccessUser, assertCanAccessPatient, scopedPatientFilter } from "./access-control.service";
 import { writeAuditLog } from "./audit-log.service";
-import { deleteCachedByPrefix, getCached, setCached } from "./cache.service";
+import { deleteCachedByPrefix, getCached, invalidateAdherenceCache, invalidateDashboardCache, invalidatePatientReadCache, setCached } from "./cache.service";
 import { sendCareTeamCriticalPushNotification } from "./notification.service";
 import { getAppDateRangeFromQuery } from "../utils/app-timezone";
 
 const FOOD_SCAN_CACHE_PREFIX = "food-scans:";
 const FOOD_SCAN_CACHE_TTL_MS = Number(process.env.FOOD_SCAN_CACHE_TTL_MS || 15_000);
+
+const invalidateFoodScanDependentCaches = () => {
+  deleteCachedByPrefix(FOOD_SCAN_CACHE_PREFIX);
+  invalidatePatientReadCache();
+  invalidateAdherenceCache();
+  invalidateDashboardCache();
+};
 
 type DetectionItem = {
   label: string;
@@ -725,7 +732,7 @@ export const uploadFoodImage = async (dto: FoodUploadDTO, user?: AccessUser) => 
     })
     .returning();
 
-  deleteCachedByPrefix(FOOD_SCAN_CACHE_PREFIX);
+  invalidateFoodScanDependentCaches();
 
   return {
     image_id: scan.id,
@@ -769,7 +776,7 @@ export const detectFood = async (dto: FoodDetectDTO, user?: AccessUser) => {
     .set({ inferenceTimeMs: detectionResult.inferenceTimeMs, modelVersion: detectionResult.modelVersion })
     .where(eq(foodScans.id, scan.id));
 
-  deleteCachedByPrefix(FOOD_SCAN_CACHE_PREFIX);
+  invalidateFoodScanDependentCaches();
 
   return {
     scan_id: scan.id,
@@ -876,7 +883,7 @@ export const checkInteraction = async (dto: InteractionCheckDTO, user?: AccessUs
     },
   });
 
-  deleteCachedByPrefix(FOOD_SCAN_CACHE_PREFIX);
+  invalidateFoodScanDependentCaches();
 
   if (interactions.length > 0) {
     await sendCareTeamCriticalPushNotification(dto.patientId, {
@@ -938,7 +945,7 @@ export const recommendFoods = async (dto: FoodRecommendationDTO, user?: AccessUs
     })
     .where(eq(foodScans.id, dto.scanId));
 
-  deleteCachedByPrefix(FOOD_SCAN_CACHE_PREFIX);
+  invalidateFoodScanDependentCaches();
 
   return {
     patient_medications: patientMedications,
@@ -967,7 +974,7 @@ export const estimateNutrition = async (dto: NutritionDTO, user?: AccessUser) =>
     const scan = await ensureScanExists(dto.scanId);
     if (user) await assertCanAccessPatient(user, scan.patientId);
     await db.update(foodScans).set({ nutritionItems: items, nutritionTotal: total }).where(eq(foodScans.id, dto.scanId));
-    deleteCachedByPrefix(FOOD_SCAN_CACHE_PREFIX);
+    invalidateFoodScanDependentCaches();
   }
 
   return {

@@ -364,9 +364,14 @@ export const getPatientsFromApi = async () => {
   return patientsRequest;
 };
 
-export const getCurrentPatientFromApi = async (): Promise<PatientRecord> => {
+export const getCachedCurrentPatientFromApi = (): PatientRecord | null => {
   const now = Date.now();
-  if (currentPatientCache && currentPatientCache.expiresAt > now) return currentPatientCache.data;
+  return currentPatientCache && currentPatientCache.expiresAt > now ? currentPatientCache.data : null;
+};
+
+export const getCurrentPatientFromApi = async (): Promise<PatientRecord> => {
+  const cachedPatient = getCachedCurrentPatientFromApi();
+  if (cachedPatient) return cachedPatient;
   if (currentPatientRequest) return currentPatientRequest;
 
   currentPatientRequest = api.get<{ data: PatientDetailResponse }>("/patients/me")
@@ -479,12 +484,13 @@ export const getPatientDetailFromApi = async (patientId: string, options: { read
     const detail = response.data.data;
 
     const patientFinal = mapPatient({ ...detail, createdAt: detail.registeredAt ?? detail.createdAt });
-    const schedules = await getPatientSchedulesFromApi(patientFinal)
-      .catch(() => (detail.activeMedications?.map((medication) => mapMedication(patientFinal, { ...medication, patientId: patientFinal.id, stock: 1, reminderEnabled: true, isActive: true })) ?? []));
-
-    const scans = detail.totalFoodScans === 0
-      ? []
-      : await getFoodScansForPatientFromApi(patientId, patientDetailPreviewLimit).catch(() => []);
+    const [schedules, scans] = await Promise.all([
+      getPatientSchedulesFromApi(patientFinal)
+        .catch(() => (detail.activeMedications?.map((medication) => mapMedication(patientFinal, { ...medication, patientId: patientFinal.id, stock: 1, reminderEnabled: true, isActive: true })) ?? [])),
+      detail.totalFoodScans === 0
+        ? Promise.resolve([])
+        : getFoodScansForPatientFromApi(patientId, patientDetailPreviewLimit).catch(() => []),
+    ]);
     const activityResult = await getPatientActivitiesFromApi(patientFinal, scans, detail.totalFoodScans ?? scans.length, patientDetailPreviewLimit)
       .catch(() => ({ activities: [], activityDistribution: getActivityDistribution([]) }));
 

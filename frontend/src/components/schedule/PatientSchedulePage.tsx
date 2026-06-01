@@ -75,8 +75,12 @@ export default function PatientSchedulePage() {
       })
       .catch(() => {
         if (!isMounted) return;
-        setScheduleContext({ patientId: null, confirmedScheduleDates: {} });
-        dispatch({ type: "patch", payload: { patientSchedules: [], hasLoadedSchedules: true, isLoading: false } });
+        if (!stateRef.current.hasLoadedSchedules) {
+          setScheduleContext({ patientId: null, confirmedScheduleDates: {} });
+          dispatch({ type: "patch", payload: { patientSchedules: [], hasLoadedSchedules: true, isLoading: false } });
+          return;
+        }
+        dispatch({ type: "patch", payload: { hasLoadedSchedules: true, isLoading: false } });
       });
 
     return () => {

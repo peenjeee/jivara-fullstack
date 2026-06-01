@@ -124,7 +124,7 @@ export default function SuperAdminActivityLogPage() {
         status: currentState.filter === "all" ? undefined : currentState.filter,
         date: currentState.date,
         search: debouncedSearch,
-        forceRefresh: page === 1 || forceRefresh,
+        forceRefresh,
       });
 
       const visibleActivities = page === 1 ? response.activities : [...currentState.activities, ...response.activities];

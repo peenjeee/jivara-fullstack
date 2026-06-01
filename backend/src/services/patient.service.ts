@@ -4,6 +4,7 @@ import { db } from "../db";
 import {
   foodScans,
   interactionResults,
+  medicationLogs,
   medicationSchedules,
   nurses,
   patientNurseAssignments,
@@ -13,13 +14,13 @@ import {
 import { AUTH_CONSTANTS } from "../types/auth.types";
 import { AccessUser, assertCanAccessPatient, ensureOrganizationIdForUser, getAssignedPatientIdsForNurse, getNurseIdForUser, getOrganizationIdForUser, getPatientIdForUser, scopedPatientFilter } from "./access-control.service";
 import { writeAuditLogAsync } from "./audit-log.service";
-import { deleteCachedByPrefix, getCached, setCached } from "./cache.service";
+import { deleteCachedByPrefix, getCached, getOrSetCached, invalidateAccessScopeCache, invalidateDashboardCache, setCached } from "./cache.service";
 import {
   PatientCreateDTO,
   PatientListQuery,
   PatientUpdateDTO,
 } from "../types/patient.types";
-import { getAdherenceStats } from "./adherence.service";
+import { buildAdherenceStatsByPatientId, getAdherenceStats } from "./adherence.service";
 import { invalidateNurseCache } from "./nurse.service";
 
 const PATIENT_CACHE_PREFIX = "patients:v4:";
@@ -33,7 +34,11 @@ const getPatientListCacheKey = (query: PatientListQuery, user?: AccessUser) => {
   return `${PATIENT_CACHE_PREFIX}list:${user?.id || "anon"}:${normalizedQuery}`;
 };
 
-export const invalidatePatientCache = () => deleteCachedByPrefix(PATIENT_CACHE_PREFIX);
+export const invalidatePatientCache = () => {
+  deleteCachedByPrefix(PATIENT_CACHE_PREFIX);
+  invalidateAccessScopeCache();
+  invalidateDashboardCache();
+};
 
 const parsePagination = (query: PatientListQuery) => {
   const page = Math.max(Number(query.page || 1), 1);
@@ -181,8 +186,42 @@ export const listPatients = async (query: PatientListQuery, user?: AccessUser): 
     assignmentsByPatientId.set(assignment.patientId, patientNurses);
   }
 
-  const enrichedRows = await Promise.all(rows.map(async (row) => {
-    const adherenceAll = await getAdherenceStats({ patientId: row.id, period: "all" }, user).catch(() => null);
+  const rowIds = rows.map((row) => row.id);
+  const [adherenceScheduleRows, adherenceLogRows] = rowIds.length > 0
+    ? await Promise.all([
+      db
+        .select({
+          id: medicationSchedules.id,
+          patientId: medicationSchedules.patientId,
+          createdAt: medicationSchedules.createdAt,
+          completedAt: medicationSchedules.completedAt,
+          startDate: medicationSchedules.startDate,
+          endDate: medicationSchedules.endDate,
+          stock: medicationSchedules.stock,
+          isActive: medicationSchedules.isActive,
+          scheduledTimes: medicationSchedules.scheduledTimes,
+          frequency: medicationSchedules.frequency,
+        })
+        .from(medicationSchedules)
+        .where(and(
+          inArray(medicationSchedules.patientId, rowIds),
+          or(eq(medicationSchedules.isActive, true), sql`${medicationSchedules.completedAt} is not null`),
+        )),
+      db
+        .select({
+          scheduleId: medicationLogs.scheduleId,
+          patientId: medicationLogs.patientId,
+          scheduledTime: medicationLogs.scheduledTime,
+          status: medicationLogs.status,
+        })
+        .from(medicationLogs)
+        .where(inArray(medicationLogs.patientId, rowIds)),
+    ])
+    : [[], []];
+  const adherenceByPatientId = buildAdherenceStatsByPatientId(rowIds, "all", adherenceScheduleRows, adherenceLogRows);
+
+  const enrichedRows = rows.map((row) => {
+    const adherenceAll = adherenceByPatientId.get(row.id);
 
     return {
       id: row.id,
@@ -204,7 +243,7 @@ export const listPatients = async (query: PatientListQuery, user?: AccessUser): 
       adherenceRateAll: adherenceAll?.adherenceRate ?? null,
       totalScheduledAll: adherenceAll?.totalScheduled ?? 0,
     };
-  }));
+  });
 
   const allPatientIds = enrichedRows.map((row) => row.id);
   const medicationStateRows = allPatientIds.length > 0
@@ -262,7 +301,7 @@ export const listPatients = async (query: PatientListQuery, user?: AccessUser): 
   return result;
 };
 
-export const getPatientById = async (patientId: string, user?: AccessUser) => {
+const loadPatientById = async (patientId: string, user?: AccessUser) => {
   if (user) await assertCanAccessPatient(user, patientId);
 
   const row = await db
@@ -367,6 +406,14 @@ export const getPatientById = async (patientId: string, user?: AccessUser) => {
     totalInteractionWarnings: interactionWarningCount[0]?.total || 0,
   };
 };
+
+export const getPatientById = async (patientId: string, user?: AccessUser) => (
+  getOrSetCached(
+    `${PATIENT_CACHE_PREFIX}detail:${user?.id || "anon"}:${user?.role || "anon"}:${patientId}`,
+    PATIENT_CACHE_TTL_MS,
+    () => loadPatientById(patientId, user),
+  )
+);
 
 export const getCurrentPatient = async (user?: AccessUser) => {
   if (!user) {

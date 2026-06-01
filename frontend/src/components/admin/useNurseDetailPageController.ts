@@ -188,25 +188,25 @@ function nurseDetailReducer(state: NurseDetailState, action: NurseDetailAction):
     case "reset_patient_filters":
       return { ...state, patientSearch: "", patientFilter: "all", patientPage: 1, selectedPatientIds: [] };
     case "set_activity_controls":
-      return { ...state, activitySearch: action.reset ? "" : action.search ?? state.activitySearch, activityQuickFilter: action.reset ? "all" : action.quickFilter ?? state.activityQuickFilter, activityCategory: action.reset ? "all" : action.category ?? state.activityCategory, activityDate: action.reset ? "" : action.date ?? state.activityDate, visibleActivityCount: loadBatchSize, hasLoadedActivities: false, isLoadingActivities: true };
+      return { ...state, activitySearch: action.reset ? "" : action.search ?? state.activitySearch, activityQuickFilter: action.reset ? "all" : action.quickFilter ?? state.activityQuickFilter, activityCategory: action.reset ? "all" : action.category ?? state.activityCategory, activityDate: action.reset ? "" : action.date ?? state.activityDate, visibleActivityCount: loadBatchSize, isLoadingActivities: true };
     case "patients_loading":
       return { ...state, isLoadingPatients: action.value };
     case "patients_loaded":
       return { ...state, assignedPatients: action.patients, totalPatientResults: action.totalPatientResults, patientPage: action.patientPage, summaryPatients: action.summaryPatients ?? state.summaryPatients, totalAssignedPatientCount: action.totalAssignedPatientCount ?? state.totalAssignedPatientCount, hasLoadedPatients: true, hasLoadedPatientSummary: action.summaryPatients ? true : state.hasLoadedPatientSummary, isLoadingPatients: false, isLoadingPatientSummary: action.summaryPatients ? false : state.isLoadingPatientSummary };
     case "patients_failed":
-      return { ...state, assignedPatients: [], totalPatientResults: 0, hasLoadedPatients: true, isLoadingPatients: false };
+      return state.hasLoadedPatients ? { ...state, isLoadingPatients: false } : { ...state, assignedPatients: [], totalPatientResults: 0, hasLoadedPatients: true, isLoadingPatients: false };
     case "patient_summary_loading":
       return { ...state, isLoadingPatientSummary: action.value };
     case "patient_summary_loaded":
       return { ...state, summaryPatients: action.patients, totalAssignedPatientCount: action.totalAssignedPatientCount, hasLoadedPatientSummary: true, isLoadingPatientSummary: false };
     case "patient_summary_failed":
-      return { ...state, summaryPatients: [], totalAssignedPatientCount: 0, hasLoadedPatientSummary: true, isLoadingPatientSummary: false };
+      return state.hasLoadedPatientSummary ? { ...state, isLoadingPatientSummary: false } : { ...state, summaryPatients: [], totalAssignedPatientCount: 0, hasLoadedPatientSummary: true, isLoadingPatientSummary: false };
     case "activities_loading":
       return { ...state, isLoadingActivities: action.value };
     case "activities_loaded":
       return { ...state, activities: action.activities, activityPage: action.activityPage, totalActivities: action.totalActivities, visibleActivityCount: loadBatchSize, hasLoadedActivities: true, isLoadingActivities: false };
     case "activities_failed":
-      return { ...state, activities: [], activityPage: 1, totalActivities: 0, hasLoadedActivities: true, isLoadingActivities: false };
+      return state.hasLoadedActivities ? { ...state, isLoadingActivities: false } : { ...state, activities: [], activityPage: 1, totalActivities: 0, hasLoadedActivities: true, isLoadingActivities: false };
     case "load_more_activities_start":
       return { ...state, isLoadingMoreActivities: true };
     case "load_more_activities_done":
@@ -260,7 +260,7 @@ export function useNurseDetailPageController(nurseId: string) {
 
   const loadAssignedPatients = useCallback(async (page: number, forceRefresh = false) => {
     const cached = nurseDetailViewCache.get(nurseId);
-    const canUseVisibleCache = !forceRefresh && cached?.patientPage === page && cached.patientSearch === debouncedPatientSearch && cached.patientFilter === state.patientFilter;
+    const canUseVisibleCache = cached?.patientPage === page && cached.patientSearch === debouncedPatientSearch && cached.patientFilter === state.patientFilter;
     const patientStatus = state.patientFilter === "Nonaktif" ? "inactive" : state.patientFilter === "all" ? "all" : "active";
     const adherenceStatus = state.patientFilter === "all" || state.patientFilter === "Nonaktif" ? undefined : state.patientFilter;
     dispatch({ type: "patients_loading", value: !canUseVisibleCache });
