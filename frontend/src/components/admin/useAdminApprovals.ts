@@ -19,9 +19,8 @@ export type ApprovalFilter = "all" | "pending" | "active" | "rejected" | "suspen
 export const emptySummary: AdminApprovalSummary = { pending: 0, active: 0, rejected: 0, suspended: 0 };
 export const pageSize = 10;
 
-const approvalsCacheTtl = 15_000;
 type AdminApprovalPage = { users: User[]; summary: AdminApprovalSummary; meta: { page: number; limit: number; total: number } };
-const approvalsCache = new Map<string, { data: AdminApprovalPage; expiresAt: number }>();
+const approvalsCache = new Map<string, { data: AdminApprovalPage }>();
 const approvalsRequests = new Map<string, Promise<AdminApprovalPage>>();
 let approvalsViewCache: {
   approvals: User[];
@@ -53,10 +52,15 @@ export function useAdminApprovals(canLoad: boolean) {
   const [rejectingUser, setRejectingUser] = useState<User | null>(null);
   const isInitialLoad = useRef(true);
   const requestSeqRef = useRef(0);
+  const hasLoadedApprovalsRef = useRef(Boolean(approvalsViewCache));
   const debouncedSearch = useDebouncedValue(search);
 
   const totalPages = Math.max(1, Math.ceil(totalApprovals / pageSize));
   const paginatedApprovals = approvals;
+
+  useEffect(() => {
+    hasLoadedApprovalsRef.current = hasLoadedApprovals;
+  }, [hasLoadedApprovals]);
 
   const loadApprovals = useCallback(async (page = currentPage, forceRefresh = false) => {
     const requestSeq = requestSeqRef.current + 1;
@@ -67,7 +71,6 @@ export function useAdminApprovals(canLoad: boolean) {
       && approvalsViewCache.filter === filter;
     setLoading(!canUseVisibleCache);
     try {
-      const now = Date.now();
       const cacheKey = `${page}:${pageSize}:${query}:${filter}`;
       let data: AdminApprovalPage;
 
@@ -76,9 +79,25 @@ export function useAdminApprovals(canLoad: boolean) {
         approvalsRequests.delete(cacheKey);
       }
 
-      if (approvalsCache.has(cacheKey) && approvalsCache.get(cacheKey)!.expiresAt > now) {
-        data = approvalsCache.get(cacheKey)!.data;
-      } else if (approvalsRequests.has(cacheKey)) {
+      const cachedEntry = forceRefresh ? null : approvalsCache.get(cacheKey);
+      if (cachedEntry && requestSeq === requestSeqRef.current) {
+        setLoadError(false);
+        setApprovals(cachedEntry.data.users);
+        setSummary(cachedEntry.data.summary);
+        setTotalApprovals(cachedEntry.data.meta.total);
+        setHasLoadedApprovals(true);
+        setHasLoadedSummary(true);
+        approvalsViewCache = {
+          approvals: cachedEntry.data.users,
+          summary: cachedEntry.data.summary,
+          totalApprovals: cachedEntry.data.meta.total,
+          search,
+          filter,
+          currentPage: page,
+        };
+      }
+
+      if (approvalsRequests.has(cacheKey)) {
         data = await approvalsRequests.get(cacheKey)!;
       } else {
         const request = api.get("/auth/admin-approvals", { params: { page, limit: pageSize, ...(query ? { search: query } : {}), ...(filter !== "all" ? { status: filter } : {}) } })
@@ -88,7 +107,7 @@ export function useAdminApprovals(canLoad: boolean) {
               summary: response.data.data.summary ?? emptySummary,
               meta: response.data.meta ?? { page, limit: pageSize, total: response.data.data.users?.length ?? 0 },
             };
-            approvalsCache.set(cacheKey, { data: result, expiresAt: Date.now() + approvalsCacheTtl });
+            approvalsCache.set(cacheKey, { data: result });
             return result;
           })
           .finally(() => {
@@ -111,33 +130,31 @@ export function useAdminApprovals(canLoad: boolean) {
         filter,
         currentPage: page,
       };
-      if (!forceRefresh) {
-        const totalPagesForQuery = Math.max(1, Math.ceil(data.meta.total / pageSize));
-        const adjacentPages = [page + 1, page - 1].filter((nextPage) => nextPage >= 1 && nextPage <= totalPagesForQuery);
-        void Promise.all(adjacentPages.map((nextPage) => {
-          const adjacentCacheKey = `${nextPage}:${pageSize}:${query}:${filter}`;
-          if (approvalsCache.has(adjacentCacheKey) || approvalsRequests.has(adjacentCacheKey)) return Promise.resolve();
-          const request = api.get("/auth/admin-approvals", { params: { page: nextPage, limit: pageSize, ...(query ? { search: query } : {}), ...(filter !== "all" ? { status: filter } : {}) } })
-            .then((response) => {
-              const result = {
-                users: response.data.data.users ?? [],
-                summary: response.data.data.summary ?? emptySummary,
-                meta: response.data.meta ?? { page: nextPage, limit: pageSize, total: response.data.data.users?.length ?? 0 },
-              };
-              approvalsCache.set(adjacentCacheKey, { data: result, expiresAt: Date.now() + approvalsCacheTtl });
-              return result;
-            })
-            .finally(() => {
-              approvalsRequests.delete(adjacentCacheKey);
-            });
-          approvalsRequests.set(adjacentCacheKey, request);
-          return request.catch(() => undefined);
-        }));
-      }
+      const totalPagesForQuery = Math.max(1, Math.ceil(data.meta.total / pageSize));
+      const adjacentPages = [page + 1, page - 1].filter((nextPage) => nextPage >= 1 && nextPage <= totalPagesForQuery);
+      void Promise.all(adjacentPages.map((nextPage) => {
+        const adjacentCacheKey = `${nextPage}:${pageSize}:${query}:${filter}`;
+        if (approvalsCache.has(adjacentCacheKey) || approvalsRequests.has(adjacentCacheKey)) return Promise.resolve();
+        const request = api.get("/auth/admin-approvals", { params: { page: nextPage, limit: pageSize, ...(query ? { search: query } : {}), ...(filter !== "all" ? { status: filter } : {}) } })
+          .then((response) => {
+            const result = {
+              users: response.data.data.users ?? [],
+              summary: response.data.data.summary ?? emptySummary,
+              meta: response.data.meta ?? { page: nextPage, limit: pageSize, total: response.data.data.users?.length ?? 0 },
+            };
+            approvalsCache.set(adjacentCacheKey, { data: result });
+            return result;
+          })
+          .finally(() => {
+            approvalsRequests.delete(adjacentCacheKey);
+          });
+        approvalsRequests.set(adjacentCacheKey, request);
+        return request.catch(() => undefined);
+      }));
     } catch (error) {
       if (requestSeq !== requestSeqRef.current) return;
       setLoadError(true);
-      if (!hasLoadedApprovals) {
+      if (!hasLoadedApprovalsRef.current) {
         setApprovals([]);
         setSummary(emptySummary);
         setTotalApprovals(0);
@@ -150,7 +167,7 @@ export function useAdminApprovals(canLoad: boolean) {
         setLoading(false);
       }
     }
-  }, [currentPage, debouncedSearch, filter, hasLoadedApprovals, search]);
+  }, [currentPage, debouncedSearch, filter, search]);
 
   useEffect(() => {
     if (!canLoad) return;

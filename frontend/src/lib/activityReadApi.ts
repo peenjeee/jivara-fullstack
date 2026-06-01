@@ -20,13 +20,25 @@ interface ActivityUnreadCountResponse {
   };
 }
 
-const activityReadCacheTtl = 30_000;
-let activityReadCache: { data: Set<string>; expiresAt: number } | null = null;
+interface MarkAllUnreadResponse {
+  data?: {
+    count?: number;
+    activityIds?: string[];
+  };
+}
+
+let activityReadCache: { data: Set<string> } | null = null;
 let activityReadRequest: Promise<Set<string>> | null = null;
 const scopedActivityReadRequests = new Map<string, Promise<Set<string>>>();
-const scopedActivityReadCache = new Map<string, { data: Set<string>; expiresAt: number }>();
-let activityUnreadCountCache: { data: number; expiresAt: number } | null = null;
-let activityUnreadCountRequest: Promise<number> | null = null;
+const scopedActivityReadCache = new Map<string, { data: Set<string> }>();
+const activityUnreadCountCache = new Map<string, { data: number }>();
+const activityUnreadCountRequests = new Map<string, Promise<number>>();
+const locallyReadActivityIds = new Set<string>();
+
+type ActivityReadState = {
+  readonly id: string;
+  readonly read?: boolean;
+};
 
 type ActivityReadRequestOptions = {
   forceRefresh?: boolean;
@@ -38,35 +50,60 @@ type ActivityReadRequestOptions = {
   paginateAll?: boolean;
 };
 
-export const clearActivityReadCache = () => {
+const normalizeActivityIds = (activityIds: readonly string[] = []) => [...new Set(activityIds.flatMap((activityId) => {
+  const normalizedActivityId = activityId.trim();
+  return normalizedActivityId ? [normalizedActivityId] : [];
+}))];
+
+export const rememberActivityIdsAsRead = (activityIds: readonly string[]) => {
+  normalizeActivityIds(activityIds).forEach((activityId) => locallyReadActivityIds.add(activityId));
+};
+
+const mergeKnownReadIds = (readIds: Set<string>) => {
+  locallyReadActivityIds.forEach((activityId) => readIds.add(activityId));
+  return readIds;
+};
+
+export const applyKnownActivityReadState = <T extends ActivityReadState>(activities: readonly T[]): T[] => {
+  return activities.map((activity) => (
+    activity.read || locallyReadActivityIds.has(activity.id) ? { ...activity, read: true } : activity
+  ));
+};
+
+export const clearActivityReadCache = (options: { readonly clearKnownReadIds?: boolean } = {}) => {
   activityReadCache = null;
   activityReadRequest = null;
   scopedActivityReadRequests.clear();
   scopedActivityReadCache.clear();
-  activityUnreadCountCache = null;
-  activityUnreadCountRequest = null;
+  activityUnreadCountCache.clear();
+  activityUnreadCountRequests.clear();
+  if (options.clearKnownReadIds) locallyReadActivityIds.clear();
 };
 
 export const getActivityReadIdsFromApi = async (options: ActivityReadRequestOptions = {}) => {
   const { startDate, endDate } = options;
-  const activityIds = [...new Set(options.activityIds ?? [])].filter(Boolean);
+  const activityIds = normalizeActivityIds(options.activityIds);
   const isScoped = Boolean(startDate && endDate);
   const hasActivityIdFilter = activityIds.length > 0;
   const shouldPaginateAll = options.paginateAll ?? !hasActivityIdFilter;
   const requestedPage = options.page ?? 1;
   const requestedLimit = options.limit ?? (hasActivityIdFilter ? activityIds.length : 100);
-  const cacheKey = shouldPaginateAll
-    ? (isScoped ? `${startDate}_${endDate}` : "all")
-    : `${isScoped ? `${startDate}_${endDate}` : "all"}:${requestedPage}:${requestedLimit}:${activityIds.join(",") || "any"}`;
+  const cacheScope = isScoped ? `${startDate}_${endDate}` : "all";
+  const cacheKey = hasActivityIdFilter
+    ? `${cacheScope}:${shouldPaginateAll ? "all-pages" : `${requestedPage}:${requestedLimit}`}:${activityIds.join(",")}`
+    : shouldPaginateAll
+      ? cacheScope
+      : `${cacheScope}:${requestedPage}:${requestedLimit}:any`;
+  const useScopedCache = isScoped || hasActivityIdFilter || !shouldPaginateAll;
 
   if (options.forceRefresh) clearActivityReadCache();
 
-  if (isScoped || !shouldPaginateAll) {
+  if (useScopedCache) {
     const cached = scopedActivityReadCache.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) return cached.data;
+    if (cached) return mergeKnownReadIds(new Set(cached.data));
     if (scopedActivityReadRequests.has(cacheKey)) return scopedActivityReadRequests.get(cacheKey)!;
   } else {
-    if (activityReadCache && activityReadCache.expiresAt > Date.now()) return activityReadCache.data;
+    if (activityReadCache) return mergeKnownReadIds(new Set(activityReadCache.data));
     if (activityReadRequest) return activityReadRequest;
   }
 
@@ -94,15 +131,18 @@ export const getActivityReadIdsFromApi = async (options: ActivityReadRequestOpti
       page += 1;
     } while (shouldPaginateAll && readIds.size < total);
 
-    if (isScoped || !shouldPaginateAll) {
-      scopedActivityReadCache.set(cacheKey, { data: readIds, expiresAt: Date.now() + activityReadCacheTtl });
+    rememberActivityIdsAsRead([...readIds]);
+    const mergedReadIds = mergeKnownReadIds(readIds);
+
+    if (useScopedCache) {
+      scopedActivityReadCache.set(cacheKey, { data: mergedReadIds });
     } else {
-      activityReadCache = { data: readIds, expiresAt: Date.now() + activityReadCacheTtl };
+      activityReadCache = { data: mergedReadIds };
     }
-    return readIds;
+    return mergedReadIds;
   })();
 
-  if (isScoped || !shouldPaginateAll) {
+  if (useScopedCache) {
     scopedActivityReadRequests.set(cacheKey, request);
     request.finally(() => {
       scopedActivityReadRequests.delete(cacheKey);
@@ -117,35 +157,43 @@ export const getActivityReadIdsFromApi = async (options: ActivityReadRequestOpti
   return activityReadRequest;
 };
 
-export const getActivityUnreadCountFromApi = async (options: { forceRefresh?: boolean } = {}) => {
-  const now = Date.now();
+export const getActivityUnreadCountFromApi = async (options: { forceRefresh?: boolean; scopeKey?: string | null } = {}) => {
+  const scopeKey = options.scopeKey || "current-user";
   if (options.forceRefresh) {
-    activityUnreadCountCache = null;
-    activityUnreadCountRequest = null;
+    activityUnreadCountCache.delete(scopeKey);
+    activityUnreadCountRequests.delete(scopeKey);
   }
-  if (activityUnreadCountCache && activityUnreadCountCache.expiresAt > now) return activityUnreadCountCache.data;
-  if (activityUnreadCountRequest) return activityUnreadCountRequest;
+  const cached = activityUnreadCountCache.get(scopeKey);
+  if (cached) return cached.data;
+  const pendingRequest = activityUnreadCountRequests.get(scopeKey);
+  if (pendingRequest) return pendingRequest;
 
-  activityUnreadCountRequest = api.get<ActivityUnreadCountResponse>("/activity-reads/unread-count")
+  const request = api.get<ActivityUnreadCountResponse>("/activity-reads/unread-count")
     .then((response) => {
       const count = response.data.data.count;
-      activityUnreadCountCache = { data: count, expiresAt: Date.now() + activityReadCacheTtl };
+      activityUnreadCountCache.set(scopeKey, { data: count });
       return count;
     })
     .finally(() => {
-      activityUnreadCountRequest = null;
+      activityUnreadCountRequests.delete(scopeKey);
     });
 
-  return activityUnreadCountRequest;
+  activityUnreadCountRequests.set(scopeKey, request);
+  return request;
 };
 
 export const markActivitiesReadViaApi = async (activityIds: readonly string[]) => {
-  if (activityIds.length === 0) return;
-  await api.post("/activity-reads", { activityIds });
+  const readIds = normalizeActivityIds(activityIds);
+  if (readIds.length === 0) return;
+  await api.post("/activity-reads", { activityIds: readIds });
+  rememberActivityIdsAsRead(readIds);
   clearActivityReadCache();
 };
 
-export const markAllUnreadViaApi = async () => {
-  await api.post("/activity-reads/mark-all-unread");
+export const markAllUnreadViaApi = async (activityIds: readonly string[] = []) => {
+  const readIds = normalizeActivityIds(activityIds);
+  const response = await api.post<MarkAllUnreadResponse>("/activity-reads/mark-all-unread", readIds.length > 0 ? { activityIds: readIds } : undefined);
+  const responseReadIds = normalizeActivityIds(response.data?.data?.activityIds ?? []);
+  rememberActivityIdsAsRead([...readIds, ...responseReadIds]);
   clearActivityReadCache();
 };

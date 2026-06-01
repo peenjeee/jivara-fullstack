@@ -9,6 +9,7 @@ import { PatientTable } from "@/components/patients";
 import { SummaryCardsSkeleton, TableDataSkeleton } from "@/components/ui/PageSkeletons";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
+import { dashboardDataChangedEvent } from "@/lib/cacheEvents";
 import { emptyNurseDashboardData, getNurseDashboardData, type NurseDashboardData } from "@/lib/dashboardApi";
 import { useSplashScreen } from "@/components/ui/AppSplashScreen";
 
@@ -25,7 +26,7 @@ export default function NurseDashboardPage() {
   useEffect(() => {
     let isMounted = true;
 
-    getNurseDashboardData()
+    void getNurseDashboardData()
       .then((data) => {
         if (!isMounted) return;
         nurseDashboardCache = data;
@@ -39,21 +40,22 @@ export default function NurseDashboardPage() {
         setHasLoadedDashboard(true);
       });
 
-    const handleScheduleChanged = () => {
-      getNurseDashboardData({ forceRefresh: true })
+    const handleDashboardDataChanged = () => {
+      void getNurseDashboardData({ forceRefresh: true })
         .then((data) => {
+          if (!isMounted) return;
           nurseDashboardCache = data;
           setDashboardData(data);
         })
         .catch(() => {
-          setDashboardData({ stats: [], patients: [] });
+          if (isMounted && !nurseDashboardCache) setDashboardData({ stats: [], patients: [] });
         });
     };
 
-    window.addEventListener("jivara:schedule-changed", handleScheduleChanged);
+    window.addEventListener(dashboardDataChangedEvent, handleDashboardDataChanged);
     return () => {
       isMounted = false;
-      window.removeEventListener("jivara:schedule-changed", handleScheduleChanged);
+      window.removeEventListener(dashboardDataChangedEvent, handleDashboardDataChanged);
     };
   }, []);
 

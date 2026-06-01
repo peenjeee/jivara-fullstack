@@ -8,13 +8,14 @@ import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import Button from "@/components/ui/Button";
 import { ActivityDataSkeleton, SummaryCardsSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
+import RefreshingNotice from "@/components/ui/RefreshingNotice";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import { FoodScanDetailModal } from "@/components/food-scan";
 import { getActivityDateKey, getTodayDateKey } from "@/helpers/activityLogs";
 import { activityMatchesNurse } from "@/helpers/nurses";
 import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
-import { getActivityReadIdsFromApi, markActivitiesReadViaApi, markAllUnreadViaApi } from "@/lib/activityReadApi";
-import { getAuditActivityPageFromApi } from "@/lib/auditLogApi";
+import { applyKnownActivityReadState, getActivityReadIdsFromApi, markActivitiesReadViaApi, markAllUnreadViaApi } from "@/lib/activityReadApi";
+import { getAuditActivityPageFromApi, getCachedAuditActivityPageFromApi } from "@/lib/auditLogApi";
 import { isDateInRange } from "@/lib/dateRange";
 import type { ActivityCategory, ActivityLogRecord } from "@/lib/mocks/activityLogs";
 import { getNursesFromApi } from "@/lib/nurseApi";
@@ -34,6 +35,30 @@ const getAuditSeverityFilter = (quickFilter: ActivityQuickFilter) => {
   if (quickFilter === "critical" || quickFilter === "warning" || quickFilter === "success" || quickFilter === "info") return quickFilter;
   return undefined;
 };
+
+type ActivityPageResult = {
+  activities: ActivityLogRecord[];
+  meta: {
+    page: number;
+    limit: number;
+    total: number;
+    summary?: {
+      warningCritical?: number;
+      today?: number;
+    };
+  };
+};
+
+const createEmptyActivityPage = (page: number, limit: number): ActivityPageResult => ({
+  activities: [],
+  meta: { page, limit, total: 0 },
+});
+
+const getWarningCriticalTotal = (page: ActivityPageResult) => page.meta.summary?.warningCritical
+  ?? page.activities.filter((activity) => activity.severity === "Peringatan" || activity.severity === "Kritis").length;
+
+const getTodayTotal = (page: ActivityPageResult, todayKey: string) => page.meta.summary?.today
+  ?? page.activities.filter((activity) => getActivityDateKey(activity.timestamp) === todayKey).length;
 
 interface ActivityLogPageProps {
   readonly initialPatientName?: string;
@@ -136,7 +161,7 @@ function createInitialState(initialPatientName: string, initialCategory: string 
     && activityLogPageViewCache.cachedAuditUserRole === auditUserRole
     && activityLogPageViewCache.cachedReadOnly === readOnly;
   return {
-    activities: cacheIsValid ? (activityLogPageViewCache?.activities ?? []) : [],
+    activities: cacheIsValid ? applyKnownActivityReadState(activityLogPageViewCache?.activities ?? []) : [],
     search: cacheIsValid ? (activityLogPageViewCache?.search ?? initialPatientName) : initialPatientName,
     quickFilter: cacheIsValid ? (activityLogPageViewCache?.quickFilter ?? "all") : "all",
     category: cacheIsValid ? (activityLogPageViewCache?.category ?? (isActivityCategory(initialCategory) ? initialCategory : "all")) : (isActivityCategory(initialCategory) ? initialCategory : "all"),
@@ -146,7 +171,7 @@ function createInitialState(initialPatientName: string, initialCategory: string 
     selectedActivity: null,
     selectedFoodScanId: null,
     patientAssignments: cacheIsValid ? (activityLogPageViewCache?.patientAssignments ?? {}) : {},
-    summaryActivities: cacheIsValid ? (activityLogPageViewCache?.summaryActivities ?? []) : [],
+    summaryActivities: cacheIsValid ? applyKnownActivityReadState(activityLogPageViewCache?.summaryActivities ?? []) : [],
     isLoading: !cacheIsValid,
     isSummaryLoading: !cacheIsValid,
     hasLoadedActivities: Boolean(cacheIsValid),
@@ -166,14 +191,14 @@ function createInitialState(initialPatientName: string, initialCategory: string 
 
 function createViewCache(state: ActivityLogPageState, quickFilter: ActivityQuickFilter, currentUserId: string | undefined, auditUserRole: string | undefined, readOnly: boolean): ActivityLogViewCache {
   return {
-    activities: state.activities,
+    activities: applyKnownActivityReadState(state.activities),
     search: state.search,
     quickFilter,
     category: state.category,
     nurseId: state.nurseId,
     date: state.date,
     visibleCount: state.visibleCount,
-    summaryActivities: state.summaryActivities,
+    summaryActivities: applyKnownActivityReadState(state.summaryActivities),
     patientAssignments: state.patientAssignments,
     activityPage: state.activityPage,
     serverActivityTotal: state.serverActivityTotal,
@@ -189,19 +214,18 @@ function createViewCache(state: ActivityLogPageState, quickFilter: ActivityQuick
 }
 
 async function fetchSummaryData({ readOnly, auditUserRole, todayKey, forceRefresh = false }: { readOnly: boolean; auditUserRole?: string; todayKey: string; forceRefresh?: boolean }) {
-  const auditPage = await getAuditActivityPageFromApi({ page: 1, limit: serverPageSize, userRole: auditUserRole, forceRefresh }).catch(() => ({ activities: [], meta: { page: 1, limit: serverPageSize, total: 0, summary: undefined } }));
+  const auditPage = await getAuditActivityPageFromApi({ page: 1, limit: serverPageSize, userRole: auditUserRole, forceRefresh }).catch(() => createEmptyActivityPage(1, serverPageSize));
   const summaryPageActivities = auditPage.activities;
   const readIds = !readOnly && summaryPageActivities.length > 0
-    ? await getActivityReadIdsFromApi({ activityIds: summaryPageActivities.map((activity) => activity.id), limit: summaryPageActivities.length }).catch(() => new Set<string>())
+    ? await getActivityReadIdsFromApi({ activityIds: summaryPageActivities.map((activity) => activity.id), limit: summaryPageActivities.length, paginateAll: true }).catch(() => new Set<string>())
     : new Set<string>();
   const summaryActivities = summaryPageActivities.map((activity) => ({ ...activity, read: readIds.has(activity.id) || activity.read }));
 
   return {
     summaryActivities,
-    unreadCount: readOnly ? 0 : summaryActivities.filter((activity) => !activity.read).length,
     summaryServerActivityTotal: auditPage.meta.total,
-    summaryServerWarningCriticalTotal: auditPage.meta.summary?.warningCritical ?? auditPage.activities.filter((activity) => activity.severity === "Peringatan" || activity.severity === "Kritis").length,
-    summaryServerTodayTotal: auditPage.meta.summary?.today ?? auditPage.activities.filter((activity) => getActivityDateKey(activity.timestamp) === todayKey).length,
+    summaryServerWarningCriticalTotal: getWarningCriticalTotal(auditPage),
+    summaryServerTodayTotal: getTodayTotal(auditPage, todayKey),
   };
 }
 
@@ -231,7 +255,8 @@ async function fetchActivityPageData({
   forceRefresh?: boolean;
 }) {
   const selectedNurseId = nurseId === "all" ? undefined : nurseId;
-  const auditPage = await getAuditActivityPageFromApi({ page, limit: serverPageSize, category, date, userRole: auditUserRole, nurseId: selectedNurseId, severity: getAuditSeverityFilter(quickFilter), search, forceRefresh }).catch(() => ({ activities: [], meta: { page, limit: serverPageSize, total: fallbackTotal } }));
+  const pageLimit = quickFilter === "unread" && page === 1 ? 50 : serverPageSize;
+  const auditPage = await getAuditActivityPageFromApi({ page, limit: pageLimit, category, date, userRole: auditUserRole, nurseId: selectedNurseId, severity: getAuditSeverityFilter(quickFilter), search, forceRefresh }).catch(() => ({ ...createEmptyActivityPage(page, pageLimit), meta: { page, limit: pageLimit, total: fallbackTotal } }));
   const assignments: Record<string, string> = {};
   const activities: ActivityLogRecord[] = [];
 
@@ -241,7 +266,7 @@ async function fetchActivityPageData({
   }
 
   const readIds = !readOnly && activities.length > 0
-    ? await getActivityReadIdsFromApi({ activityIds: activities.map((activity) => activity.id), limit: serverPageSize }).catch(() => new Set<string>())
+    ? await getActivityReadIdsFromApi({ activityIds: activities.map((activity) => activity.id), limit: activities.length, paginateAll: true }).catch(() => new Set<string>())
     : new Set<string>();
 
   for (let index = 0; index < activities.length; index += 1) {
@@ -271,9 +296,10 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
   const currentUserId = useAuthStore((state) => state.user?.id);
   const setActivities = useActivityLogStore((state) => state.setActivities);
   const setActivityLogLoading = useActivityLogStore((state) => state.setLoading);
+  const unreadActivityCount = useActivityLogStore((state) => state.unreadActivityCount);
+  const unreadActivityScopeKey = useActivityLogStore((state) => state.unreadActivityScopeKey);
   const nurses = useNurseStore((state) => state.nurses);
   const setNurses = useNurseStore((state) => state.setNurses);
-  const setUnreadActivityCount = useActivityLogStore((state) => state.setUnreadActivityCount);
   const [state, dispatch] = useReducer(activityLogPageReducer, undefined, () => createInitialState(initialPatientName, initialCategory, currentUserId, auditUserRole, readOnly));
   const stateRef = useRef(state);
   const loadingPagesRef = useRef(new Set<string>());
@@ -316,7 +342,6 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
     void fetchSummaryData({ readOnly, auditUserRole, todayKey, forceRefresh: !hasValidViewCache })
       .then((summaryData) => {
         if (!isMounted) return;
-        setUnreadActivityCount(summaryData.unreadCount);
         dispatch({
           type: "patch",
           payload: {
@@ -347,19 +372,56 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
     return () => {
       isMounted = false;
     };
-  }, [auditUserRole, hasValidViewCache, readOnly, setUnreadActivityCount, todayKey]);
+  }, [auditUserRole, hasValidViewCache, readOnly, todayKey]);
 
   const loadPage = useCallback(async (page: number, options: { readonly forceRefresh?: boolean } = {}) => {
     const forceRefresh = options.forceRefresh ?? false;
     const current = stateRef.current;
     const pageKey = `${page}:${current.nurseId}:${current.category}:${current.date}:${effectiveQuickFilter}:${debouncedSearch}`;
-    if (!forceRefresh && page === 1 && loadedQueryRef.current === pageKey) return;
-    if (!forceRefresh && page === 1 && failedQueryRef.current === pageKey) return;
+    const hasVisibleCachedPage = page === 1 && loadedQueryRef.current === pageKey && current.hasLoadedActivities;
+    if (!forceRefresh && page === 1 && failedQueryRef.current === pageKey) {
+      dispatch({ type: "patch", payload: { isLoading: false, isLoadingMore: false } });
+      return;
+    }
     if (loadingPagesRef.current.has(pageKey)) return;
 
     loadingPagesRef.current.add(pageKey);
     latestRequestKeyRef.current = pageKey;
+    const selectedNurseId = current.nurseId === "all" ? undefined : current.nurseId;
+    const pageLimit = effectiveQuickFilter === "unread" && page === 1 ? 50 : serverPageSize;
+    const auditPageParams = {
+      page,
+      limit: pageLimit,
+      category: current.category,
+      date: current.date,
+      userRole: auditUserRole,
+      nurseId: selectedNurseId,
+      severity: getAuditSeverityFilter(effectiveQuickFilter),
+      search: debouncedSearch,
+    };
+    const cachedPage = forceRefresh ? null : getCachedAuditActivityPageFromApi(auditPageParams);
+    const hasCachedActivities = cachedPage && cachedPage.activities.length > 0;
+    if (page === 1 && hasCachedActivities && latestRequestKeyRef.current === pageKey) {
+      loadedQueryRef.current = pageKey;
+      failedQueryRef.current = null;
+      dispatch({
+        type: "patch",
+        payload: {
+          activities: applyKnownActivityReadState(cachedPage.activities),
+          patientAssignments: {},
+          serverActivityTotal: cachedPage.meta.total,
+          serverWarningCriticalTotal: null,
+          serverTodayTotal: null,
+          activityPage: page,
+          visibleCount: cachedPage.activities.length,
+          hasLoadedActivities: true,
+        },
+      });
+    }
     dispatch({ type: "patch", payload: page === 1 ? { isLoading: true, isLoadingMore: false } : { isLoadingMore: true } });
+    if (page === 1 && (hasCachedActivities || hasVisibleCachedPage)) {
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+    }
 
     try {
       const activityData = await fetchActivityPageData({
@@ -396,7 +458,7 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
             visibleCount: visibleActivities.length,
           },
         });
-        if (!forceRefresh && page * serverPageSize < activityData.total) {
+        if (page * serverPageSize < activityData.total) {
           void fetchActivityPageData({
             page: page + 1,
             readOnly,
@@ -438,11 +500,7 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
   }, [auditUserRole, debouncedSearch, effectiveQuickFilter, readOnly, showNurseFilter]);
 
   useEffect(() => {
-    const timerId = window.setTimeout(() => {
-      void loadPage(1);
-    }, 0);
-
-    return () => window.clearTimeout(timerId);
+    void loadPage(1);
   }, [loadPage, state.category, state.date, state.nurseId]);
 
   useEffect(() => {
@@ -459,7 +517,10 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
 
   const summaryStats = useMemo(() => {
     const total = state.summaryServerActivityTotal ?? state.summaryActivities.length;
-    const unread = state.summaryActivities.filter((activity) => !activity.read).length;
+    const expectedUnreadScopeKey = !readOnly && auditUserRole === "nurse" && currentUserId ? `nurse:${currentUserId}` : null;
+    const unread = expectedUnreadScopeKey && unreadActivityScopeKey === expectedUnreadScopeKey && unreadActivityCount !== null
+      ? unreadActivityCount
+      : state.summaryActivities.filter((activity) => !activity.read).length;
     const warningCritical = state.summaryServerWarningCriticalTotal ?? state.summaryActivities.filter((activity) => activity.severity === "Peringatan" || activity.severity === "Kritis").length;
     const todayTotal = state.summaryServerTodayTotal ?? state.summaryActivities.filter((activity) => getActivityDateKey(activity.timestamp) === todayKey).length;
 
@@ -470,7 +531,7 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
       { label: "Notifikasi Peringatan/Kritis", value: String(warningCritical), tone: "critical" as const, color: "lime" as const, icon: AlertTriangle },
       { label: "Total Aktivitas Hari Ini", value: String(todayTotal), tone: "safe" as const, color: "leaf" as const, icon: ClipboardList },
     ];
-  }, [readOnly, state.summaryActivities, state.summaryServerActivityTotal, state.summaryServerTodayTotal, state.summaryServerWarningCriticalTotal, todayKey]);
+  }, [auditUserRole, currentUserId, readOnly, state.summaryActivities, state.summaryServerActivityTotal, state.summaryServerTodayTotal, state.summaryServerWarningCriticalTotal, todayKey, unreadActivityCount, unreadActivityScopeKey]);
 
   const filteredActivities = useMemo(() => {
     const query = debouncedSearch.trim().toLowerCase();
@@ -541,6 +602,7 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
     dispatch({ type: "patch", payload: { processingActivityId: activityId } });
     try {
       await markActivitiesReadViaApi([activityId]);
+      useActivityLogStore.getState().markAsRead(activityId);
       dispatch({
         type: "patch",
         payload: {
@@ -550,7 +612,6 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
       });
 
       const summaryData = await fetchSummaryData({ readOnly, auditUserRole, todayKey });
-      setUnreadActivityCount(summaryData.unreadCount);
       dispatch({
         type: "patch",
         payload: {
@@ -571,7 +632,9 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
     if (readOnly) return;
     dispatch({ type: "patch", payload: { isMarkingAllRead: true } });
     try {
-      await markAllUnreadViaApi();
+      const activityIds = [...new Set([...state.activities, ...state.summaryActivities].map((activity) => activity.id))];
+      await markAllUnreadViaApi(activityIds);
+      useActivityLogStore.getState().markAllAsRead();
       dispatch({
         type: "patch",
         payload: {
@@ -581,7 +644,6 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
       });
 
       const summaryData = await fetchSummaryData({ readOnly, auditUserRole, todayKey });
-      setUnreadActivityCount(summaryData.unreadCount);
       dispatch({
         type: "patch",
         payload: {
@@ -640,10 +702,10 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
 export default function ActivityLogPage(props: ActivityLogPageProps) {
   const shouldAnimate = useDashboardEntranceMotion();
   const controller = useActivityLogPageController(props);
+  const isUpdatingActivities = controller.state.isLoading && controller.state.hasLoadedActivities;
 
   // Tombol muncul kalo ada unread di page ini ATAU backend bilang ada unread
-  const unreadBadgeCount = useActivityLogStore((state) => state.unreadActivityCount);
-  const showMarkAllButton = !props.readOnly && (controller.hasUnread || (unreadBadgeCount ?? 0) > 0);
+  const showMarkAllButton = !props.readOnly && controller.hasUnread;
 
   return (
     <DashboardPageShell>
@@ -681,19 +743,24 @@ export default function ActivityLogPage(props: ActivityLogPageProps) {
       </m.div>
 
       <m.div className="mt-6" {...getDashboardEntranceMotion(shouldAnimate, 0.4, 24)}>
+        <div className="relative" aria-busy={isUpdatingActivities || undefined}>
+          <RefreshingNotice active={isUpdatingActivities} />
         {controller.state.isLoading && !controller.state.hasLoadedActivities ? <ActivityDataSkeleton /> : (
-          <ActivityFeed
-            activities={controller.filteredActivities}
-            visibleCount={controller.filteredActivities.length}
-            readOnly={props.readOnly ?? false}
-            hasMore={controller.hasMoreFromServer}
-            isLoadingMore={controller.state.isLoadingMore}
-            onLoadMore={() => { void controller.handleLoadMore(); }}
-            onMarkRead={controller.markAsRead}
-            processingActivityId={controller.state.processingActivityId}
-            onViewDetail={controller.selectActivity}
-          />
+          <div className={isUpdatingActivities ? "opacity-60 transition-opacity" : "transition-opacity"}>
+            <ActivityFeed
+              activities={controller.filteredActivities}
+              visibleCount={controller.filteredActivities.length}
+              readOnly={props.readOnly ?? false}
+              hasMore={controller.hasMoreFromServer}
+              isLoadingMore={controller.state.isLoadingMore}
+              onLoadMore={() => { void controller.handleLoadMore(); }}
+              onMarkRead={controller.markAsRead}
+              processingActivityId={controller.state.processingActivityId}
+              onViewDetail={controller.selectActivity}
+            />
+          </div>
         )}
+        </div>
       </m.div>
 
       <ActivityDetailModal activity={controller.state.selectedActivity} onClose={() => controller.selectActivity(null)} onViewFoodScan={controller.viewFoodScan} onViewSchedule={controller.viewSchedule} />

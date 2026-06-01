@@ -22,13 +22,34 @@ const getPublicStatsUrl = () => {
   return "/api/v1/public/stats";
 };
 
-const publicStatsCacheTtl = 60_000;
-let publicStatsCache: { data: PublicStatsResponse; expiresAt: number } | null = null;
+let publicStatsCache: { data: PublicStatsResponse } | null = null;
 let publicStatsRequest: Promise<PublicStatsResponse> | null = null;
 
+const getCachedPublicStats = () => publicStatsCache?.data ?? null;
+
+const buildPublicStatsCards = (response: PublicStatsResponse): SummaryCardItem[] => {
+  const { totalNurses, totalPatients } = response.data;
+  return [
+    {
+      label: "Total Semua Perawat",
+      value: `+${totalNurses}`,
+      helper: "",
+      tone: "safe",
+      color: "emerald",
+      icon: HeartPulse,
+    },
+    {
+      label: "Total Semua Pasien",
+      value: `+${totalPatients}`,
+      helper: "",
+      tone: "safe",
+      color: "leaf",
+      icon: UsersRound,
+    },
+  ];
+};
+
 const fetchPublicStats = async () => {
-  const now = Date.now();
-  if (publicStatsCache && publicStatsCache.expiresAt > now) return publicStatsCache.data;
   if (publicStatsRequest) return publicStatsRequest;
 
   publicStatsRequest = (async () => {
@@ -36,7 +57,7 @@ const fetchPublicStats = async () => {
       const response = await fetch(getPublicStatsUrl(), { cache: "no-store" });
       if (!response.ok) throw new Error("PUBLIC_STATS_FAILED");
       const data = await response.json() as PublicStatsResponse;
-      publicStatsCache = { data, expiresAt: Date.now() + publicStatsCacheTtl };
+      publicStatsCache = { data };
       return data;
     } catch {
       // fallback: try the other URL in case of proxy mismatch
@@ -46,7 +67,7 @@ const fetchPublicStats = async () => {
       const response = await fetch(fallbackUrl, { cache: "no-store" });
       if (!response.ok) throw new Error("PUBLIC_STATS_FAILED");
       const data = await response.json() as PublicStatsResponse;
-      publicStatsCache = { data, expiresAt: Date.now() + publicStatsCacheTtl };
+      publicStatsCache = { data };
       return data;
     }
   })().finally(() => {
@@ -57,39 +78,34 @@ const fetchPublicStats = async () => {
 };
 
 export default function Stats() {
-  const [stats, setStats] = useState<SummaryCardItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState<SummaryCardItem[]>(() => {
+    const cachedStats = getCachedPublicStats();
+    return cachedStats ? buildPublicStatsCards(cachedStats) : [];
+  });
+  const [isLoading, setIsLoading] = useState(() => !getCachedPublicStats());
   const [hasError, setHasError] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
+    const cachedStats = getCachedPublicStats();
+
+    if (cachedStats) {
+      queueMicrotask(() => {
+        if (!isMounted) return;
+        setHasError(false);
+        setStats(buildPublicStatsCards(cachedStats));
+        setIsLoading(false);
+      });
+    }
 
     fetchPublicStats()
       .then((response) => {
         if (!isMounted) return;
-        const { totalNurses, totalPatients } = response.data;
         setHasError(false);
-        setStats([
-          {
-            label: "Total Semua Perawat",
-            value: `+${totalNurses}`,
-            helper: "",
-            tone: "safe",
-            color: "emerald",
-            icon: HeartPulse,
-          },
-          {
-            label: "Total Semua Pasien",
-            value: `+${totalPatients}`,
-            helper: "",
-            tone: "safe",
-            color: "leaf",
-            icon: UsersRound,
-          },
-        ]);
+        setStats(buildPublicStatsCards(response));
       })
       .catch(() => {
-        if (isMounted) {
+        if (isMounted && !cachedStats) {
           setHasError(true);
           setStats([]);
         }

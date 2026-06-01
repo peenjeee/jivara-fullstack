@@ -13,34 +13,41 @@ const ACTIVITY_EVENTS_URL = process.env.NEXT_PUBLIC_API_URL
 interface UseActivityBadgeSyncOptions {
   readonly enabled: boolean;
   readonly role: DashboardRole;
+  readonly userId?: string | null;
 }
 
-export function useActivityBadgeSync({ enabled, role }: UseActivityBadgeSyncOptions) {
+export function useActivityBadgeSync({ enabled, role, userId }: UseActivityBadgeSyncOptions) {
   const isSyncingRef = useRef(false);
 
   const lastSuccessfulSyncAtRef = useRef(0);
+  const badgeScopeKey = userId && (role === "patient" || role === "nurse") ? `${role}:${userId}` : null;
 
   const syncActivityBadge = useCallback(async (forceRefresh = false) => {
-    if (!enabled || (role !== "patient" && role !== "nurse")) return;
+    if (!enabled || !badgeScopeKey) return;
     if (isSyncingRef.current) return;
 
     isSyncingRef.current = true;
-    const { setLoading, setUnreadActivityCount, unreadActivityCount } = useActivityLogStore.getState();
-    if (unreadActivityCount === null) setLoading(true);
+    const { setLoading, setUnreadActivityCount, setUnreadActivityScope, unreadActivityCount, unreadActivityScopeKey } = useActivityLogStore.getState();
+    if (unreadActivityScopeKey !== badgeScopeKey) {
+      setUnreadActivityScope(badgeScopeKey);
+    }
+    if (unreadActivityScopeKey !== badgeScopeKey || unreadActivityCount === null) setLoading(true);
 
     try {
-      const unreadCount = await getActivityUnreadCountFromApi({ forceRefresh });
-      setUnreadActivityCount(unreadCount);
+      const unreadCount = await getActivityUnreadCountFromApi({ forceRefresh, scopeKey: badgeScopeKey });
+      setUnreadActivityCount(unreadCount, badgeScopeKey);
       lastSuccessfulSyncAtRef.current = Date.now();
     } finally {
       setLoading(false);
       isSyncingRef.current = false;
     }
-  }, [enabled, role]);
+  }, [badgeScopeKey, enabled]);
 
   useEffect(() => {
-    if (!enabled || (role !== "patient" && role !== "nurse")) {
-      useActivityLogStore.getState().setUnreadActivityCount(null);
+    if (!enabled || !badgeScopeKey) {
+      const { setLoading, setUnreadActivityScope } = useActivityLogStore.getState();
+      setUnreadActivityScope(null);
+      setLoading(false);
       return;
     }
 
@@ -78,5 +85,5 @@ export function useActivityBadgeSync({ enabled, role }: UseActivityBadgeSyncOpti
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [enabled, role, syncActivityBadge]);
+  }, [badgeScopeKey, enabled, syncActivityBadge]);
 }

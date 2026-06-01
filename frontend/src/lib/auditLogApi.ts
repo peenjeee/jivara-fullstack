@@ -1,4 +1,5 @@
 import api from "@/lib/axios";
+import { applyKnownActivityReadState } from "@/lib/activityReadApi";
 import { getDateRangeParams } from "@/lib/dateRange";
 import type { ActivityCategory, ActivityLogRecord, ActivitySeverity } from "@/lib/mocks/activityLogs";
 
@@ -86,9 +87,17 @@ type AuditLogParams = {
 
 type AuditActivityCategory = "reminder" | "adherence" | "food_scan" | "administration";
 
-const auditCacheTtl = 10_000;
-const auditCache = new Map<string, { data: AuditLogPage; expiresAt: number }>();
+const auditCache = new Map<string, { data: AuditLogPage }>();
 const auditRequests = new Map<string, Promise<AuditLogPage>>();
+
+const getAuditLogCacheKey = (params: AuditLogParams = {}) => {
+  const page = params.page || 1;
+  const limit = params.limit || 100;
+  const activityCategory = params.activityCategory || getAuditCategoryParam(params.category);
+  const search = params.search?.trim() || "";
+
+  return `${page}:${limit}:${params.action ?? ""}:${params.status ?? ""}:${params.severityFilter ?? ""}:${activityCategory ?? ""}:${params.date ?? ""}:${params.userRole ?? ""}:${params.nurseId ?? ""}:${params.severity ?? ""}:${search}`;
+};
 
 export const clearAuditLogCache = () => {
   auditCache.clear();
@@ -100,11 +109,10 @@ const getAuditLogs = async (params: AuditLogParams = {}) => {
   const limit = params.limit || 100;
   const activityCategory = params.activityCategory || getAuditCategoryParam(params.category);
   const search = params.search?.trim() || "";
-  const cacheKey = `${page}:${limit}:${params.action ?? ""}:${activityCategory ?? ""}:${params.date ?? ""}:${params.userRole ?? ""}:${params.nurseId ?? ""}:${params.severity ?? ""}:${search}`;
-  const now = Date.now();
-  if (params.forceRefresh) auditCache.delete(cacheKey);
-  const cached = auditCache.get(cacheKey);
-  if (cached && cached.expiresAt > now) return cached.data;
+  const cacheKey = getAuditLogCacheKey(params);
+  if (params.forceRefresh) {
+    auditCache.delete(cacheKey);
+  }
   const activeRequest = auditRequests.get(cacheKey);
   if (activeRequest) return activeRequest;
 
@@ -114,7 +122,7 @@ const getAuditLogs = async (params: AuditLogParams = {}) => {
         data: response.data.data,
         meta: response.data.meta ?? { page, limit, total: response.data.data.length },
       };
-      auditCache.set(cacheKey, { data, expiresAt: Date.now() + auditCacheTtl });
+      auditCache.set(cacheKey, { data });
       return data;
     })
     .finally(() => {
@@ -123,6 +131,10 @@ const getAuditLogs = async (params: AuditLogParams = {}) => {
 
   auditRequests.set(cacheKey, request);
   return request;
+};
+
+const getCachedAuditLogs = (params: AuditLogParams = {}) => {
+  return auditCache.get(getAuditLogCacheKey(params))?.data ?? null;
 };
 
 const categoryByResource = (resourceType: string): ActivityCategory => {
@@ -229,8 +241,7 @@ const getRelatedNurseId = (log: AuditLogResponse) => {
     || getNestedString(changes, "sourceNurseId");
 };
 
-export const getAuditActivityPageFromApi = async (params: { page?: number; limit?: number; status?: string; severityFilter?: string; category?: ActivityCategory | "all"; date?: string; userRole?: string; nurseId?: string; severity?: "success" | "info" | "critical" | "warning"; search?: string; forceRefresh?: boolean } = {}): Promise<ActivityLogPage> => {
-  const { data: logs, meta } = await getAuditLogs(params);
+const mapAuditActivityPage = ({ data: logs, meta }: AuditLogPage): ActivityLogPage => {
   const activities = removeNearDuplicateAuditLogs(logs).map((log) => ({
     id: log.id,
     title: formatAction(log.action),
@@ -248,7 +259,16 @@ export const getAuditActivityPageFromApi = async (params: { page?: number; limit
     read: false,
   }));
 
-  return { activities, meta };
+  return { activities: applyKnownActivityReadState(activities), meta };
+};
+
+export const getAuditActivityPageFromApi = async (params: { page?: number; limit?: number; status?: string; severityFilter?: string; category?: ActivityCategory | "all"; date?: string; userRole?: string; nurseId?: string; severity?: "success" | "info" | "critical" | "warning"; search?: string; forceRefresh?: boolean } = {}): Promise<ActivityLogPage> => {
+  return mapAuditActivityPage(await getAuditLogs(params));
+};
+
+export const getCachedAuditActivityPageFromApi = (params: { page?: number; limit?: number; status?: string; severityFilter?: string; category?: ActivityCategory | "all"; date?: string; userRole?: string; nurseId?: string; severity?: "success" | "info" | "critical" | "warning"; search?: string } = {}): ActivityLogPage | null => {
+  const cached = getCachedAuditLogs(params);
+  return cached ? mapAuditActivityPage(cached) : null;
 };
 
 export const getAuditActivitiesFromApi = async (params: { page?: number; limit?: number; category?: ActivityCategory | "all"; date?: string; userRole?: string; nurseId?: string; severity?: "success" | "info" | "critical" | "warning"; search?: string; forceRefresh?: boolean } = {}): Promise<ActivityLogRecord[]> => {
@@ -316,5 +336,46 @@ export const getSuperAdminApprovalActivityPageFromApi = async (params: { page?: 
       }];
     });
 
-  return { activities, meta };
+  return { activities: applyKnownActivityReadState(activities), meta };
+};
+
+export const getCachedSuperAdminApprovalActivityPageFromApi = (params: { page?: number; limit?: number; status?: ApprovalLogStatus; severity?: ApprovalLogSeverity; date?: string; search?: string } = {}): ActivityLogPage | null => {
+  const status = params.status ?? "all";
+  const severity = params.severity ?? "all";
+  const statusActions = status === "all" ? Array.from(approvalActions) : approvalActionsByStatus[status];
+  const severityActions = severity === "all" ? Array.from(approvalActions) : approvalActionsBySeverity[severity];
+  const actions = statusActions.filter((action) => severityActions.includes(action));
+  const page = params.page ?? 1;
+  const limit = params.limit ?? 100;
+
+  if (actions.length === 0) {
+    return { activities: [], meta: { page, limit, total: 0, summary: { warningCritical: 0, today: 0 } } };
+  }
+
+  const cached = getCachedAuditLogs({
+    page,
+    limit,
+    status: status === "all" ? undefined : status,
+    severityFilter: severity === "all" ? undefined : severity,
+    date: params.date,
+    search: params.search,
+    userRole: "super_admin",
+  });
+  if (!cached) return null;
+
+  const activities = cached.data.flatMap((log) => {
+    if (!actions.includes(log.action as ApprovalAction)) return [];
+    const config = approvalActionLabels[log.action as ApprovalAction];
+    return [{
+      id: log.id,
+      title: config.title,
+      description: getApprovalDescription(log),
+      category: "Administrasi" as const,
+      severity: config.severity,
+      timestamp: log.createdAt || new Date().toISOString(),
+      read: false,
+    }];
+  });
+
+  return { activities: applyKnownActivityReadState(activities), meta: cached.meta };
 };

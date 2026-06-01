@@ -20,6 +20,7 @@ vi.mock("@/lib/patientApi", () => ({
   assignPatientToNursesViaApi: vi.fn(),
   createPatientViaApi: vi.fn(),
   deactivatePatientViaApi: vi.fn(),
+  getCachedPatientPageFromApi: vi.fn(() => null),
   getPatientPageFromApi: vi.fn(),
   getPatientsFromApi: vi.fn(),
   updatePatientViaApi: vi.fn(),

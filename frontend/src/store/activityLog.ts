@@ -5,9 +5,11 @@ interface ActivityLogState {
   readonly activities: ActivityLogRecord[];
   readonly isLoading: boolean;
   readonly unreadActivityCount: number | null;
+  readonly unreadActivityScopeKey: string | null;
   readonly setActivities: (activities: ActivityLogRecord[]) => void;
   readonly setLoading: (isLoading: boolean) => void;
-  readonly setUnreadActivityCount: (count: number | null) => void;
+  readonly setUnreadActivityCount: (count: number | null, scopeKey?: string | null) => void;
+  readonly setUnreadActivityScope: (scopeKey: string | null) => void;
   readonly addActivity: (activity: ActivityLogRecord) => void;
   readonly markAsRead: (activityId: string) => void;
   readonly markAllAsRead: () => void;
@@ -17,9 +19,18 @@ export const useActivityLogStore = create<ActivityLogState>()((set) => ({
   activities: [],
   isLoading: false,
   unreadActivityCount: null,
+  unreadActivityScopeKey: null,
   setActivities: (activities) => set({ activities }),
   setLoading: (isLoading) => set({ isLoading }),
-  setUnreadActivityCount: (count) => set({ unreadActivityCount: count }),
+  setUnreadActivityCount: (count, scopeKey) => set((state) => ({
+    unreadActivityCount: count,
+    unreadActivityScopeKey: scopeKey ?? state.unreadActivityScopeKey,
+  })),
+  setUnreadActivityScope: (scopeKey) => set((state) => (
+    state.unreadActivityScopeKey === scopeKey
+      ? {}
+      : { unreadActivityCount: null, unreadActivityScopeKey: scopeKey }
+  )),
   addActivity: (activity) => set((state) => ({
     activities: [activity, ...state.activities],
     unreadActivityCount: activity.read ? state.unreadActivityCount : state.unreadActivityCount === null ? null : state.unreadActivityCount + 1,

@@ -31,7 +31,7 @@ const attachScanIdParam = (req: Request, _res: Response, next: NextFunction) => 
  * /api/v1/food-scans:
  *   get:
  *     summary: Ambil daftar scan makanan
- *     description: Mengembalikan scan yang sudah selesai dianalisis. Scan upload/deteksi yang gagal atau masih pending tidak ditampilkan di log aktivitas.
+ *     description: Mengembalikan scan yang sudah selesai dianalisis. Scan upload/deteksi yang gagal atau masih pending tidak ditampilkan di log aktivitas. Setiap item menyertakan `overallRecommendation` yang diringkas dari `overallRiskLevel`.
  *     tags: [Food AI]
  *     security:
  *       - bearerAuth: []
@@ -172,10 +172,12 @@ router.post("/food-scans", authorizeRoles("patient", "nurse", "admin"), uploadSi
  *                     label_display: Rendang
  *                     confidence: 0.94
  *                     bounding_box:
- *                       x: 120
- *                       y: 80
- *                       width: 200
- *                       height: 180
+ *                       x1: 97
+ *                       y1: 212
+ *                       x2: 818
+ *                       y2: 1006
+ *                       imageWidth: 1402
+ *                       imageHeight: 1122
  *                 low_confidence_items: []
  *                 inference_time_ms: 320
  *                 model_version: yolov11-food-v1
@@ -193,6 +195,10 @@ router.post("/food-scans/:scanId/detections", authorizeRoles("patient", "nurse",
  *       untuk setiap makanan. Secara default endpoint ini juga memanggil `/recommend` untuk kompatibilitas
  *       client lama, tetapi client baru dapat mengirim `includeRecommendations: false` lalu memanggil
  *       `/api/v1/food-scans/{scanId}/recommendations` agar request rekomendasi terlihat eksplisit.
+ *       Jika AI reasoning gagal untuk salah satu label makanan, backend tetap mengembalikan hasil scan
+ *       dengan fallback kosong untuk label tersebut agar upload tidak gagal total.
+ *       Response `interactions` berisi seluruh pasangan makanan terdeteksi x obat aktif pasien, termasuk
+ *       pasangan aman/ringan. Level `sedang` dan `tinggi` diperlakukan sebagai butuh perhatian.
  *     tags: [Food AI]
  *     security:
  *       - bearerAuth: []

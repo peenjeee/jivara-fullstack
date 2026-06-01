@@ -1,13 +1,13 @@
 import { db } from "../db";
-import { activityReads, auditLogs, foodScans, medicationLogs, notifications } from "../db/schema";
+import { activityReads, auditLogs, foodScans, medicationLogs } from "../db/schema";
 import { and, count, eq, gte, inArray, isNotNull, lt, notInArray, sql } from "drizzle-orm";
-import { AccessUser, getAssignedPatientIdsForNurse, getNurseIdForUser, getPatientIdForUser } from "./access-control.service";
+import { AccessUser, getPatientIdForUser } from "./access-control.service";
 import { deleteCachedByPrefix, getCached, setCached } from "./cache.service";
 import { emitActivityChanged } from "./activity-event.service";
 import { getAppDateRangeFromQuery } from "../utils/app-timezone";
+import { hiddenActivityActions, hiddenActivityResourceTypes } from "./activity-visibility.service";
 
 const ACTIVITY_READ_CACHE_TTL_MS = Number(process.env.ACTIVITY_READ_CACHE_TTL_MS || 30_000);
-const hiddenActivityResourceTypes = ["notification", "push_subscription", "user_push_subscription"];
 
 type ActivityReadPage = {
   data: Array<{ activityId: string; readAt: Date | null }>;
@@ -102,38 +102,25 @@ export const getUnreadActivityCount = async (user: AccessUser) => {
   }
 
   if (user.role === "nurse") {
-    const nurseId = await getNurseIdForUser(user.id);
-    const assignedPatientIds = nurseId ? await getAssignedPatientIdsForNurse(nurseId) : [];
+    const auditRows = await db
+      .select({ total: count() })
+      .from(auditLogs)
+      .where(and(
+        eq(auditLogs.userId, user.id),
+        notInArray(auditLogs.resourceType, hiddenActivityResourceTypes),
+        notInArray(auditLogs.action, hiddenActivityActions),
+        sql`not exists (select 1 from ${activityReads} where ${activityReads.userId} = ${user.id} and ${activityReads.activityId} = ${auditLogs.id}::text)`,
+      ));
 
-    const [notificationRows, auditRows] = await Promise.all([
-      assignedPatientIds.length === 0
-        ? Promise.resolve([{ total: 0 }])
-        : db
-          .select({ total: count() })
-          .from(notifications)
-          .where(and(
-            inArray(notifications.patientId, assignedPatientIds),
-            eq(notifications.status, "delivered"),
-            sql`not exists (select 1 from ${activityReads} where ${activityReads.userId} = ${user.id} and ${activityReads.activityId} = ('notification-' || ${notifications.id}::text))`,
-          )),
-      db
-        .select({ total: count() })
-        .from(auditLogs)
-        .where(and(
-          eq(auditLogs.userId, user.id),
-          notInArray(auditLogs.resourceType, hiddenActivityResourceTypes),
-          sql`not exists (select 1 from ${activityReads} where ${activityReads.userId} = ${user.id} and ${activityReads.activityId} = ${auditLogs.id}::text)`,
-        )),
-    ]);
-
-    return { count: getCountValue(notificationRows) + getCountValue(auditRows) };
+    return { count: getCountValue(auditRows) };
   }
 
   return { count: 0 };
 };
 
-export const markAllUnread = async (user: AccessUser) => {
+export const markAllUnread = async (user: AccessUser, rawActivityIds: unknown = []) => {
   let unreadIds: string[] = [];
+  const explicitActivityIds = cleanActivityIds(rawActivityIds);
 
   if (user.role === "patient") {
     const patientId = await getPatientIdForUser(user.id);
@@ -162,37 +149,22 @@ export const markAllUnread = async (user: AccessUser) => {
       ...foodScanRows.map((r) => `food-scan-${r.id}`),
     ];
   } else if (user.role === "nurse") {
-    const nurseId = await getNurseIdForUser(user.id);
-    const assignedPatientIds = nurseId ? await getAssignedPatientIdsForNurse(nurseId) : [];
+    const auditRows = await db
+      .select({ id: auditLogs.id })
+      .from(auditLogs)
+      .where(and(
+        eq(auditLogs.userId, user.id),
+        notInArray(auditLogs.resourceType, hiddenActivityResourceTypes),
+        notInArray(auditLogs.action, hiddenActivityActions),
+        sql`not exists (select 1 from ${activityReads} where ${activityReads.userId} = ${user.id} and ${activityReads.activityId} = ${auditLogs.id}::text)`,
+      ));
 
-    const [notificationRows, auditRows] = await Promise.all([
-      assignedPatientIds.length === 0
-        ? Promise.resolve([] as Array<{ id: string }>)
-        : db
-          .select({ id: notifications.id })
-          .from(notifications)
-          .where(and(
-            inArray(notifications.patientId, assignedPatientIds),
-            eq(notifications.status, "delivered"),
-            sql`not exists (select 1 from ${activityReads} where ${activityReads.userId} = ${user.id} and ${activityReads.activityId} = ('notification-' || ${notifications.id}::text))`,
-          )),
-      db
-        .select({ id: auditLogs.id })
-        .from(auditLogs)
-        .where(and(
-          eq(auditLogs.userId, user.id),
-          notInArray(auditLogs.resourceType, hiddenActivityResourceTypes),
-          sql`not exists (select 1 from ${activityReads} where ${activityReads.userId} = ${user.id} and ${activityReads.activityId} = ${auditLogs.id}::text)`,
-        )),
-    ]);
-
-    unreadIds = [
-      ...notificationRows.map((r) => `notification-${r.id}`),
-      ...auditRows.map((r) => r.id),
-    ];
+    unreadIds = auditRows.map((r) => r.id);
   }
 
-  if (unreadIds.length === 0) return { count: 0 };
+  unreadIds = [...new Set([...unreadIds, ...explicitActivityIds])];
+
+  if (unreadIds.length === 0) return { count: 0, activityIds: [] };
 
   await db
     .insert(activityReads)
@@ -202,7 +174,7 @@ export const markAllUnread = async (user: AccessUser) => {
   deleteCachedByPrefix(`activity-reads:${user.id}`);
   emitActivityChanged({ reason: "activity-read-updated", targetUserId: user.id });
 
-  return { count: unreadIds.length };
+  return { count: unreadIds.length, activityIds: unreadIds };
 };
 
 export const markActivitiesRead = async (userId: string, rawActivityIds: unknown) => {

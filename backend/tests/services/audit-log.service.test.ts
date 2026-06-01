@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../../src/db", () => ({ db: {} }));
 
 import { sanitizeAuditValue } from "../../src/services/audit-log.service";
+import { isActivityAuditLogHidden } from "../../src/services/activity-visibility.service";
 
 describe("audit log service", () => {
   it("redacts sensitive fields inside nested audit changes", () => {
@@ -35,5 +36,17 @@ describe("audit log service", () => {
       ],
       note: "kept",
     });
+  });
+
+  it("hides internal notification preference audit logs from activity surfaces", () => {
+    expect(isActivityAuditLogHidden({
+      action: "user_notification_preference.updated",
+      resourceType: "user",
+    })).toBe(true);
+
+    expect(isActivityAuditLogHidden({
+      action: "auth.login",
+      resourceType: "user",
+    })).toBe(false);
   });
 });

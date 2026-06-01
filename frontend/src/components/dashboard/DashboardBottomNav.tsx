@@ -10,11 +10,15 @@ import { getDashboardBottomNavItems, getDashboardRole } from "./navigation";
 export default function DashboardBottomNav() {
   const pathname = usePathname();
   const userRole = useAuthStore((state) => state.user?.role);
+  const userId = useAuthStore((state) => state.user?.id);
   const hasAuthHydrated = useAuthStore((state) => state.hasHydrated);
   const dashboardRole = getDashboardRole(userRole);
+  const badgeScopeKey = userId && (dashboardRole === "patient" || dashboardRole === "nurse") ? `${dashboardRole}:${userId}` : null;
   const globalUnreadActivityCount = useActivityLogStore((state) => state.unreadActivityCount);
+  const unreadActivityScopeKey = useActivityLogStore((state) => state.unreadActivityScopeKey);
   const unreadActivityCount = useActivityLogStore((state) => {
     if (dashboardRole === "super_admin" || dashboardRole === "admin") return 0;
+    if (state.unreadActivityScopeKey !== badgeScopeKey) return 0;
     return state.unreadActivityCount ?? 0;
   });
   const isActivityLogLoading = useActivityLogStore((state) => state.isLoading);
@@ -36,7 +40,7 @@ export default function DashboardBottomNav() {
           const Icon = item.icon;
           const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
           const badgeCount = item.href === "/activity-log" ? unreadActivityCount : 0;
-          const isBadgeLoading = item.href === "/activity-log" && (dashboardRole === "patient" || dashboardRole === "nurse") && globalUnreadActivityCount === null && isActivityLogLoading;
+          const isBadgeLoading = item.href === "/activity-log" && Boolean(badgeScopeKey) && unreadActivityScopeKey === badgeScopeKey && globalUnreadActivityCount === null && isActivityLogLoading;
           const isFeatured = "featured" in item && item.featured;
 
           return (

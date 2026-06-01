@@ -11,6 +11,7 @@ import Button from "@/components/ui/Button";
 import FilterPills from "@/components/ui/FilterPills";
 import IconActionButton from "@/components/ui/IconActionButton";
 import { ButtonSkeleton, TableDataSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
+import RefreshingNotice from "@/components/ui/RefreshingNotice";
 import SearchField from "@/components/ui/SearchField";
 import ToolbarCard from "@/components/ui/ToolbarCard";
 import PatientPagination from "@/components/patients/PatientPagination";
@@ -18,7 +19,7 @@ import { getNurseInitials } from "@/helpers/nurses";
 import { getDashboardRole, isOperationalAdminRole } from "@/components/dashboard/navigation";
 import { getApiErrorMessage } from "@/lib/apiErrors";
 import type { NurseRecord, NurseStatus } from "@/lib/mocks/nurses";
-import { createNurseViaApi, getNursesPageFromApi, updateNurseViaApi } from "@/lib/nurseApi";
+import { createNurseViaApi, getCachedNursesPageFromApi, getNursesPageFromApi, updateNurseViaApi } from "@/lib/nurseApi";
 import { showConfirm, showError, showToast } from "@/lib/swal";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { useNurseStore, type NurseFormValues } from "@/store/nurses";
@@ -43,7 +44,7 @@ let nurseListViewCache: {
   currentPage: number;
 } | null = null;
 
-const getNurseStatusQuery = (filter: NurseFilter) => {
+const getNurseStatusQuery = (filter: NurseFilter): "active" | "inactive" | undefined => {
   if (filter === "Aktif") return "active";
   if (filter === "Nonaktif") return "inactive";
   return undefined;
@@ -110,15 +111,28 @@ export default function NurseListPage() {
     const canUseVisibleCache = nurseListViewCache?.currentPage === page
       && nurseListViewCache.search === debouncedSearch
       && nurseListViewCache.filter === filter;
+    const status = getNurseStatusQuery(filter);
+    const queryParams = {
+      page,
+      limit: pageSize,
+      search: debouncedSearch,
+      status,
+    };
+    const cachedPage = forceRefresh ? null : getCachedNursesPageFromApi(queryParams);
+    if (cachedPage && requestSeq === requestSeqRef.current) {
+      dispatch({ type: "patch", payload: { pageNurses: cachedPage.nurses, totalNurses: cachedPage.meta.total, hasLoadedNurses: true } });
+      setNurses(cachedPage.nurses);
+      nurseListViewCache = {
+        pageNurses: cachedPage.nurses,
+        totalNurses: cachedPage.meta.total,
+        search: debouncedSearch,
+        filter,
+        currentPage: page,
+      };
+    }
     dispatch({ type: "patch", payload: { isLoading: !canUseVisibleCache } });
     try {
-      const result = await getNursesPageFromApi({
-        page,
-        limit: pageSize,
-        search: debouncedSearch,
-        status: getNurseStatusQuery(filter),
-        forceRefresh,
-      });
+      const result = await getNursesPageFromApi({ ...queryParams, forceRefresh });
       if (requestSeq === requestSeqRef.current) {
         dispatch({ type: "patch", payload: { pageNurses: result.nurses, totalNurses: result.meta.total } });
         setNurses(result.nurses);
@@ -130,16 +144,13 @@ export default function NurseListPage() {
           filter,
           currentPage: page,
         };
-        if (!forceRefresh) {
-          const status = getNurseStatusQuery(filter);
-          const adjacentPages = [page + 1, page - 1].filter((nextPage) => nextPage >= 1 && nextPage <= totalPagesForQuery);
-          void Promise.all(adjacentPages.map((nextPage) => getNursesPageFromApi({
-            page: nextPage,
-            limit: pageSize,
-            search: debouncedSearch,
-            status,
-          }).catch(() => undefined)));
-        }
+        const adjacentPages = [page + 1, page - 1].filter((nextPage) => nextPage >= 1 && nextPage <= totalPagesForQuery);
+        void Promise.all(adjacentPages.map((nextPage) => getNursesPageFromApi({
+          page: nextPage,
+          limit: pageSize,
+          search: debouncedSearch,
+          status,
+        }).catch(() => undefined)));
       }
     } catch {
       if (requestSeq === requestSeqRef.current && !stateRef.current.hasLoadedNurses) {
@@ -163,6 +174,7 @@ export default function NurseListPage() {
 
   const totalPages = Math.max(1, Math.ceil(totalNurses / pageSize));
   const paginatedNurses = pageNurses;
+  const isUpdatingNurses = isLoading && hasLoadedNurses;
 
   if (!hasAuthHydrated || (dashboardRole !== "nurse" && !isOperationalAdminRole(dashboardRole))) return null;
 
@@ -245,8 +257,10 @@ export default function NurseListPage() {
         </ToolbarCard>}
       </m.div>
 
-      <m.section className="mt-6 overflow-hidden rounded-3xl bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)]" {...getDashboardEntranceMotion(shouldAnimate, 0.18, 24)}>
+      <m.section className="relative mt-6 overflow-hidden rounded-3xl bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)]" aria-busy={isUpdatingNurses || undefined} {...getDashboardEntranceMotion(shouldAnimate, 0.18, 24)}>
+        <RefreshingNotice active={isUpdatingNurses} />
         {isLoading && !hasLoadedNurses ? <TableDataSkeleton /> : <>
+        <div className={isUpdatingNurses ? "opacity-60 transition-opacity" : "transition-opacity"}>
         <div className="hidden overflow-x-auto sm:block" data-lenis-prevent>
           <table className="w-full text-left">
             <thead className="bg-surface text-xs font-extrabold uppercase tracking-[0.08em] text-muted">
@@ -317,6 +331,7 @@ export default function NurseListPage() {
           itemLabel="perawat"
           onPageChange={(page) => dispatch({ type: "patch", payload: { currentPage: Math.min(Math.max(page, 1), totalPages) } })}
         />
+        </div>
         </>}
       </m.section>
 

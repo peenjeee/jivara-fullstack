@@ -32,7 +32,7 @@ export const getUnreadActivityCount = async (req: AuthRequest, res: Response) =>
 
 export const markAllUnread = async (req: AuthRequest, res: Response) => {
   try {
-    const result = await activityReadService.markAllUnread(req.user!);
+    const result = await activityReadService.markAllUnread(req.user!, req.body?.activityIds);
     res.status(200).json({
       status: "berhasil",
       data: result,

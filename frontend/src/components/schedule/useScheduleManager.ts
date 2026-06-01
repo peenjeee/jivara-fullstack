@@ -7,7 +7,7 @@ import { getApiErrorMessage } from "@/lib/apiErrors";
 import type { PatientRecord } from "@/lib/mocks/patients";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
 import { getPatientsFromApi } from "@/lib/patientApi";
-import { createSchedulesViaApi, getSchedulePatientGroupsPageFromApi, setScheduleActiveViaApi, updateScheduleViaApi } from "@/lib/scheduleApi";
+import { createSchedulesViaApi, getCachedSchedulePatientGroupsPageFromApi, getSchedulePatientGroupsPageFromApi, setScheduleActiveViaApi, updateScheduleViaApi } from "@/lib/scheduleApi";
 import { showError, showToast } from "@/lib/swal";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import type { ScheduleAction } from "./ScheduleActions";
@@ -51,11 +51,16 @@ export function useScheduleManager({ initialPatientId = "", initialPatientName =
   const [isSummaryLoading, setIsSummaryLoading] = useState(!scheduleManagerViewCache);
   const [hasLoadedSchedules, setHasLoadedSchedules] = useState(Boolean(scheduleManagerViewCache));
   const [hasLoadedSummary, setHasLoadedSummary] = useState(Boolean(scheduleManagerViewCache));
+  const hasLoadedSchedulesRef = useRef(Boolean(scheduleManagerViewCache));
   const hasLoadedSummaryRef = useRef(Boolean(scheduleManagerViewCache));
   const [processingAction, setProcessingAction] = useState<string | null>(null);
   const isInitialLoad = useRef(true);
   const requestSeqRef = useRef(0);
   const debouncedSearch = useDebouncedValue(search);
+
+  useEffect(() => {
+    hasLoadedSchedulesRef.current = hasLoadedSchedules;
+  }, [hasLoadedSchedules]);
 
   const ensureScheduleFormPatients = useCallback(async () => {
     try {
@@ -71,21 +76,41 @@ export function useScheduleManager({ initialPatientId = "", initialPatientName =
     requestSeqRef.current = requestSeq;
     const nextSearch = overrides?.search ?? debouncedSearch;
     const nextFilter = overrides?.activeFilter ?? activeFilter;
-    const status = nextFilter === "Nonaktif" ? "inactive" : nextFilter === "all" ? "all" : "active";
+    const status: "active" | "inactive" | "all" = nextFilter === "Nonaktif" ? "inactive" : nextFilter === "all" ? "all" : "active";
     const adherenceStatus = nextFilter === "all" || nextFilter === "Nonaktif" ? undefined : nextFilter;
     const canUseVisibleCache = scheduleManagerViewCache?.currentPage === page
       && scheduleManagerViewCache.search === nextSearch
       && scheduleManagerViewCache.activeFilter === nextFilter;
+    const queryParams = {
+      page,
+      limit: pageSize,
+      search: nextSearch,
+      status,
+      adherenceStatus,
+    };
+    const cachedPage = forceRefresh ? null : getCachedSchedulePatientGroupsPageFromApi(queryParams);
+    if (cachedPage && requestSeq === requestSeqRef.current) {
+      const nextSummary = cachedPage.meta.summary ?? scheduleManagerViewCache?.scheduleSummary ?? defaultScheduleSummary;
+      setPatients(cachedPage.patients);
+      setSchedules(cachedPage.schedules);
+      setTotalPatients(cachedPage.meta.total);
+      setScheduleSummary(nextSummary);
+      setHasLoadedSchedules(true);
+      setHasLoadedSummary(true);
+      hasLoadedSummaryRef.current = true;
+      scheduleManagerViewCache = {
+        schedules: cachedPage.schedules,
+        patients: cachedPage.patients,
+        totalPatients: cachedPage.meta.total,
+        scheduleSummary: nextSummary,
+        search: nextSearch,
+        activeFilter: nextFilter,
+        currentPage: page,
+      };
+    }
     setIsLoading(!canUseVisibleCache);
     try {
-      const schedulePage = await getSchedulePatientGroupsPageFromApi({
-        page,
-        limit: pageSize,
-        search: nextSearch,
-        status,
-        adherenceStatus,
-        forceRefresh,
-      });
+      const schedulePage = await getSchedulePatientGroupsPageFromApi({ ...queryParams, forceRefresh });
       if (requestSeq === requestSeqRef.current) {
         setPatients(schedulePage.patients);
         setSchedules(schedulePage.schedules);
@@ -108,19 +133,17 @@ export function useScheduleManager({ initialPatientId = "", initialPatientName =
           activeFilter: nextFilter,
           currentPage: page,
         };
-        if (!forceRefresh) {
-          const adjacentPages = [page + 1, page - 1].filter((nextPage) => nextPage >= 1 && nextPage <= totalPagesForQuery);
-          void Promise.all(adjacentPages.map((nextPage) => getSchedulePatientGroupsPageFromApi({
-            page: nextPage,
-            limit: pageSize,
-            search: nextSearch,
-            status,
-            adherenceStatus,
-          }).catch(() => undefined)));
-        }
+        const adjacentPages = [page + 1, page - 1].filter((nextPage) => nextPage >= 1 && nextPage <= totalPagesForQuery);
+        void Promise.all(adjacentPages.map((nextPage) => getSchedulePatientGroupsPageFromApi({
+          page: nextPage,
+          limit: pageSize,
+          search: nextSearch,
+          status,
+          adherenceStatus,
+        }).catch(() => undefined)));
       }
     } catch {
-      if (requestSeq === requestSeqRef.current && !hasLoadedSchedules) {
+      if (requestSeq === requestSeqRef.current && !hasLoadedSchedulesRef.current) {
         setSchedules([]);
         setPatients([]);
         setTotalPatients(0);
@@ -136,13 +159,12 @@ export function useScheduleManager({ initialPatientId = "", initialPatientName =
         setIsLoading(false);
       }
     }
-  }, [activeFilter, debouncedSearch, hasLoadedSchedules]);
+  }, [activeFilter, debouncedSearch]);
 
   useEffect(() => {
     const forceRefresh = isInitialLoad.current && !scheduleManagerViewCache;
     isInitialLoad.current = false;
-    const id = setTimeout(() => void loadSchedulePage(currentPage, forceRefresh));
-    return () => clearTimeout(id);
+    void loadSchedulePage(currentPage, forceRefresh);
   }, [currentPage, loadSchedulePage]);
 
   const summaryStats = useMemo(() => {

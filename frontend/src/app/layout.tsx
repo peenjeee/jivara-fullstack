@@ -7,6 +7,8 @@ import MotionProvider from "@/providers/MotionProvider";
 import PwaInstallPromptProvider from "@/providers/PwaInstallPromptProvider";
 import ScrollProvider from "@/providers/ScrollProvider";
 import { JSON_LD_SCRIPT, SITE_URL } from "@/config/seo";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata, Viewport } from "next";
 import { Archivo, Inter } from "next/font/google";
 import Script from "next/script";
@@ -155,6 +157,8 @@ export default function RootLayout({ children }: RootLayoutProps) {
                 <AppSplashScreen />
                 <PwaPullToRefresh />
                 <BackToTopButton />
+                <Analytics />
+                <SpeedInsights />
               </PwaInstallPromptProvider>
             </AuthNavigationProvider>
           </ScrollProvider>

@@ -5,15 +5,14 @@ import { useRouter } from "next/navigation";
 import { getActivityDateKey } from "@/helpers/activityLogs";
 import { activityMatchesNurse, getAverageAdherence } from "@/helpers/nurses";
 import { getDashboardRole, isOperationalAdminRole } from "@/components/dashboard/navigation";
-import { markActivitiesReadViaApi } from "@/lib/activityReadApi";
+import { applyKnownActivityReadState, getActivityReadIdsFromApi, markActivitiesReadViaApi } from "@/lib/activityReadApi";
 import { getApiErrorMessage } from "@/lib/apiErrors";
-import { getAuditActivityPageFromApi } from "@/lib/auditLogApi";
-import { getNotificationActivityPageFromApi } from "@/lib/notificationActivitiesApi";
+import { getAuditActivityPageFromApi, getCachedAuditActivityPageFromApi } from "@/lib/auditLogApi";
 import type { ActivityCategory, ActivityLogRecord } from "@/lib/mocks/activityLogs";
 import type { NurseRecord } from "@/lib/mocks/nurses";
 import type { PatientRecord } from "@/lib/mocks/patients";
 import { deactivateNurseViaApi, getNurseByIdFromApi } from "@/lib/nurseApi";
-import { assignPatientToNursesViaApi, getPatientPageFromApi } from "@/lib/patientApi";
+import { assignPatientToNursesViaApi, getCachedPatientPageFromApi, getPatientPageFromApi } from "@/lib/patientApi";
 import { isDateInRange } from "@/lib/dateRange";
 import { showConfirm, showError, showToast, showWarning } from "@/lib/swal";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
@@ -49,6 +48,7 @@ const nurseDetailViewCache = new Map<string, NurseDetailViewCacheEntry>();
 
 const updateNurseDetailViewCache = (nurseId: string, nextCache: Partial<NurseDetailViewCacheEntry>) => {
   const currentCache = nurseDetailViewCache.get(nurseId);
+  const normalizedNextCache = nextCache.activities ? { ...nextCache, activities: applyKnownActivityReadState(nextCache.activities) } : nextCache;
   nurseDetailViewCache.set(nurseId, {
     nurse: null,
     assignedPatients: [],
@@ -59,7 +59,7 @@ const updateNurseDetailViewCache = (nurseId: string, nextCache: Partial<NurseDet
     totalActivities: 0,
     activityPage: 1,
     ...currentCache,
-    ...nextCache,
+    ...normalizedNextCache,
   });
 };
 
@@ -123,13 +123,17 @@ const getAuditSeverityFilter = (quickFilter: ActivityQuickFilter) => {
   return undefined;
 };
 
-const getNotificationSeverityFilter = (quickFilter: ActivityQuickFilter) => {
-  if (quickFilter === "critical" || quickFilter === "warning" || quickFilter === "success") return quickFilter;
-  return undefined;
-};
-
 const sortActivitiesByNewest = (activities: readonly ActivityLogRecord[]) => activities
   .toSorted((first, second) => new Date(second.timestamp).getTime() - new Date(first.timestamp).getTime());
+
+const hydrateActivityReadState = async (activities: readonly ActivityLogRecord[]) => {
+  const knownActivities = applyKnownActivityReadState(activities);
+  const activityIds = knownActivities.map((activity) => activity.id);
+  if (activityIds.length === 0) return knownActivities;
+
+  const readIds = await getActivityReadIdsFromApi({ activityIds, limit: Math.min(activityIds.length, 100), paginateAll: true }).catch(() => new Set<string>());
+  return knownActivities.map((activity) => (activity.read || readIds.has(activity.id) ? { ...activity, read: true } : activity));
+};
 
 const isPatientStillHandled = (patient: PatientRecord) => patient.status !== "Complete" && patient.status !== "Nonaktif";
 
@@ -156,7 +160,7 @@ function createInitialState(nurseId: string, nurses: readonly NurseRecord[]): Nu
     visibleActivityCount: loadBatchSize,
     activityPage: cachedDetail?.activityPage ?? 1,
     totalActivities: cachedDetail?.totalActivities ?? 0,
-    activities: cachedDetail?.activities ?? [],
+    activities: applyKnownActivityReadState(cachedDetail?.activities ?? []),
     isLoadingMoreActivities: false,
     isLoadingPatients: !cachedDetail,
     hasLoadedPatients: Boolean(cachedDetail),
@@ -233,6 +237,11 @@ export function useNurseDetailPageController(nurseId: string) {
   const patientRequestSeqRef = useRef(0);
   const patientSummaryRequestSeqRef = useRef(0);
   const activityRequestSeqRef = useRef(0);
+  const hasLoadedPatientSummaryRef = useRef(Boolean(nurseDetailViewCache.get(nurseId)));
+
+  useEffect(() => {
+    hasLoadedPatientSummaryRef.current = state.hasLoadedPatientSummary;
+  }, [state.hasLoadedPatientSummary]);
 
   useEffect(() => {
     if (!hasAuthHydrated || isOperationalAdminRole(dashboardRole) || dashboardRole === "nurse") return;
@@ -266,29 +275,36 @@ export function useNurseDetailPageController(nurseId: string) {
     patientRequestSeqRef.current = requestSeq;
     const cached = nurseDetailViewCache.get(nurseId);
     const canUseVisibleCache = cached?.patientPage === page && cached.patientSearch === debouncedPatientSearch && cached.patientFilter === state.patientFilter;
-    const patientStatus = state.patientFilter === "Nonaktif" ? "inactive" : state.patientFilter === "all" ? "all" : "active";
+    const patientStatus: "active" | "inactive" | "all" = state.patientFilter === "Nonaktif" ? "inactive" : state.patientFilter === "all" ? "all" : "active";
     const adherenceStatus = state.patientFilter === "all" || state.patientFilter === "Nonaktif" ? undefined : state.patientFilter;
+    const patientQueryParams = { page, limit: patientPageSize, status: patientStatus, nurseId, search: debouncedPatientSearch, adherenceStatus };
+    const cachedPage = forceRefresh ? null : getCachedPatientPageFromApi(patientQueryParams);
+    if (cachedPage && requestSeq === patientRequestSeqRef.current) {
+      const canUsePageAsSummary = page === 1 && !debouncedPatientSearch && state.patientFilter === "all" && cachedPage.patients.length >= cachedPage.meta.total;
+      const nextSummaryPatients = canUsePageAsSummary ? cachedPage.patients : undefined;
+      const nextTotalAssignedPatientCount = canUsePageAsSummary ? cachedPage.patients.filter(isPatientStillHandled).length : undefined;
+      dispatch({ type: "patients_loaded", patients: cachedPage.patients, totalPatientResults: cachedPage.meta.total, patientPage: page, summaryPatients: nextSummaryPatients, totalAssignedPatientCount: nextTotalAssignedPatientCount });
+      updateNurseDetailViewCache(nurseId, { assignedPatients: cachedPage.patients, ...(nextSummaryPatients ? { summaryPatients: nextSummaryPatients } : {}), ...(nextTotalAssignedPatientCount !== undefined ? { totalAssignedPatientCount: nextTotalAssignedPatientCount } : {}), totalPatientResults: cachedPage.meta.total, patientSearch: state.patientSearch, patientFilter: state.patientFilter, patientPage: page });
+    }
     dispatch({ type: "patients_loading", value: !canUseVisibleCache });
     try {
-      const response = await getPatientPageFromApi({ page, limit: patientPageSize, status: patientStatus, nurseId, search: debouncedPatientSearch, adherenceStatus, forceRefresh });
+      const response = await getPatientPageFromApi({ ...patientQueryParams, forceRefresh });
       if (requestSeq === patientRequestSeqRef.current) {
         const canUsePageAsSummary = page === 1 && !debouncedPatientSearch && state.patientFilter === "all" && response.patients.length >= response.meta.total;
         const nextSummaryPatients = canUsePageAsSummary ? response.patients : undefined;
         const nextTotalAssignedPatientCount = canUsePageAsSummary ? response.patients.filter(isPatientStillHandled).length : undefined;
         dispatch({ type: "patients_loaded", patients: response.patients, totalPatientResults: response.meta.total, patientPage: page, summaryPatients: nextSummaryPatients, totalAssignedPatientCount: nextTotalAssignedPatientCount });
         updateNurseDetailViewCache(nurseId, { assignedPatients: response.patients, ...(nextSummaryPatients ? { summaryPatients: nextSummaryPatients } : {}), ...(nextTotalAssignedPatientCount !== undefined ? { totalAssignedPatientCount: nextTotalAssignedPatientCount } : {}), totalPatientResults: response.meta.total, patientSearch: state.patientSearch, patientFilter: state.patientFilter, patientPage: page });
-        if (!forceRefresh) {
-          const totalPagesForQuery = Math.max(1, Math.ceil(response.meta.total / patientPageSize));
-          const adjacentPages = [page + 1, page - 1].filter((nextPage) => nextPage >= 1 && nextPage <= totalPagesForQuery);
-          void Promise.all(adjacentPages.map((nextPage) => getPatientPageFromApi({
-            page: nextPage,
-            limit: patientPageSize,
-            status: patientStatus,
-            nurseId,
-            search: debouncedPatientSearch,
-            adherenceStatus,
-          }).catch(() => undefined)));
-        }
+        const totalPagesForQuery = Math.max(1, Math.ceil(response.meta.total / patientPageSize));
+        const adjacentPages = [page + 1, page - 1].filter((nextPage) => nextPage >= 1 && nextPage <= totalPagesForQuery);
+        void Promise.all(adjacentPages.map((nextPage) => getPatientPageFromApi({
+          page: nextPage,
+          limit: patientPageSize,
+          status: patientStatus,
+          nurseId,
+          search: debouncedPatientSearch,
+          adherenceStatus,
+        }).catch(() => undefined)));
       }
     } catch {
       if (requestSeq === patientRequestSeqRef.current) dispatch({ type: "patients_failed" });
@@ -298,7 +314,7 @@ export function useNurseDetailPageController(nurseId: string) {
   const loadPatientSummary = useCallback(async (forceRefresh = false) => {
     const requestSeq = patientSummaryRequestSeqRef.current + 1;
     patientSummaryRequestSeqRef.current = requestSeq;
-    dispatch({ type: "patient_summary_loading", value: true });
+    dispatch({ type: "patient_summary_loading", value: !hasLoadedPatientSummaryRef.current });
     try {
       const response = await getPatientPageFromApi({ page: 1, limit: 1000, status: "all", nurseId, forceRefresh });
       if (requestSeq === patientSummaryRequestSeqRef.current) {
@@ -318,9 +334,9 @@ export function useNurseDetailPageController(nurseId: string) {
 
   useEffect(() => {
     if (!hasAuthHydrated || (dashboardRole !== "admin" && dashboardRole !== "nurse")) return;
-    if (!state.hasLoadedPatients || state.hasLoadedPatientSummary) return;
+    if (!state.hasLoadedPatients || hasLoadedPatientSummaryRef.current) return;
     void loadPatientSummary();
-  }, [dashboardRole, hasAuthHydrated, loadPatientSummary, state.hasLoadedPatientSummary, state.hasLoadedPatients]);
+  }, [dashboardRole, hasAuthHydrated, loadPatientSummary, state.hasLoadedPatients]);
 
   const loadActivities = useCallback(async () => {
     // Skip re-fetch kalau bukan karena filter change (misal patient summary selesai).
@@ -332,32 +348,31 @@ export function useNurseDetailPageController(nurseId: string) {
     const cached = nurseDetailViewCache.get(nurseId);
     const canUseVisibleCache = cached?.activitySearch === debouncedActivitySearch && cached.activityQuickFilter === state.activityQuickFilter && cached.activityCategory === state.activityCategory && cached.activityDate === state.activityDate;
     dispatch({ type: "activities_loading", value: !canUseVisibleCache });
-    const patientById = new Map([...state.summaryPatients, ...state.assignedPatients].map((patient) => [patient.id, patient]));
+    const auditParams = { page: 1, limit: loadBatchSize, category: state.activityCategory, date: state.activityDate, nurseId, severity: getAuditSeverityFilter(state.activityQuickFilter), search: debouncedActivitySearch };
+    const cachedAuditPage = getCachedAuditActivityPageFromApi(auditParams);
+    if (cachedAuditPage && requestSeq === activityRequestSeqRef.current) {
+      const nextActivities = applyKnownActivityReadState(sortActivitiesByNewest(cachedAuditPage.activities));
+      const nextTotalActivities = cachedAuditPage.meta.total;
+      dispatch({ type: "activities_loaded", activities: nextActivities, totalActivities: nextTotalActivities, activityPage: 1 });
+      updateNurseDetailViewCache(nurseId, { activities: nextActivities, totalActivities: nextTotalActivities, activityPage: 1, activitySearch: state.activitySearch, activityQuickFilter: state.activityQuickFilter, activityCategory: state.activityCategory, activityDate: state.activityDate });
+    }
     try {
-      const [auditResponse, notificationResponse] = await Promise.all([
-        getAuditActivityPageFromApi({ page: 1, limit: loadBatchSize, category: state.activityCategory, date: state.activityDate, nurseId, severity: getAuditSeverityFilter(state.activityQuickFilter), search: debouncedActivitySearch }),
-        getNotificationActivityPageFromApi({ page: 1, limit: loadBatchSize, nurseId, category: state.activityCategory, date: state.activityDate, severity: getNotificationSeverityFilter(state.activityQuickFilter), search: debouncedActivitySearch }).catch(() => ({ activities: [], meta: { page: 1, limit: loadBatchSize, total: 0 } })),
-      ]);
+      const auditResponse = await getAuditActivityPageFromApi(auditParams);
       if (requestSeq === activityRequestSeqRef.current) {
-        const notificationActivities = notificationResponse.activities.map((activity) => {
-          const patient = activity.patientId ? patientById.get(activity.patientId) : undefined;
-          return { ...activity, patientName: activity.patientName ?? patient?.name, patientAvatar: activity.patientAvatar ?? patient?.avatar };
-        });
-        const nextActivities = sortActivitiesByNewest([...notificationActivities, ...auditResponse.activities]);
-        const nextTotalActivities = auditResponse.meta.total + notificationResponse.meta.total;
-        dispatch({ type: "activities_loaded", activities: nextActivities, totalActivities: nextTotalActivities, activityPage: 1 });
-        updateNurseDetailViewCache(nurseId, { activities: nextActivities, totalActivities: nextTotalActivities, activityPage: 1, activitySearch: state.activitySearch, activityQuickFilter: state.activityQuickFilter, activityCategory: state.activityCategory, activityDate: state.activityDate });
-        if (loadBatchSize < nextTotalActivities) {
-          void Promise.all([
-            getAuditActivityPageFromApi({ page: 2, limit: loadBatchSize, category: state.activityCategory, date: state.activityDate, nurseId, severity: getAuditSeverityFilter(state.activityQuickFilter), search: debouncedActivitySearch }),
-            getNotificationActivityPageFromApi({ page: 2, limit: loadBatchSize, nurseId, category: state.activityCategory, date: state.activityDate, severity: getNotificationSeverityFilter(state.activityQuickFilter), search: debouncedActivitySearch }).catch(() => ({ activities: [], meta: { page: 2, limit: loadBatchSize, total: 0 } })),
-          ]).catch(() => undefined);
+        const hydratedActivities = await hydrateActivityReadState(sortActivitiesByNewest(auditResponse.activities));
+        if (requestSeq === activityRequestSeqRef.current) {
+          const nextTotalActivities = auditResponse.meta.total;
+          dispatch({ type: "activities_loaded", activities: hydratedActivities, totalActivities: nextTotalActivities, activityPage: 1 });
+          updateNurseDetailViewCache(nurseId, { activities: hydratedActivities, totalActivities: nextTotalActivities, activityPage: 1, activitySearch: state.activitySearch, activityQuickFilter: state.activityQuickFilter, activityCategory: state.activityCategory, activityDate: state.activityDate });
+          if (loadBatchSize < nextTotalActivities) {
+            void getAuditActivityPageFromApi({ page: 2, limit: loadBatchSize, category: state.activityCategory, date: state.activityDate, nurseId, severity: getAuditSeverityFilter(state.activityQuickFilter), search: debouncedActivitySearch }).catch(() => undefined);
+          }
         }
       }
     } catch {
       if (requestSeq === activityRequestSeqRef.current) dispatch({ type: "activities_failed" });
     }
-  }, [debouncedActivitySearch, nurseId, state.activityCategory, state.activityDate, state.activityQuickFilter, state.activitySearch, state.assignedPatients, state.isLoadingActivities, state.summaryPatients]);
+  }, [debouncedActivitySearch, nurseId, state.activityCategory, state.activityDate, state.activityQuickFilter, state.activitySearch, state.isLoadingActivities]);
 
   useEffect(() => {
     if (!hasAuthHydrated || (dashboardRole !== "admin" && dashboardRole !== "nurse")) return;
@@ -463,25 +478,16 @@ export function useNurseDetailPageController(nurseId: string) {
     const nextPage = state.activityPage + 1;
     dispatch({ type: "load_more_activities_start" });
     try {
-      const patientById = new Map([...state.summaryPatients, ...state.assignedPatients].map((patient) => [patient.id, patient]));
-      const [auditResponse, notificationResponse] = await Promise.all([
-        getAuditActivityPageFromApi({ page: nextPage, limit: loadBatchSize, category: state.activityCategory, date: state.activityDate, nurseId, severity: getAuditSeverityFilter(state.activityQuickFilter), search: debouncedActivitySearch }),
-        getNotificationActivityPageFromApi({ page: nextPage, limit: loadBatchSize, nurseId, category: state.activityCategory, date: state.activityDate, severity: getNotificationSeverityFilter(state.activityQuickFilter), search: debouncedActivitySearch }).catch(() => ({ activities: [], meta: { page: nextPage, limit: loadBatchSize, total: 0 } })),
-      ]);
+      const auditResponse = await getAuditActivityPageFromApi({ page: nextPage, limit: loadBatchSize, category: state.activityCategory, date: state.activityDate, nurseId, severity: getAuditSeverityFilter(state.activityQuickFilter), search: debouncedActivitySearch });
       if (requestSeq === activityRequestSeqRef.current) {
-        const notificationActivities = notificationResponse.activities.map((activity) => {
-          const patient = activity.patientId ? patientById.get(activity.patientId) : undefined;
-          return { ...activity, patientName: activity.patientName ?? patient?.name, patientAvatar: activity.patientAvatar ?? patient?.avatar };
-        });
-        const nextActivities = sortActivitiesByNewest([...state.activities, ...notificationActivities, ...auditResponse.activities]);
-        const nextTotalActivities = auditResponse.meta.total + notificationResponse.meta.total;
-        dispatch({ type: "activities_appended", activities: nextActivities, totalActivities: nextTotalActivities, activityPage: nextPage });
-        updateNurseDetailViewCache(nurseId, { activities: nextActivities, totalActivities: nextTotalActivities, activityPage: nextPage });
-        if (nextPage * loadBatchSize < nextTotalActivities) {
-          void Promise.all([
-            getAuditActivityPageFromApi({ page: nextPage + 1, limit: loadBatchSize, category: state.activityCategory, date: state.activityDate, nurseId, severity: getAuditSeverityFilter(state.activityQuickFilter), search: debouncedActivitySearch }),
-            getNotificationActivityPageFromApi({ page: nextPage + 1, limit: loadBatchSize, nurseId, category: state.activityCategory, date: state.activityDate, severity: getNotificationSeverityFilter(state.activityQuickFilter), search: debouncedActivitySearch }).catch(() => ({ activities: [], meta: { page: nextPage + 1, limit: loadBatchSize, total: 0 } })),
-          ]).catch(() => undefined);
+        const hydratedActivities = await hydrateActivityReadState(sortActivitiesByNewest([...state.activities, ...auditResponse.activities]));
+        if (requestSeq === activityRequestSeqRef.current) {
+          const nextTotalActivities = auditResponse.meta.total;
+          dispatch({ type: "activities_appended", activities: hydratedActivities, totalActivities: nextTotalActivities, activityPage: nextPage });
+          updateNurseDetailViewCache(nurseId, { activities: hydratedActivities, totalActivities: nextTotalActivities, activityPage: nextPage });
+          if (nextPage * loadBatchSize < nextTotalActivities) {
+            void getAuditActivityPageFromApi({ page: nextPage + 1, limit: loadBatchSize, category: state.activityCategory, date: state.activityDate, nurseId, severity: getAuditSeverityFilter(state.activityQuickFilter), search: debouncedActivitySearch }).catch(() => undefined);
+          }
         }
       }
     } catch {
@@ -495,6 +501,7 @@ export function useNurseDetailPageController(nurseId: string) {
   const handleMarkActivityRead = async (activityId: string) => {
     await markActivitiesReadViaApi([activityId]);
     dispatch({ type: "mark_activity_read", activityId });
+    updateNurseDetailViewCache(nurseId, { activities: state.activities.map((activity) => activity.id === activityId ? { ...activity, read: true } : activity) });
   };
 
   return {

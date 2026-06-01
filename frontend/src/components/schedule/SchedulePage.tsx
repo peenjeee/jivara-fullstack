@@ -8,6 +8,7 @@ import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/
 import Button from "@/components/ui/Button";
 import PatientPagination from "@/components/patients/PatientPagination";
 import { ButtonSkeleton, SummaryCardsSkeleton, TableDataSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
+import RefreshingNotice from "@/components/ui/RefreshingNotice";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import ScheduleDetailModal from "./ScheduleDetailModal";
 import ScheduleModal from "./ScheduleModal";
@@ -24,6 +25,7 @@ interface SchedulePageProps {
 export default function SchedulePage({ initialPatientId = "", initialPatientName = "", readOnly = false }: SchedulePageProps) {
   const shouldAnimate = useDashboardEntranceMotion();
   const schedule = useScheduleManager({ initialPatientId, initialPatientName });
+  const isUpdatingSchedules = schedule.isLoading && schedule.hasLoadedSchedules;
 
   return (
     <DashboardPageShell>
@@ -47,14 +49,16 @@ export default function SchedulePage({ initialPatientId = "", initialPatientName
       </m.div>
 
       <m.div
-        className="mt-6 overflow-hidden rounded-3xl shadow-[0_10px_30px_rgba(15,23,42,0.08)]"
+        className="relative mt-6 overflow-hidden rounded-3xl shadow-[0_10px_30px_rgba(15,23,42,0.08)]"
+        aria-busy={isUpdatingSchedules || undefined}
         {...getDashboardEntranceMotion(shouldAnimate, 0.4, 24)}
       >
+        <RefreshingNotice active={isUpdatingSchedules} />
         {schedule.isLoading && !schedule.hasLoadedSchedules ? <TableDataSkeleton /> : (
-          <>
+          <div className={isUpdatingSchedules ? "opacity-60 transition-opacity" : "transition-opacity"}>
             <ScheduleTable groups={schedule.paginatedGroups} onViewDetail={(group) => schedule.setSelectedPatientId(group.patientId)} onAddMedicine={(group) => schedule.setAddMedicinePatientId(group.patientId)} readOnly={readOnly} emptyMessage="Tidak ada data jadwal." />
             <PatientPagination currentPage={schedule.currentPage} totalPages={schedule.totalPatients > 0 ? schedule.totalPages : 1} totalItems={schedule.totalPatients} pageSize={schedule.pageSize} itemLabel="pasien" onPageChange={schedule.setCurrentPage} />
-          </>
+          </div>
         )}
       </m.div>
 

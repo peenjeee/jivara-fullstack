@@ -94,19 +94,13 @@ export interface AdminDashboardData extends AdminDashboardStatsData {
   inactiveNurseReassignCount: number;
 }
 
-const nurseDashboardCacheTtl = 15_000;
-let nurseDashboardCache: { data: NurseDashboardData; expiresAt: number } | null = null;
 let nurseDashboardRequest: Promise<NurseDashboardData> | null = null;
 
-const adminDashboardCacheTtl = 15_000;
-const adminDashboardCache = new Map<string, { data: AdminDashboardStatsData; expiresAt: number }>();
 const adminDashboardRequests = new Map<string, Promise<AdminDashboardStatsData>>();
 let fullAdminDashboardRequest: Promise<AdminDashboardData> | null = null;
 
 export const clearDashboardCache = () => {
-  nurseDashboardCache = null;
   nurseDashboardRequest = null;
-  adminDashboardCache.clear();
   adminDashboardRequests.clear();
   fullAdminDashboardRequest = null;
 };
@@ -161,12 +155,9 @@ const getPatientListAdherence = (patient: PatientListResponse) => {
 
 export const getNurseDashboardData = async (options: { readonly forceRefresh?: boolean } = {}): Promise<NurseDashboardData> => {
   if (options.forceRefresh) {
-    nurseDashboardCache = null;
     nurseDashboardRequest = null;
   }
 
-  const now = Date.now();
-  if (nurseDashboardCache && nurseDashboardCache.expiresAt > now) return nurseDashboardCache.data;
   if (nurseDashboardRequest) return nurseDashboardRequest;
 
   nurseDashboardRequest = (async () => {
@@ -193,7 +184,6 @@ export const getNurseDashboardData = async (options: { readonly forceRefresh?: b
       ],
       patients,
     };
-    nurseDashboardCache = { data: result, expiresAt: Date.now() + nurseDashboardCacheTtl };
     return result;
   })().finally(() => {
     nurseDashboardRequest = null;
@@ -204,9 +194,6 @@ export const getNurseDashboardData = async (options: { readonly forceRefresh?: b
 
 export const getAdminDashboardStats = async (params: { nurseTotal?: number } = {}): Promise<AdminDashboardStatsData> => {
   const cacheKey = `nurses:${params.nurseTotal ?? "all"}`;
-  const now = Date.now();
-  const cached = adminDashboardCache.get(cacheKey);
-  if (cached && cached.expiresAt > now) return cached.data;
   const activeRequest = adminDashboardRequests.get(cacheKey);
   if (activeRequest) return activeRequest;
 
@@ -229,7 +216,6 @@ export const getAdminDashboardStats = async (params: { nurseTotal?: number } = {
         { label: "Jadwal Pasien Aktif", value: String(aggregate.totalActiveSchedules ?? aggregate.totalScheduled), tone: "neutral", color: "lime", icon: CalendarClock },
       ],
     };
-    adminDashboardCache.set(cacheKey, { data: result, expiresAt: Date.now() + adminDashboardCacheTtl });
     return result;
   })().finally(() => {
     adminDashboardRequests.delete(cacheKey);

@@ -46,6 +46,8 @@ type FoodDetectionResult = {
   lowConfidenceItems: unknown[];
   inferenceTimeMs: number;
   modelVersion: string;
+  boundingBoxImageWidth?: number;
+  boundingBoxImageHeight?: number;
 };
 
 type ImageForDetection = {
@@ -167,6 +169,15 @@ const normalizeDetectedLabel = (item: unknown) => {
   return "";
 };
 
+const uniqueDetectedLabels = (items: readonly unknown[]): string[] => Array.from(items.reduce<Map<string, string>>((labels, item) => {
+  const label = normalizeDetectedLabel(item).trim();
+  if (!label) return labels;
+
+  const key = label.toLocaleLowerCase("id-ID");
+  if (!labels.has(key)) labels.set(key, label);
+  return labels;
+}, new Map<string, string>()).values());
+
 const normalizeMedicationNames = (medications: Array<{ drugName: string }>) => medications.map((medication) => medication.drugName.toUpperCase());
 
 const mapMedicationDetails = (medications: Array<{ drugName: string; registrationNumber?: string | null; compositionNormalized?: string | null; activeSubstances?: string | null; drugCategories?: string | null; medicineForm?: string | null }>) => medications.map((medication) => ({
@@ -183,6 +194,40 @@ const mapRiskScoreToLevel = (score: number) => {
   if (score >= 2) return "sedang";
   return "rendah";
 };
+
+const isAttentionRiskLevel = (riskLevel?: string | null) => {
+  const normalized = String(riskLevel || "").trim().toLocaleLowerCase("id-ID");
+  return ["sedang", "menengah", "moderate", "medium", "tinggi", "kritis", "critical", "high"].includes(normalized);
+};
+
+const getOverallRecommendationText = (riskLevel?: string | null) => isAttentionRiskLevel(riskLevel)
+  ? "Ditemukan potensi interaksi obat-makanan. Ikuti alternatif makanan aman dari rekomendasi AI."
+  : "Tidak ditemukan interaksi signifikan pada makanan yang terdeteksi.";
+
+type FoodInteractionResult = {
+  food_item: string;
+  food_display: string;
+  medication: string;
+  severity: string;
+  severity_label: string;
+  interaction_description: string;
+  recommendation: string;
+  sources: string[];
+};
+
+const getInteractionResultKey = (interaction: FoodInteractionResult) => [
+  interaction.food_item,
+  interaction.medication,
+  interaction.severity,
+  interaction.interaction_description,
+  interaction.recommendation,
+].map((value) => value.trim().toLocaleLowerCase("id-ID")).join("|");
+
+const dedupeInteractionResults = (interactions: FoodInteractionResult[]) => Array.from(interactions.reduce((uniqueInteractions, interaction) => {
+  const key = getInteractionResultKey(interaction);
+  if (!uniqueInteractions.has(key)) uniqueInteractions.set(key, interaction);
+  return uniqueInteractions;
+}, new Map<string, FoodInteractionResult>()).values());
 
 const getReasoningTimeoutMs = () => Number(process.env.FOOD_REASONING_TIMEOUT_MS || process.env.FOOD_AI_TIMEOUT_MS || 10000);
 
@@ -281,7 +326,7 @@ const getFallbackInteraction = (yoloClass: string): ReasoningInteractionResponse
   highest_severity: 0,
   status: "fallback",
   detailed_predictions: [],
-  llm_reasoning: "Service AI reasoning sedang lambat, jadi hasil sementara ditandai aman sampai analisis berikutnya tersedia.",
+  llm_reasoning: "Service AI reasoning sedang tidak tersedia untuk makanan ini, jadi tidak ada prediksi interaksi spesifik yang dapat dipastikan pada percobaan ini.",
   recommended_foods: [],
 });
 
@@ -362,9 +407,8 @@ const toRecommendationSummary = (value: unknown): RecommendationSummary | undefi
 const checkFoodInteractionWithReasoning = async (yoloClass: string, patientMedications: string[]) => {
   try {
     return await postReasoning<ReasoningInteractionResponse>("/interaction-check", { yolo_class: yoloClass, patient_medications: patientMedications });
-  } catch (error) {
-    if (shouldUseDevelopmentFallback()) return getFallbackInteraction(yoloClass);
-    throw error;
+  } catch {
+    return getFallbackInteraction(yoloClass);
   }
 };
 
@@ -410,6 +454,78 @@ const toUnavailableNutritionItem = (item: NutritionDTO["detectedItems"][number],
   };
 };
 
+const toFiniteNumber = (value: unknown) => {
+  const numberValue = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  return Number.isFinite(numberValue) ? numberValue : null;
+};
+
+const getBoxNumber = (record: Record<string, unknown>, ...keys: string[]) => {
+  for (const key of keys) {
+    const value = toFiniteNumber(record[key]);
+    if (value !== null) return value;
+  }
+
+  return null;
+};
+
+const normalizeBoundingBoxPayload = (box: unknown, formatHint = "") => {
+  if (Array.isArray(box) && box.length >= 4) {
+    const values = box.slice(0, 4).map(toFiniteNumber);
+    if (values.some((value) => value === null)) return box;
+    const [first, second, third, fourth] = values as [number, number, number, number];
+    return formatHint.includes("xywh")
+      ? { x: first, y: second, width: third, height: fourth }
+      : { x1: first, y1: second, x2: third, y2: fourth };
+  }
+
+  return box;
+};
+
+const getDetectionBoundingBox = (item: Record<string, unknown>) => {
+  const formatHint = String(item.box_format || item.bbox_format || item.format || "").toLowerCase();
+  const directBox = item.bounding_box ?? item.boundingBox ?? item.bbox ?? item.box;
+  if (directBox !== undefined && directBox !== null) return normalizeBoundingBoxPayload(directBox, formatHint);
+
+  const x1 = getBoxNumber(item, "x1", "xmin", "left");
+  const y1 = getBoxNumber(item, "y1", "ymin", "top");
+  const x2 = getBoxNumber(item, "x2", "xmax", "right");
+  const y2 = getBoxNumber(item, "y2", "ymax", "bottom");
+  if (x1 !== null && y1 !== null && x2 !== null && y2 !== null) return { x1, y1, x2, y2 };
+
+  const x = getBoxNumber(item, "x");
+  const y = getBoxNumber(item, "y");
+  const width = getBoxNumber(item, "width", "w");
+  const height = getBoxNumber(item, "height", "h");
+  if (x !== null && y !== null && width !== null && height !== null) {
+    return formatHint.includes("center") || formatHint.includes("cxcy")
+      ? { cx: x, cy: y, width, height }
+      : { x, y, width, height };
+  }
+
+  const cx = getBoxNumber(item, "cx", "centerX", "xCenter", "x_center");
+  const cy = getBoxNumber(item, "cy", "centerY", "yCenter", "y_center");
+  if (cx !== null && cy !== null && width !== null && height !== null) return { cx, cy, width, height };
+
+  return undefined;
+};
+
+const getDetectionResponseImageSize = (root: Record<string, unknown>) => {
+  const directSize = root.image_size ?? root.imageSize ?? root.input_size ?? root.inputSize;
+  const directRecord = directSize && typeof directSize === "object" && !Array.isArray(directSize)
+    ? directSize as Record<string, unknown>
+    : null;
+  const width = directRecord
+    ? getBoxNumber(directRecord, "width", "w")
+    : getBoxNumber(root, "image_width", "imageWidth", "input_width", "inputWidth", "width");
+  const height = directRecord
+    ? getBoxNumber(directRecord, "height", "h")
+    : getBoxNumber(root, "image_height", "imageHeight", "input_height", "inputHeight", "height");
+
+  return width !== null && height !== null && width > 0 && height > 0
+    ? { width, height }
+    : null;
+};
+
 const toDetectionItem = (item: Record<string, unknown>): DetectionItem => {
   const displayLabel = item.label_display || item.labelDisplay || item.label_final || item.class_name || item.display || item.name || item.label || "Makanan Terdeteksi";
   const rawConfidence = typeof item.confidence === "number" ? item.confidence : Number(item.score || item.probability || 0);
@@ -418,29 +534,23 @@ const toDetectionItem = (item: Record<string, unknown>): DetectionItem => {
     label: normalizeFoodClass(item.label || item.label_final || item.class_name || item.class || item.name),
     labelDisplay: String(displayLabel),
     confidence: rawConfidence > 1 ? rawConfidence / 100 : rawConfidence,
-    boundingBox: item.bounding_box || item.boundingBox || item.bbox || (
-      ["x1", "y1", "x2", "y2"].every((key) => typeof item[key] === "number")
-        ? { x1: item.x1, y1: item.y1, x2: item.x2, y2: item.y2 }
-        : undefined
-    ),
+    boundingBox: getDetectionBoundingBox(item),
   };
 };
 
-const toFiniteNumber = (value: unknown) => {
-  const numberValue = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
-  return Number.isFinite(numberValue) ? numberValue : null;
-};
-
-const scaleDetectionBoundingBox = (box: unknown, image: ImageForDetection) => {
+const scaleDetectionBoundingBox = (box: unknown, image: ImageForDetection, coordinateWidth: number, coordinateHeight: number) => {
   if (!box || typeof box !== "object") return box;
 
   const record = box as Record<string, unknown>;
-  const rawLeft = toFiniteNumber(record.x1 ?? record.x);
-  const rawTop = toFiniteNumber(record.y1 ?? record.y);
-  const rawRight = toFiniteNumber(record.x2);
-  const rawBottom = toFiniteNumber(record.y2);
-  const rawWidth = toFiniteNumber(record.width);
-  const rawHeight = toFiniteNumber(record.height);
+  const rawWidth = getBoxNumber(record, "width", "w");
+  const rawHeight = getBoxNumber(record, "height", "h");
+  const rawCenterX = getBoxNumber(record, "cx", "centerX", "xCenter", "x_center");
+  const rawCenterY = getBoxNumber(record, "cy", "centerY", "yCenter", "y_center");
+  const usesCenterPoint = rawCenterX !== null && rawCenterY !== null && rawWidth !== null && rawHeight !== null;
+  const rawLeft = usesCenterPoint ? rawCenterX - rawWidth / 2 : getBoxNumber(record, "x1", "xmin", "left", "x");
+  const rawTop = usesCenterPoint ? rawCenterY - rawHeight / 2 : getBoxNumber(record, "y1", "ymin", "top", "y");
+  const rawRight = getBoxNumber(record, "x2", "xmax", "right");
+  const rawBottom = getBoxNumber(record, "y2", "ymax", "bottom");
   const left = rawLeft ?? 0;
   const top = rawTop ?? 0;
   const right = rawRight ?? (rawWidth !== null ? left + rawWidth : null);
@@ -450,28 +560,71 @@ const scaleDetectionBoundingBox = (box: unknown, image: ImageForDetection) => {
 
   const values = [left, top, right, bottom];
   const isNormalizedBox = values.every((value) => value >= 0 && value <= 1);
-  const scaleX = isNormalizedBox ? image.sourceWidth : image.sourceWidth / image.detectionWidth;
-  const scaleY = isNormalizedBox ? image.sourceHeight : image.sourceHeight / image.detectionHeight;
+  const scaledLeft = isNormalizedBox ? left * coordinateWidth : left;
+  const scaledTop = isNormalizedBox ? top * coordinateHeight : top;
+  const scaledRight = isNormalizedBox ? right * coordinateWidth : right;
+  const scaledBottom = isNormalizedBox ? bottom * coordinateHeight : bottom;
 
-  const x1 = Math.round(left * scaleX);
-  const y1 = Math.round(top * scaleY);
-  const x2 = Math.round(right * scaleX);
-  const y2 = Math.round(bottom * scaleY);
+  const x1 = Math.round(scaledLeft);
+  const y1 = Math.round(scaledTop);
+  const x2 = Math.round(scaledRight);
+  const y2 = Math.round(scaledBottom);
 
   return {
-    x1: Math.max(0, Math.min(image.sourceWidth, x1)),
-    y1: Math.max(0, Math.min(image.sourceHeight, y1)),
-    x2: Math.max(0, Math.min(image.sourceWidth, x2)),
-    y2: Math.max(0, Math.min(image.sourceHeight, y2)),
+    x1: Math.max(0, Math.min(coordinateWidth, x1)),
+    y1: Math.max(0, Math.min(coordinateHeight, y1)),
+    x2: Math.max(0, Math.min(coordinateWidth, x2)),
+    y2: Math.max(0, Math.min(coordinateHeight, y2)),
+    imageWidth: coordinateWidth,
+    imageHeight: coordinateHeight,
   };
+};
+
+const getDetectionBoxAreaRatio = (box: unknown, image: ImageForDetection) => {
+  if (!box || typeof box !== "object") return 0;
+  const record = box as Record<string, unknown>;
+  const x1 = getBoxNumber(record, "x1");
+  const y1 = getBoxNumber(record, "y1");
+  const x2 = getBoxNumber(record, "x2");
+  const y2 = getBoxNumber(record, "y2");
+  const imageWidth = getBoxNumber(record, "imageWidth", "image_width", "coordinateWidth", "coordinate_width") ?? image.sourceWidth;
+  const imageHeight = getBoxNumber(record, "imageHeight", "image_height", "coordinateHeight", "coordinate_height") ?? image.sourceHeight;
+  if (x1 === null || y1 === null || x2 === null || y2 === null) return 0;
+  const area = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+  const imageArea = imageWidth * imageHeight;
+  return imageArea > 0 ? area / imageArea : 0;
+};
+
+const pruneDuplicateDetections = (items: DetectionItem[], image: ImageForDetection) => {
+  const byLabel = new Map<string, DetectionItem>();
+
+  for (const item of items) {
+    const areaRatio = getDetectionBoxAreaRatio(item.boundingBox, image);
+    if (areaRatio > 0.72 && item.confidence < 0.5) continue;
+
+    const existing = byLabel.get(item.label);
+    if (!existing || item.confidence > existing.confidence) {
+      byLabel.set(item.label, item);
+    }
+  }
+
+  return [...byLabel.values()];
 };
 
 const scaleDetectionBoundingBoxes = (result: FoodDetectionResult, image: ImageForDetection): FoodDetectionResult => ({
   ...result,
-  detectedItems: result.detectedItems.map((item) => ({
-    ...item,
-    boundingBox: scaleDetectionBoundingBox(item.boundingBox, image),
-  })),
+  detectedItems: pruneDuplicateDetections(
+    result.detectedItems.map((item) => ({
+      ...item,
+      boundingBox: scaleDetectionBoundingBox(
+        item.boundingBox,
+        image,
+        result.boundingBoxImageWidth || image.detectionWidth,
+        result.boundingBoxImageHeight || image.detectionHeight,
+      ),
+    })),
+    image,
+  ),
 });
 
 const normalizeDetectionResponse = (payload: unknown): FoodDetectionResult => {
@@ -490,12 +643,15 @@ const normalizeDetectionResponse = (payload: unknown): FoodDetectionResult => {
     .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
     .map(toDetectionItem)
     .filter((item) => item.label.length > 0);
+  const imageSize = getDetectionResponseImageSize(root);
 
   return {
     detectedItems,
     lowConfidenceItems: Array.isArray(root?.low_confidence_items) ? root.low_confidence_items : [],
     inferenceTimeMs: typeof root?.inference_time_ms === "number" ? root.inference_time_ms : Number(root?.inferenceTimeMs || 0),
     modelVersion: String(root?.model_version || root?.modelVersion || "jivara-food-detection-hf"),
+    boundingBoxImageWidth: imageSize?.width,
+    boundingBoxImageHeight: imageSize?.height,
   };
 };
 
@@ -632,6 +788,7 @@ const mapScanSummary = (scan: typeof foodScans.$inferSelect) => ({
   modelVersion: scan.modelVersion,
   overallRiskScore: scan.overallRiskScore,
   overallRiskLevel: scan.overallRiskLevel,
+  overallRecommendation: getOverallRecommendationText(scan.overallRiskLevel),
   createdAt: scan.createdAt,
 });
 
@@ -760,8 +917,8 @@ export const detectFood = async (dto: FoodDetectDTO, user?: AccessUser) => {
 
   const detectionResult = await runFoodDetection(scan);
 
-  const existingItems = await db.select({ id: detectedItems.id }).from(detectedItems).where(eq(detectedItems.scanId, scan.id)).limit(1);
-  if (existingItems.length === 0 && detectionResult.detectedItems.length > 0) {
+  await db.delete(detectedItems).where(eq(detectedItems.scanId, scan.id));
+  if (detectionResult.detectedItems.length > 0) {
     await db.insert(detectedItems).values(detectionResult.detectedItems.map((item) => ({
       scanId: scan.id,
       label: item.label,
@@ -798,7 +955,7 @@ export const checkInteraction = async (dto: InteractionCheckDTO, user?: AccessUs
   if (user) await assertCanAccessPatient(user, dto.patientId);
   await ensureScanExists(dto.scanId, dto.patientId);
 
-  const detectedLabels = dto.detectedItems.map(normalizeDetectedLabel).filter(Boolean);
+  const detectedLabels = uniqueDetectedLabels(dto.detectedItems);
   const activeMedicationData = await getActivePatientMedications(dto.patientId);
   const patientMedications = activeMedicationData.names;
   const shouldIncludeRecommendations = dto.includeRecommendations !== false;
@@ -809,8 +966,7 @@ export const checkInteraction = async (dto: InteractionCheckDTO, user?: AccessUs
       : Promise.resolve(getFallbackRecommendations(patientMedications)),
   ]);
   const recommendationGroups = splitRecommendationsByRisk(recommendationData);
-  const interactions = interactionChecks.flatMap((check) => check.detailed_predictions
-    .filter((prediction) => prediction.severity_score > 0)
+  const interactions = dedupeInteractionResults(interactionChecks.flatMap((check) => check.detailed_predictions
     .map((prediction) => ({
       food_item: check.detected_food,
       food_display: check.detected_food.replace(/-/g, " "),
@@ -822,9 +978,11 @@ export const checkInteraction = async (dto: InteractionCheckDTO, user?: AccessUs
         ? `Alternatif aman: ${check.recommended_foods.map((food) => food.food_name).join(", ")}.`
         : "Ikuti rekomendasi tenaga kesehatan dan pantau gejala setelah makan.",
       sources: ["Jivara AI Reasoning"],
-    })));
+    }))));
   const highestSeverity = Math.max(0, ...interactionChecks.map((check) => check.highest_severity));
   const overallRiskLevel = mapRiskScoreToLevel(highestSeverity);
+
+  const hasAttentionInteraction = isAttentionRiskLevel(overallRiskLevel);
 
   if (interactions.length > 0) {
     await db.insert(interactionResults).values(interactions.map((interaction) => ({
@@ -880,12 +1038,13 @@ export const checkInteraction = async (dto: InteractionCheckDTO, user?: AccessUs
       interactionCount: interactions.length,
       detectedItems: detectedLabels.length,
       recommendationCount: shouldIncludeRecommendations ? recommendationGroups.recommendedFoods.length : 0,
+      attentionRequired: hasAttentionInteraction,
     },
   });
 
   invalidateFoodScanDependentCaches();
 
-  if (interactions.length > 0) {
+  if (hasAttentionInteraction) {
     await sendCareTeamCriticalPushNotification(dto.patientId, {
       type: "food_interaction_detected",
       title: "Interaksi makanan terdeteksi",
@@ -914,9 +1073,7 @@ export const checkInteraction = async (dto: InteractionCheckDTO, user?: AccessUs
     matched_medication_categories: recommendationData.matched_categories || {},
     overall_risk_score: highestSeverity,
     overall_risk_level: overallRiskLevel,
-    overall_recommendation: interactions.length > 0
-      ? "Ditemukan potensi interaksi obat-makanan. Ikuti alternatif makanan aman dari rekomendasi AI."
-      : "Tidak ditemukan interaksi signifikan pada makanan yang terdeteksi.",
+    overall_recommendation: getOverallRecommendationText(overallRiskLevel),
     disclaimer: "Ini bukan nasihat medis. Selalu konsultasikan dengan dokter atau apoteker Anda.",
     timestamp: new Date(),
   };

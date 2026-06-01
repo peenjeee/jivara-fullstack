@@ -14,12 +14,11 @@ interface PreferenceResponse {
 }
 
 const firstLoginPromptStoragePrefix = "jivara-notification-first-login-prompt:";
-const medicationPreferenceCacheTtl = 30_000;
 const currentMedicationPreferenceCacheKey = "current-patient";
 
 const getPushNotificationCache = () => {
   const globalStore = globalThis as typeof globalThis & {
-    __jivaraMedicationPreferenceCache?: Map<string, { data: PreferenceResponse; expiresAt: number }>;
+    __jivaraMedicationPreferenceCache?: Map<string, { data: PreferenceResponse }>;
     __jivaraMedicationPreferenceRequests?: Map<string, Promise<PreferenceResponse>>;
   };
 
@@ -27,6 +26,11 @@ const getPushNotificationCache = () => {
   globalStore.__jivaraMedicationPreferenceRequests ??= new Map();
 
   return globalStore;
+};
+
+export const getCachedMedicationPushPreference = () => {
+  const cache = getPushNotificationCache();
+  return cache.__jivaraMedicationPreferenceCache?.get(currentMedicationPreferenceCacheKey)?.data ?? null;
 };
 
 const urlBase64ToUint8Array = (base64String: string) => {
@@ -192,19 +196,14 @@ export const setMedicationPushPreference = async (enabled: boolean) => {
   const cache = getPushNotificationCache();
   cache.__jivaraMedicationPreferenceCache?.set(currentMedicationPreferenceCacheKey, {
     data: response.data.data,
-    expiresAt: Date.now() + medicationPreferenceCacheTtl,
   });
   cache.__jivaraMedicationPreferenceCache?.set(response.data.data.patientId, {
     data: response.data.data,
-    expiresAt: Date.now() + medicationPreferenceCacheTtl,
   });
 };
 
 export const getMedicationPushPreference = async () => {
   const cache = getPushNotificationCache();
-  const cached = cache.__jivaraMedicationPreferenceCache?.get(currentMedicationPreferenceCacheKey);
-  if (cached && cached.expiresAt > Date.now()) return cached.data;
-
   const activeRequest = cache.__jivaraMedicationPreferenceRequests?.get(currentMedicationPreferenceCacheKey);
   if (activeRequest) return activeRequest;
 
@@ -212,11 +211,9 @@ export const getMedicationPushPreference = async () => {
     .then((response) => {
       cache.__jivaraMedicationPreferenceCache?.set(currentMedicationPreferenceCacheKey, {
         data: response.data.data,
-        expiresAt: Date.now() + medicationPreferenceCacheTtl,
       });
       cache.__jivaraMedicationPreferenceCache?.set(response.data.data.patientId, {
         data: response.data.data,
-        expiresAt: Date.now() + medicationPreferenceCacheTtl,
       });
       return response.data.data;
     })

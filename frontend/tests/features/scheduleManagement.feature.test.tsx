@@ -18,6 +18,7 @@ vi.mock("@/lib/patientApi", () => ({
 vi.mock("@/lib/scheduleApi", () => ({
   createSchedulesViaApi: vi.fn(),
   deactivateScheduleViaApi: vi.fn(),
+  getCachedSchedulePatientGroupsPageFromApi: vi.fn(() => null),
   getMedicineCatalogFromApi: vi.fn(),
   getSchedulePatientGroupsPageFromApi: vi.fn(),
   getSchedulesFromApi: vi.fn(),

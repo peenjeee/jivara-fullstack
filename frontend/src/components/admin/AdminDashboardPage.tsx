@@ -13,6 +13,7 @@ import { DashboardPanelGridSkeleton, SummaryCardsSkeleton } from "@/components/u
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import type { SummaryCardItem } from "@/components/ui/SummaryCard";
 import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
+import { dashboardDataChangedEvent } from "@/lib/cacheEvents";
 import { getAdminDashboardData, type AdminDashboardData, type AdminDashboardRiskyPatient } from "@/lib/dashboardApi";
 import type { ActivityLogRecord } from "@/lib/mocks/activityLogs";
 import NurseStatusBadge from "./NurseStatusBadge";
@@ -100,7 +101,7 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     let isMounted = true;
 
-    getAdminDashboardData()
+    const loadDashboard = (showFailure = true) => getAdminDashboardData()
       .then((data) => {
         if (!isMounted) return;
         adminDashboardCache = data;
@@ -108,15 +109,22 @@ export default function AdminDashboardPage() {
       })
       .catch(() => {
         if (!isMounted) return;
-        if (!adminDashboardCache) dispatch({ type: "loadFailure" });
+        if (showFailure && !adminDashboardCache) dispatch({ type: "loadFailure" });
       })
       .finally(() => {
         if (!isMounted) return;
         dispatch({ type: "finishLoading" });
       });
 
+    void loadDashboard();
+    const handleDashboardDataChanged = () => {
+      void loadDashboard(false);
+    };
+
+    window.addEventListener(dashboardDataChangedEvent, handleDashboardDataChanged);
     return () => {
       isMounted = false;
+      window.removeEventListener(dashboardDataChangedEvent, handleDashboardDataChanged);
     };
   }, []);
 

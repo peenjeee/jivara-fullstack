@@ -4,7 +4,7 @@ import { useEffect, useReducer, type FormEvent } from "react";
 import { Save } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { FormDataSkeleton } from "@/components/ui/PageSkeletons";
-import { getUserNotificationPreferenceFromApi, updateUserNotificationPreferenceViaApi, type UserNotificationPreferenceKey } from "@/lib/notificationSettingsApi";
+import { getCachedUserNotificationPreference, getUserNotificationPreferenceFromApi, updateUserNotificationPreferenceViaApi, type UserNotificationPreferenceKey } from "@/lib/notificationSettingsApi";
 import { enableUserPushNotifications, getBlockedNotificationPermissionMessage, isBrowserPushPermissionDenied, supportsBrowserPushNotifications } from "@/lib/pushNotifications";
 import { showToast, showWarning } from "@/lib/swal";
 import { useAuthStore } from "@/store/auth";
@@ -25,11 +25,14 @@ type AdminNotificationSettingsAction =
   | { readonly type: "setSaving"; readonly value: boolean };
 
 function createInitialAdminNotificationSettingsState(preferenceKey: UserNotificationPreferenceKey): AdminNotificationSettingsState {
-  const cachedEnabled = adminNotificationSettingsCache.get(preferenceKey);
+  const cachedApiPreference = getCachedUserNotificationPreference(preferenceKey);
+  const hasCachedEnabled = adminNotificationSettingsCache.has(preferenceKey) || Boolean(cachedApiPreference);
+  const cachedEnabled = adminNotificationSettingsCache.get(preferenceKey)
+    ?? (cachedApiPreference ? cachedApiPreference.enabled && !isBrowserPushPermissionDenied() : undefined);
   return {
     notificationEnabled: cachedEnabled ?? true,
-    isLoading: !adminNotificationSettingsCache.has(preferenceKey),
-    hasLoadedSettings: adminNotificationSettingsCache.has(preferenceKey),
+    isLoading: !hasCachedEnabled,
+    hasLoadedSettings: hasCachedEnabled,
     isSaving: false,
   };
 }
