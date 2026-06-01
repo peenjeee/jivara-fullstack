@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { updateSession } from './lib/supabase/middleware';
 import { JSON_LD_SCRIPT } from './config/seo';
 
 function getConfiguredApiOrigin() {
@@ -86,6 +85,12 @@ const protectedRoutes = ['/dashboard', '/patients', '/schedule', '/activity-log'
 const authRoutes = ['/login', '/register'];
 const authCookieNames = ['jivara-token', 'jivara-refresh-token', 'jivara-role', 'jivara-account-status'];
 const logoutCookieName = 'jivara-logged-out';
+const sharedCookieDomain = process.env.AUTH_COOKIE_DOMAIN || '.jivara.web.id';
+
+function getCookieDomain(request: NextRequest) {
+  if (process.env.NODE_ENV !== 'production') return undefined;
+  return request.nextUrl.hostname.endsWith('jivara.web.id') ? sharedCookieDomain : undefined;
+}
 
 function setHardeningHeaders(response: NextResponse) {
   response.headers.set('X-Content-Type-Options', 'nosniff');
@@ -95,24 +100,26 @@ function setHardeningHeaders(response: NextResponse) {
   response.headers.set('Cross-Origin-Resource-Policy', 'same-origin');
 }
 
-function expireAuthCookies(response: NextResponse) {
+function expireAuthCookies(response: NextResponse, request: NextRequest) {
   for (const name of authCookieNames) {
     response.cookies.set(name, '', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
       path: '/',
+      domain: getCookieDomain(request),
       maxAge: 0,
     });
   }
 }
 
-function setLogoutMarker(response: NextResponse) {
+function setLogoutMarker(response: NextResponse, request: NextRequest) {
   response.cookies.set(logoutCookieName, '1', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',
     path: '/',
+    domain: getCookieDomain(request),
     maxAge: 5 * 60,
   });
 }
@@ -141,8 +148,6 @@ function isTokenUsable(token?: string) {
 }
 
 export async function proxy(request: NextRequest) {
-  const supabaseResponse = await updateSession(request);
-
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-nonce', nonce);
@@ -167,9 +172,8 @@ export async function proxy(request: NextRequest) {
     response.headers.set('Content-Security-Policy', contentSecurityPolicy);
     setHardeningHeaders(response);
     response.headers.set('Cache-Control', 'no-store, max-age=0');
-    supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
-    expireAuthCookies(response);
-    setLogoutMarker(response);
+    expireAuthCookies(response, request);
+    setLogoutMarker(response, request);
     return response;
   }
 
@@ -179,8 +183,7 @@ export async function proxy(request: NextRequest) {
     const response = NextResponse.redirect(url);
     response.headers.set('Content-Security-Policy', contentSecurityPolicy);
     setHardeningHeaders(response);
-    supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
-    if (hasLogoutMarker) expireAuthCookies(response);
+    if (hasLogoutMarker) expireAuthCookies(response, request);
     return response;
   }
 
@@ -188,7 +191,6 @@ export async function proxy(request: NextRequest) {
     const response = NextResponse.redirect(new URL('/dashboard', request.url));
     response.headers.set('Content-Security-Policy', contentSecurityPolicy);
     setHardeningHeaders(response);
-    supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
     return response;
   }
 
@@ -199,8 +201,7 @@ export async function proxy(request: NextRequest) {
   });
   response.headers.set('Content-Security-Policy', contentSecurityPolicy);
   setHardeningHeaders(response);
-  supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
-  if (hasLogoutMarker) expireAuthCookies(response);
+  if (hasLogoutMarker) expireAuthCookies(response, request);
   return response;
 }
 

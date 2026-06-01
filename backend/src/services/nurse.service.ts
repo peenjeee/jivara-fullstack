@@ -5,7 +5,7 @@ import { medicationSchedules, nurses, organizations, patientNurseAssignments, pa
 import { AUTH_CONSTANTS } from "../types/auth.types";
 import { NurseCreateDTO, NurseListQuery, NurseUpdateDTO } from "../types/nurse.types";
 import { AccessUser, ensureOrganizationIdForUser, getOrganizationIdForUser } from "./access-control.service";
-import { deleteCachedByPrefix, getCached, setCached } from "./cache.service";
+import { deleteCachedByPrefix, getCached, invalidateAccessScopeCache, invalidateDashboardCache, setCached } from "./cache.service";
 import { writeAuditLogAsync } from "./audit-log.service";
 
 const NURSE_CACHE_TTL_MS = Number(process.env.NURSE_CACHE_TTL_MS || 20_000);
@@ -21,7 +21,11 @@ const getNurseListCacheKey = (query: NurseListQuery, user?: AccessUser) => {
 
 const getNurseByIdCacheKey = (nurseId: string, user?: AccessUser) => `${NURSE_CACHE_PREFIX}byId:${user?.id || "anon"}:${user?.role || "anon"}:${nurseId}`;
 
-export const invalidateNurseCache = () => deleteCachedByPrefix(NURSE_CACHE_PREFIX);
+export const invalidateNurseCache = () => {
+  deleteCachedByPrefix(NURSE_CACHE_PREFIX);
+  invalidateAccessScopeCache();
+  invalidateDashboardCache();
+};
 
 type NurseListResult = {
   data: Array<{

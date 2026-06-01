@@ -1,6 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../db";
 import { nurses, organizations, patientNurseAssignments, patients, users } from "../db/schema";
+import { getOrSetCached, invalidateAccessScopeCache } from "./cache.service";
 
 export type AccessUser = {
   id: string;
@@ -14,34 +15,43 @@ const forbidden = () => ({
   code: "FORBIDDEN",
 });
 
-export const getPatientIdForUser = async (userId: string) => {
-  const row = await db
-    .select({ id: patients.id })
-    .from(patients)
-    .where(eq(patients.userId, userId))
-    .limit(1);
+const ACCESS_SCOPE_CACHE_TTL_MS = Math.max(Number(process.env.ACCESS_SCOPE_CACHE_TTL_MS || (process.env.NODE_ENV === "test" ? 0 : 5_000)), 0);
+const getScopedValue = <T>(key: string, loader: () => Promise<T>) => getOrSetCached(key, ACCESS_SCOPE_CACHE_TTL_MS, loader);
 
-  return row[0]?.id || null;
+export const getPatientIdForUser = async (userId: string) => {
+  return getScopedValue(`access-scope:patient-user:${userId}`, async () => {
+    const row = await db
+      .select({ id: patients.id })
+      .from(patients)
+      .where(eq(patients.userId, userId))
+      .limit(1);
+
+    return row[0]?.id || null;
+  });
 };
 
 export const getNurseIdForUser = async (userId: string) => {
-  const row = await db
-    .select({ id: nurses.id })
-    .from(nurses)
-    .where(eq(nurses.userId, userId))
-    .limit(1);
+  return getScopedValue(`access-scope:nurse-user:${userId}`, async () => {
+    const row = await db
+      .select({ id: nurses.id })
+      .from(nurses)
+      .where(eq(nurses.userId, userId))
+      .limit(1);
 
-  return row[0]?.id || null;
+    return row[0]?.id || null;
+  });
 };
 
 export const getOrganizationIdForUser = async (userId: string) => {
-  const row = await db
-    .select({ organizationId: users.organizationId })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
+  return getScopedValue(`access-scope:organization-user:${userId}`, async () => {
+    const row = await db
+      .select({ organizationId: users.organizationId })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
 
-  return row[0]?.organizationId || null;
+    return row[0]?.organizationId || null;
+  });
 };
 
 export const ensureOrganizationIdForUser = async (userId: string) => {
@@ -56,7 +66,7 @@ export const ensureOrganizationIdForUser = async (userId: string) => {
   if (user.organizationId) return user.organizationId;
   if (user.role !== "admin" && user.role !== "nurse") return null;
 
-  return db.transaction(async (tx) => {
+  const organizationId = await db.transaction(async (tx) => {
     const [organization] = await tx
       .insert(organizations)
       .values({ name: `${user.fullName} Organization` })
@@ -70,21 +80,26 @@ export const ensureOrganizationIdForUser = async (userId: string) => {
 
     return organization.id;
   });
+
+  invalidateAccessScopeCache();
+  return organizationId;
 };
 
 export const getAssignedPatientIdsForNurse = async (nurseId: string) => {
-  const rows = await db
-    .select({ patientId: patientNurseAssignments.patientId })
-    .from(patientNurseAssignments)
-    .innerJoin(nurses, eq(patientNurseAssignments.nurseId, nurses.id))
-    .innerJoin(patients, eq(patientNurseAssignments.patientId, patients.id))
-    .where(and(
-      eq(patientNurseAssignments.nurseId, nurseId),
-      eq(patientNurseAssignments.isActive, true),
-      eq(patients.organizationId, nurses.organizationId),
-    ));
+  return getScopedValue(`access-scope:nurse-patients:${nurseId}`, async () => {
+    const rows = await db
+      .select({ patientId: patientNurseAssignments.patientId })
+      .from(patientNurseAssignments)
+      .innerJoin(nurses, eq(patientNurseAssignments.nurseId, nurses.id))
+      .innerJoin(patients, eq(patientNurseAssignments.patientId, patients.id))
+      .where(and(
+        eq(patientNurseAssignments.nurseId, nurseId),
+        eq(patientNurseAssignments.isActive, true),
+        eq(patients.organizationId, nurses.organizationId),
+      ));
 
-  return rows.map((row) => row.patientId);
+    return rows.map((row) => row.patientId);
+  });
 };
 
 export const getAccessiblePatientIds = async (user?: AccessUser) => {

@@ -5,6 +5,7 @@ import { activityReads, medicationLogs, medicationSchedules, notifications, nurs
 import { AccessUser, getOrganizationIdForUser, patientScopeCondition, scopedPatientFilter } from "./access-control.service";
 import { buildAdherenceStatsByPatientId } from "./adherence.service";
 import { getMedicationScheduleSummaryForPatients } from "./medication-schedule.service";
+import { getOrSetCached } from "./cache.service";
 
 type PatientStatus = "On Ideal Schedule" | "Lagging Behind" | "Need Special Attention" | "Complete" | "Nonaktif";
 type ActivityCategory = "Reminder" | "Kepatuhan" | "Scan Makanan" | "Administrasi";
@@ -56,6 +57,12 @@ type MedicationDashboardLogRow = {
 };
 
 const previewLimit = 5;
+const DASHBOARD_CACHE_TTL_MS = Math.max(Number(process.env.DASHBOARD_CACHE_TTL_MS || (process.env.NODE_ENV === "test" ? 0 : 10_000)), 0);
+const DASHBOARD_CACHE_PREFIX = "dashboard:v1:";
+
+const getDashboardCacheKey = (scope: string, user?: AccessUser) => (
+  `${DASHBOARD_CACHE_PREFIX}${scope}:${user?.id || "anon"}:${user?.role || "anon"}`
+);
 
 type PatientAssignmentCandidate = {
   id: string;
@@ -361,7 +368,7 @@ const listPriorityNotifications = async (user: AccessUser | undefined, patientRo
   }));
 };
 
-export const getAdminDashboardData = async (user?: AccessUser) => {
+const loadAdminDashboardData = async (user?: AccessUser) => {
   const [nurseRows, patientRows, totalPatients] = await Promise.all([
     listScopedNurses(user),
     listScopedPatients(user),
@@ -456,7 +463,11 @@ export const getAdminDashboardData = async (user?: AccessUser) => {
   };
 };
 
-export const getNurseDashboardSummary = async (user?: AccessUser) => {
+export const getAdminDashboardData = async (user?: AccessUser) => (
+  getOrSetCached(getDashboardCacheKey("admin", user), DASHBOARD_CACHE_TTL_MS, () => loadAdminDashboardData(user))
+);
+
+const loadNurseDashboardSummary = async (user?: AccessUser) => {
   const scope = await patientScopeCondition(user);
   if (!scope.allowed) {
     return {
@@ -518,3 +529,7 @@ export const getNurseDashboardSummary = async (user?: AccessUser) => {
     overallAdherence,
   };
 };
+
+export const getNurseDashboardSummary = async (user?: AccessUser) => (
+  getOrSetCached(getDashboardCacheKey("nurse", user), DASHBOARD_CACHE_TTL_MS, () => loadNurseDashboardSummary(user))
+);

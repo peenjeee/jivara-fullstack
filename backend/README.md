@@ -65,6 +65,12 @@ VAPID_SUBJECT=mailto:admin@jivara.app
 | `FRONTEND_URL` | Yes | Allowed frontend origin, contoh `http://localhost:3000` |
 | `JWT_SECRET` | Yes | Secret untuk access token |
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `SUPABASE_POOLER_URL` | Optional production | Supabase Session Pooler URL for IPv4-only hosts |
+| `DATABASE_MAX_CONNECTIONS` | Optional | Maximum Postgres.js connections, default `10` |
+| `AUTH_USER_CACHE_TTL_MS` | Optional | Authenticated user validation cache, default `5000` |
+| `ACCESS_SCOPE_CACHE_TTL_MS` | Optional | Access-scope lookup cache, default `5000` |
+| `ADHERENCE_CACHE_TTL_MS` | Optional | Expensive adherence calculation cache, default `10000` |
+| `DASHBOARD_CACHE_TTL_MS` | Optional | Admin and nurse dashboard response cache, default `10000` |
 | `FOOD_AI_INFERENCE_URL` | Optional | Endpoint YOLO food detection |
 | `FOOD_AI_TIMEOUT_MS` | Optional | Timeout inference service |
 | `FOOD_AI_ALLOW_LOCAL_FALLBACK` | Optional | `true` hanya untuk local fallback |
@@ -74,6 +80,7 @@ VAPID_SUBJECT=mailto:admin@jivara.app
 | `VAPID_PRIVATE_KEY` | Required for push | Private key Web Push |
 | `VAPID_SUBJECT` | Required for push | Mailto/contact VAPID subject |
 | `ENABLE_REMINDER_SCHEDULER` | Optional | Enable medication reminder scheduler |
+| `REMINDER_SCHEDULER_RUN_IN_WEB` | Optional | Run scheduler inside web dyno. Keep `false` in production when using a separate worker |
 | `REMINDER_SCHEDULER_INTERVAL_MS` | Optional | Scheduler interval, default `60000` |
 | `REMINDER_LOOKBACK_MINUTES` | Optional | Reminder lookback window |
 | `SUPABASE_URL` | Optional local, recommended production | Supabase project URL |
@@ -130,6 +137,7 @@ Useful URLs:
 | `npm run dev` | Start development server |
 | `npm run build` | Compile TypeScript to `dist/` |
 | `npm start` | Run compiled server |
+| `npm run start:reminder-worker` | Run medication reminder worker separately |
 | `npm run db:push` | Push Drizzle schema |
 | `npm run seed` | Build and seed demo data |
 | `npm run backfill:patient-assignments` | Dry-run patient assignment backfill |
@@ -175,6 +183,8 @@ Required Heroku config examples:
 ```bash
 heroku config:set API_URL="https://api.jivara.web.id" -a jivara-api
 heroku config:set FRONTEND_URL="https://jivara.web.id,https://www.jivara.web.id" -a jivara-api
+heroku config:set REMINDER_SCHEDULER_RUN_IN_WEB=false -a jivara-api
+heroku ps:scale web=1 worker=1 -a jivara-api
 ```
 
 Use Heroku config vars for all secrets. Do not commit production `.env`.
@@ -186,7 +196,7 @@ Use Heroku config vars for all secrets. Do not commit production `.env`.
 - `API_URL` should be the backend origin only, for example `https://api.jivara.web.id`, not `/api/v1`.
 - Web Push needs HTTPS/secure context on frontend PWA.
 - Food scan uploads should use Supabase Storage in production, not local `uploads/`.
-- Reminder scheduler runs in backend when `ENABLE_REMINDER_SCHEDULER=true`.
+- In production, run `npm run start:reminder-worker` as a separate worker and keep `REMINDER_SCHEDULER_RUN_IN_WEB=false`.
 - Patient created by a nurse is auto-assigned to that nurse.
 
 ## Directory Structure

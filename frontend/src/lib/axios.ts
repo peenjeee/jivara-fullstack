@@ -2,12 +2,15 @@ import axios from 'axios';
 import { notifyAuthExpired } from '@/lib/authNavigation';
 import { useAuthStore } from '@/store/auth';
 
+const getApiBaseUrl = () => {
+  const configuredUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
+  if (typeof window !== "undefined" && configuredUrl) return configuredUrl;
+  return "/api/v1";
+};
+
 const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL: getApiBaseUrl(),
   withCredentials: true,
-  headers: {
-    'Content-Type': 'application/json',
-  },
 });
 
 interface FailedRequest {

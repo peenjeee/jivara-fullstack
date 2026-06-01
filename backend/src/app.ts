@@ -30,16 +30,44 @@ const publicDir = path.resolve(process.cwd(), 'public');
 
 app.set('trust proxy', 1);
 
-const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:3000,http://127.0.0.1:3000')
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const startedAt = Date.now();
+  const writeHead = res.writeHead.bind(res);
+
+  res.writeHead = ((...args: Parameters<Response['writeHead']>) => {
+    const durationMs = Date.now() - startedAt;
+    res.setHeader('X-Jivara-Backend-Ms', String(durationMs));
+    res.setHeader('Server-Timing', `jivara-backend;dur=${durationMs}`);
+    return writeHead(...args);
+  }) as Response['writeHead'];
+
+  next();
+});
+
+const defaultAllowedOrigins = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'https://www.jivara.web.id',
+  'https://jivara.web.id',
+];
+const allowedOrigins = (process.env.FRONTEND_URL || defaultAllowedOrigins.join(','))
   .split(',')
-  .map((origin) => origin.trim());
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const allowedOriginSet = new Set(allowedOrigins);
 
 // CORS must run before rate limiting so preflight requests get CORS headers.
 app.use(cors({
-  origin: allowedOrigins,
+  origin: (origin, callback) => {
+    if (!origin || allowedOriginSet.has(origin)) return callback(null, true);
+    return callback(null, false);
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['X-Jivara-Backend-Ms', 'Server-Timing'],
+  credentials: true,
+  maxAge: 86_400,
+  optionsSuccessStatus: 204,
 }));
 
 // Security: HTTP headers

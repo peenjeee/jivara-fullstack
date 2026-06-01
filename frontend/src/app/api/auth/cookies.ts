@@ -2,6 +2,7 @@ import type { NextRequest, NextResponse } from "next/server";
 
 const isProduction = process.env.NODE_ENV === "production";
 const defaultBackendApiUrl = "https://api.jivara.web.id/api/v1";
+const sharedCookieDomain = process.env.AUTH_COOKIE_DOMAIN || ".jivara.web.id";
 
 export const ACCESS_COOKIE = "jivara-token";
 export const REFRESH_COOKIE = "jivara-refresh-token";
@@ -14,11 +15,17 @@ const isSecureRequest = (request?: NextRequest) => {
   return request.nextUrl.protocol === "https:" || request.headers.get("x-forwarded-proto") === "https";
 };
 
+const getCookieDomain = (request?: NextRequest) => {
+  if (!isProduction || !request) return undefined;
+  return request.nextUrl.hostname.endsWith("jivara.web.id") ? sharedCookieDomain : undefined;
+};
+
 const getCookieOptions = (request?: NextRequest) => ({
   httpOnly: true,
   secure: isSecureRequest(request),
   sameSite: "strict" as const,
   path: "/",
+  domain: getCookieDomain(request),
 });
 
 export const setAuthCookies = (response: NextResponse, data: { accessToken: string; refreshToken?: string; role?: string | null; accountStatus?: string | null; expiresIn?: number }, request?: NextRequest) => {

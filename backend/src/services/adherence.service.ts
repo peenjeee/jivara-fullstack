@@ -11,6 +11,7 @@ import {
   users,
 } from "../db/schema";
 import { AdherenceQuery } from "../types/adherence.types";
+import { getOrSetCached } from "./cache.service";
 import { addAppDays, getAppDateKey, getAppDateStartUtc, getTodayAppDateStartUtc } from "../utils/app-timezone";
 import { AccessUser, assertCanAccessPatient, getNurseIdForUser, getAssignedPatientIdsForNurse, getOrganizationIdForUser, patientScopeCondition } from "./access-control.service";
 
@@ -312,7 +313,18 @@ const getPatientName = async (patientId?: string) => {
   return patient[0]?.fullName || null;
 };
 
-export const getAdherenceStats = async (query: AdherenceQuery, user?: AccessUser) => {
+const ADHERENCE_CACHE_TTL_MS = Math.max(Number(process.env.ADHERENCE_CACHE_TTL_MS || (process.env.NODE_ENV === "test" ? 0 : 10_000)), 0);
+const ADHERENCE_CACHE_PREFIX = "adherence:v1:";
+
+const getAdherenceCacheKey = (scope: string, query: AdherenceQuery, user?: AccessUser) => {
+  const normalizedQuery = Object.entries(query)
+    .sort(([first], [second]) => first.localeCompare(second))
+    .map(([key, value]) => `${key}=${String(value)}`)
+    .join("&");
+  return `${ADHERENCE_CACHE_PREFIX}${scope}:${user?.id || "anon"}:${user?.role || "anon"}:${normalizedQuery}`;
+};
+
+const loadAdherenceStats = async (query: AdherenceQuery, user?: AccessUser) => {
   const period = query.period || "7d";
   const periodDays = getPeriodDays(period);
   const startDate = periodDays ? getStartDate(periodDays) : null;
@@ -384,6 +396,10 @@ export const getAdherenceStats = async (query: AdherenceQuery, user?: AccessUser
   };
 };
 
+export const getAdherenceStats = async (query: AdherenceQuery, user?: AccessUser) => (
+  getOrSetCached(getAdherenceCacheKey("detail", query, user), ADHERENCE_CACHE_TTL_MS, () => loadAdherenceStats(query, user))
+);
+
 const emptyAggregateStats = (period: string) => ({
   period,
   totalActivePatients: 0,
@@ -404,7 +420,7 @@ export const __test__ = {
   buildAdherenceStatsSnapshot,
 };
 
-export const getAggregateAdherenceStats = async (query: AdherenceQuery = {}, user?: AccessUser) => {
+const loadAggregateAdherenceStats = async (query: AdherenceQuery = {}, user?: AccessUser) => {
   const period = query.period || "all";
   const days = getPeriodDays(period);
   const startDate = days ? getStartDate(days) : null;
@@ -546,3 +562,7 @@ export const getAggregateAdherenceStats = async (query: AdherenceQuery = {}, use
     nurseMetrics,
   };
 };
+
+export const getAggregateAdherenceStats = async (query: AdherenceQuery = {}, user?: AccessUser) => (
+  getOrSetCached(getAdherenceCacheKey("aggregate", query, user), ADHERENCE_CACHE_TTL_MS, () => loadAggregateAdherenceStats(query, user))
+);
