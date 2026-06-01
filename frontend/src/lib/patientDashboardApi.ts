@@ -4,6 +4,7 @@ import type { PatientRecord } from "@/lib/mocks/patients";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
 import { normalizeAdherenceForVisibleSchedules } from "@/helpers/patientSchedule";
 import { getApiDateKey } from "@/lib/appTimezone";
+import { notifyDashboardDataChanged } from "@/lib/cacheEvents";
 import { getFoodScansPageFromApi } from "@/lib/foodScanApi";
 import { clearPatientsCache, getCachedCurrentPatientFromApi, getCurrentPatientFromApi } from "@/lib/patientApi";
 import { clearSchedulesCache, getSchedulesForPatientsFromApi } from "@/lib/scheduleApi";
@@ -74,22 +75,16 @@ type PatientDashboardRequestOptions = {
   readonly patient?: PatientRecord | null;
 };
 
-const dashboardCacheTtl = 15_000;
-let dashboardCache: { data: PatientDashboardData; expiresAt: number } | null = null;
 let dashboardRequest: Promise<PatientDashboardData> | null = null;
-let dashboardOverviewCache: { data: PatientDashboardOverviewData; expiresAt: number } | null = null;
 let dashboardOverviewRequest: Promise<PatientDashboardOverviewData> | null = null;
-const patientScheduleCache = new Map<string, { data: PatientScheduleData; expiresAt: number }>();
+const patientScheduleCache = new Map<string, { data: PatientScheduleData }>();
 const patientScheduleRequests = new Map<string, Promise<PatientScheduleData>>();
 
-const activitiesCacheTtl = 15_000;
-const activitiesCache = new Map<string, { data: PatientActivityLogData; expiresAt: number }>();
+const activitiesCache = new Map<string, { data: PatientActivityLogData }>();
 const activitiesRequests = new Map<string, Promise<PatientActivityLogData>>();
 
 export const clearPatientDashboardCache = () => {
-  dashboardCache = null;
   dashboardRequest = null;
-  dashboardOverviewCache = null;
   dashboardOverviewRequest = null;
   patientScheduleCache.clear();
   patientScheduleRequests.clear();
@@ -144,11 +139,8 @@ const getPatientScheduleBaseData = async (options: PatientDashboardRequestOption
 
 const getPatientDashboardBaseData = async (options: PatientDashboardRequestOptions = {}): Promise<PatientDashboardOverviewData> => {
   if (options.forceRefresh) {
-    dashboardOverviewCache = null;
     dashboardOverviewRequest = null;
   }
-  const now = Date.now();
-  if (dashboardOverviewCache && dashboardOverviewCache.expiresAt > now) return dashboardOverviewCache.data;
   if (dashboardOverviewRequest) return dashboardOverviewRequest;
 
   dashboardOverviewRequest = (async () => {
@@ -166,7 +158,6 @@ const getPatientDashboardBaseData = async (options: PatientDashboardRequestOptio
       schedules: patientSchedules,
       adherenceStats,
     };
-    dashboardOverviewCache = { data: result, expiresAt: Date.now() + dashboardCacheTtl };
     return result;
   })().finally(() => {
     dashboardOverviewRequest = null;
@@ -177,25 +168,15 @@ const getPatientDashboardBaseData = async (options: PatientDashboardRequestOptio
 
 export const getPatientDashboardOverviewData = async (options: PatientDashboardRequestOptions = {}): Promise<PatientDashboardOverviewData> => {
   if (options.forceRefresh) {
-    dashboardCache = null;
     dashboardRequest = null;
   }
-  const now = Date.now();
-  if (!options.forceRefresh && dashboardCache && dashboardCache.expiresAt > now) {
-    const { patient, schedules, adherenceStats } = dashboardCache.data;
-    return { patient, schedules, adherenceStats };
-  }
-
   return getPatientDashboardBaseData(options);
 };
 
 export const getPatientDashboardData = async (options: PatientDashboardRequestOptions = {}): Promise<PatientDashboardData> => {
   if (options.forceRefresh) {
-    dashboardCache = null;
     dashboardRequest = null;
   }
-  const now = Date.now();
-  if (!options.forceRefresh && dashboardCache && dashboardCache.expiresAt > now) return dashboardCache.data;
   if (dashboardRequest) return dashboardRequest;
 
   dashboardRequest = (async () => {
@@ -209,7 +190,6 @@ export const getPatientDashboardData = async (options: PatientDashboardRequestOp
       ...baseData,
       medicationLogs: logResponse.data.data,
     };
-    dashboardCache = { data: result, expiresAt: Date.now() + dashboardCacheTtl };
     return result;
   })().finally(() => {
     dashboardRequest = null;
@@ -333,14 +313,11 @@ const applyCompletedScheduleEndDates = (
 };
 
 export const getPatientScheduleData = async (monthDate = new Date(), options: PatientDashboardRequestOptions = {}): Promise<PatientScheduleData> => {
-  const now = Date.now();
   const { cacheKey } = getMonthLogRange(monthDate);
   if (options.forceRefresh) {
     patientScheduleCache.delete(cacheKey);
     patientScheduleRequests.delete(cacheKey);
   }
-  const cached = patientScheduleCache.get(cacheKey);
-  if (!options.forceRefresh && cached && cached.expiresAt > now) return cached.data;
   const activeRequest = patientScheduleRequests.get(cacheKey);
   if (activeRequest) return activeRequest;
 
@@ -356,7 +333,7 @@ export const getPatientScheduleData = async (monthDate = new Date(), options: Pa
       schedules: applyCompletedScheduleEndDates(baseData.schedules, medicationLogs),
       medicationLogs,
     };
-    patientScheduleCache.set(cacheKey, { data: result, expiresAt: Date.now() + dashboardCacheTtl });
+    patientScheduleCache.set(cacheKey, { data: result });
     return result;
   })().finally(() => {
     patientScheduleRequests.delete(cacheKey);
@@ -364,6 +341,10 @@ export const getPatientScheduleData = async (monthDate = new Date(), options: Pa
 
   patientScheduleRequests.set(cacheKey, request);
   return request;
+};
+
+export const getCachedPatientScheduleData = (monthDate = new Date()): PatientScheduleData | null => {
+  return patientScheduleCache.get(getMonthLogRange(monthDate).cacheKey)?.data ?? null;
 };
 
 export const getConfirmedScheduleDates = (logs: readonly MedicationLogResponse[]) => logs.reduce<Record<string, string[]>>((confirmedDates, log) => {
@@ -391,13 +372,10 @@ export const getCompletedScheduleDates = (logs: readonly MedicationLogResponse[]
 }, {});
 
 export const getPatientActivityLogData = async (monthDate = new Date(), options: PatientDashboardRequestOptions = {}): Promise<PatientActivityLogData> => {
-  const now = Date.now();
   const { cacheKey } = getMonthLogRange(monthDate);
   if (options.forceRefresh) {
     activitiesCache.delete(cacheKey);
   }
-  const cached = activitiesCache.get(cacheKey);
-  if (cached && cached.expiresAt > now) return cached.data;
   const activeRequest = activitiesRequests.get(cacheKey);
   if (activeRequest) return activeRequest;
 
@@ -451,7 +429,7 @@ export const getPatientActivityLogData = async (monthDate = new Date(), options:
       activities,
       monthKey: cacheKey,
     };
-    activitiesCache.set(cacheKey, { data: result, expiresAt: Date.now() + activitiesCacheTtl });
+    activitiesCache.set(cacheKey, { data: result });
     return result;
   })().finally(() => {
     activitiesRequests.delete(cacheKey);
@@ -459,6 +437,10 @@ export const getPatientActivityLogData = async (monthDate = new Date(), options:
 
   activitiesRequests.set(cacheKey, request);
   return request;
+};
+
+export const getCachedPatientActivityLogData = (monthDate = new Date()): PatientActivityLogData | null => {
+  return activitiesCache.get(getMonthLogRange(monthDate).cacheKey)?.data ?? null;
 };
 
 export const getPatientActivitiesFromApi = async (monthDate = new Date()): Promise<ActivityLogRecord[]> => {
@@ -485,4 +467,11 @@ export const confirmMedicationScheduleViaApi = async (schedule: MedicationSchedu
   // Invalidate caches after confirmation
   clearPatientDashboardCache();
   clearPatientsCache();
+  await Promise.all([
+    import("./alertsApi").then(({ clearAlertsCache }) => clearAlertsCache()).catch(() => undefined),
+    import("./auditLogApi").then(({ clearAuditLogCache }) => clearAuditLogCache()).catch(() => undefined),
+    import("./dashboardApi").then(({ clearDashboardCache }) => clearDashboardCache()).catch(() => undefined),
+    import("./notificationActivitiesApi").then(({ clearNotificationActivityCache }) => clearNotificationActivityCache()).catch(() => undefined),
+  ]);
+  notifyDashboardDataChanged("medication-logs");
 };

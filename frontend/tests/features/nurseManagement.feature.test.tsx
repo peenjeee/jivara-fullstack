@@ -23,6 +23,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/nurseApi", () => ({
   createNurseViaApi: vi.fn(),
   deactivateNurseViaApi: vi.fn(),
+  getCachedNursesPageFromApi: vi.fn(() => null),
   getNurseByIdFromApi: vi.fn(),
   getNursesFromApi: vi.fn(),
   getNursesPageFromApi: vi.fn(),
@@ -30,15 +31,18 @@ vi.mock("@/lib/nurseApi", () => ({
 }));
 
 vi.mock("@/lib/auditLogApi", () => ({
+  getCachedAuditActivityPageFromApi: vi.fn(() => null),
   getAuditActivityPageFromApi: vi.fn(),
 }));
 
 vi.mock("@/lib/notificationActivitiesApi", () => ({
+  getCachedNotificationActivityPageFromApi: vi.fn(() => null),
   getNotificationActivityPageFromApi: vi.fn(),
 }));
 
 vi.mock("@/lib/patientApi", () => ({
   assignPatientToNurseViaApi: vi.fn(),
+  getCachedPatientPageFromApi: vi.fn(() => null),
   getPatientPageFromApi: vi.fn(),
 }));
 

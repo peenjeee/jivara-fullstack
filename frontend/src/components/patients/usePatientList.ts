@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getApiErrorMessage } from "@/lib/apiErrors";
 import type { PatientRecord } from "@/lib/mocks/patients";
 import { getNursesFromApi } from "@/lib/nurseApi";
-import { activatePatientViaApi, assignPatientToNursesViaApi, createPatientViaApi, deactivatePatientViaApi, getPatientPageFromApi, updatePatientViaApi } from "@/lib/patientApi";
+import { activatePatientViaApi, assignPatientToNursesViaApi, createPatientViaApi, deactivatePatientViaApi, getCachedPatientPageFromApi, getPatientPageFromApi, updatePatientViaApi } from "@/lib/patientApi";
 import { showConfirm, showError, showToast } from "@/lib/swal";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { useNurseStore } from "@/store/nurses";
@@ -57,21 +57,34 @@ export function usePatientList(onViewPatient: (patientId: string) => void, optio
     requestSeqRef.current = requestSeq;
     const nextSearch = overrides?.search ?? debouncedSearch;
     const nextFilter = overrides?.activeFilter ?? activeFilter;
-    const status = nextFilter === "Nonaktif" ? "inactive" : nextFilter === "all" ? "all" : "active";
+    const status: "active" | "inactive" | "all" = nextFilter === "Nonaktif" ? "inactive" : nextFilter === "all" ? "all" : "active";
     const adherenceStatus = nextFilter === "all" || nextFilter === "Nonaktif" ? undefined : nextFilter;
     const canUseVisibleCache = patientListViewCache?.currentPage === page
       && patientListViewCache.search === nextSearch
       && patientListViewCache.activeFilter === nextFilter;
+    const queryParams = {
+      page,
+      limit: pageSize,
+      status,
+      search: nextSearch,
+      adherenceStatus,
+    };
+    const cachedPage = forceRefresh ? null : getCachedPatientPageFromApi(queryParams);
+    if (cachedPage && requestSeq === requestSeqRef.current) {
+      setPatientRecords(cachedPage.patients);
+      setTotalPatients(cachedPage.meta.total);
+      setHasLoadedPatients(true);
+      patientListViewCache = {
+        patientRecords: cachedPage.patients,
+        totalPatients: cachedPage.meta.total,
+        search: nextSearch,
+        activeFilter: nextFilter,
+        currentPage: page,
+      };
+    }
     setIsLoading(!canUseVisibleCache);
     try {
-      const result = await getPatientPageFromApi({
-        page,
-        limit: pageSize,
-        status,
-        search: nextSearch,
-        adherenceStatus,
-        forceRefresh,
-      });
+      const result = await getPatientPageFromApi({ ...queryParams, forceRefresh });
       if (requestSeq === requestSeqRef.current) {
         setPatientRecords(result.patients);
         setTotalPatients(result.meta.total);
@@ -83,16 +96,14 @@ export function usePatientList(onViewPatient: (patientId: string) => void, optio
           activeFilter: nextFilter,
           currentPage: page,
         };
-        if (!forceRefresh) {
-          const adjacentPages = [page + 1, page - 1].filter((nextPage) => nextPage >= 1 && nextPage <= totalPagesForQuery);
-          void Promise.all(adjacentPages.map((nextPage) => getPatientPageFromApi({
-            page: nextPage,
-            limit: pageSize,
-            status,
-            search: nextSearch,
-            adherenceStatus,
-          }).catch(() => undefined)));
-        }
+        const adjacentPages = [page + 1, page - 1].filter((nextPage) => nextPage >= 1 && nextPage <= totalPagesForQuery);
+        void Promise.all(adjacentPages.map((nextPage) => getPatientPageFromApi({
+          page: nextPage,
+          limit: pageSize,
+          status,
+          search: nextSearch,
+          adherenceStatus,
+        }).catch(() => undefined)));
       }
     } catch {
       if (requestSeq === requestSeqRef.current && !hasLoadedPatientsRef.current) {
@@ -110,8 +121,7 @@ export function usePatientList(onViewPatient: (patientId: string) => void, optio
   useEffect(() => {
     const forceRefresh = isInitialLoad.current && !patientListViewCache;
     isInitialLoad.current = false;
-    const id = setTimeout(() => void loadPatientPage(currentPage, forceRefresh));
-    return () => clearTimeout(id);
+    void loadPatientPage(currentPage, forceRefresh);
   }, [currentPage, loadPatientPage]);
 
   useEffect(() => {

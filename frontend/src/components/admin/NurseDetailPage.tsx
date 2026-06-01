@@ -14,6 +14,7 @@ import ActivityToolbar, { type ActivityQuickFilter } from "@/components/activity
 import Button from "@/components/ui/Button";
 import DetailItem from "@/components/ui/DetailItem";
 import { ActivityDataSkeleton, DetailDataSkeleton, SummaryCardsSkeleton, TableDataSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
+import RefreshingNotice from "@/components/ui/RefreshingNotice";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import { getNurseInitials } from "@/helpers/nurses";
 import { getDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
@@ -167,8 +168,11 @@ function PatientAssignmentsSection({
   readonly onTogglePatient: (patientId: string) => void;
   readonly onPageChange: (page: number) => void;
 }) {
+  const isUpdatingPatients = loading.isLoading && loading.hasLoaded;
+
   return (
-    <m.section className="mt-6 overflow-hidden rounded-3xl bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)]" {...getDashboardEntranceMotion(motion.shouldAnimate, 0.18, 24)}>
+    <m.section className="relative mt-6 overflow-hidden rounded-3xl bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)]" aria-busy={isUpdatingPatients || undefined} {...getDashboardEntranceMotion(motion.shouldAnimate, 0.18, 24)}>
+      <RefreshingNotice active={isUpdatingPatients} />
       <div className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
         <h2 className="font-display text-xl font-extrabold tracking-[-0.04em] text-text-main">Pasien Ditangani</h2>
         <Button size="sm" icon={<Shuffle size={16} />} disabled={selection.count === 0} onClick={onOpenReassign}>Reassign ({selection.count})</Button>
@@ -177,7 +181,7 @@ function PatientAssignmentsSection({
         {loading.isLoading && !loading.hasLoaded ? <ToolbarSkeleton /> : <PatientToolbar search={filters.search} activeFilter={filters.filter} hasActiveFilters={filters.hasActive} framed={false} onSearchChange={onSearchChange} onFilterChange={onFilterChange} onReset={onReset} />}
       </div>
       {loading.isLoading && !loading.hasLoaded ? <TableDataSkeleton /> : (
-        <>
+        <div className={isUpdatingPatients ? "opacity-60 transition-opacity" : "transition-opacity"}>
           <div className="overflow-x-auto" data-lenis-prevent>
             <table className="w-full text-left">
               <colgroup>
@@ -208,7 +212,7 @@ function PatientAssignmentsSection({
             </table>
           </div>
           <PatientPagination currentPage={data.page} totalPages={data.totalPages} totalItems={data.totalResults} pageSize={patientPageSize} itemLabel="pasien" onPageChange={onPageChange} />
-        </>
+        </div>
       )}
     </m.section>
   );
@@ -241,14 +245,21 @@ function NurseActivitySection({
   readonly onMarkRead: (activityId: string) => Promise<void>;
   readonly onViewDetail: (activity: ActivityLogRecord | null) => void;
 }) {
+  const isUpdatingActivities = loading.isLoading && loading.hasLoaded;
+
   return (
     <m.section className="mt-8" {...getDashboardEntranceMotion(motion.shouldAnimate, 0.26, 24)}>
       <h2 className="font-display text-2xl font-extrabold tracking-[-0.04em] text-text-main sm:text-3xl">Log Terkait Perawat</h2>
       <div className="mt-5">
         {loading.isLoading && !loading.hasLoaded ? <ToolbarSkeleton /> : <ActivityToolbar search={filters.search} quickFilter={filters.quickFilter} category={filters.category} showNurseFilter={false} showUnreadFilter={false} date={filters.date} hasActiveFilters={filters.hasActive} onSearchChange={onSearchChange} onQuickFilterChange={onQuickFilterChange} onCategoryChange={onCategoryChange} onDateChange={onDateChange} onReset={onReset} />}
       </div>
-      <div className="mt-6">
-        {loading.isLoading && !loading.hasLoaded ? <ActivityDataSkeleton /> : <ActivityFeed activities={data.activities} visibleCount={data.visibleCount} readOnly={data.isAdminView} hasMore={data.hasMore} isLoadingMore={loading.isLoadingMore} onLoadMore={onLoadMore} onMarkRead={onMarkRead} onViewDetail={onViewDetail} />}
+      <div className="relative mt-6" aria-busy={isUpdatingActivities || undefined}>
+        <RefreshingNotice active={isUpdatingActivities} />
+        {loading.isLoading && !loading.hasLoaded ? <ActivityDataSkeleton /> : (
+          <div className={isUpdatingActivities ? "opacity-60 transition-opacity" : "transition-opacity"}>
+            <ActivityFeed activities={data.activities} visibleCount={data.visibleCount} readOnly={data.isAdminView} hasMore={data.hasMore} isLoadingMore={loading.isLoadingMore} onLoadMore={onLoadMore} onMarkRead={onMarkRead} onViewDetail={onViewDetail} />
+          </div>
+        )}
       </div>
     </m.section>
   );

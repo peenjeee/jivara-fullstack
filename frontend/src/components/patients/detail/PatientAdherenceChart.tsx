@@ -48,23 +48,27 @@ interface PaginatedResponse<T> {
   };
 }
 
-const adherenceTrendCacheTtl = 15_000;
-const adherenceTrendCache = new Map<string, { data: ChartTrendPoint[]; expiresAt: number }>();
+const adherenceTrendCache = new Map<string, ChartTrendPoint[]>();
 const adherenceTrendRequests = new Map<string, Promise<ChartTrendPoint[]>>();
 const medicationLogPageSize = 100;
 
+const getAdherenceTrendCacheKey = (patientId: string, schedules: readonly MedicationScheduleRecord[], range: AdherenceRange) => (
+  `${patientId}:${range}:${schedules.map((schedule) => `${schedule.id}:${schedule.endDate ?? ""}:${schedule.status}`).join("|")}`
+);
+
+const getCachedAdherenceTrend = (patientId: string, schedules: readonly MedicationScheduleRecord[], range: AdherenceRange) => {
+  return adherenceTrendCache.get(getAdherenceTrendCacheKey(patientId, schedules, range)) ?? null;
+};
+
 const fetchAdherenceTrend = (patientId: string, schedules: readonly MedicationScheduleRecord[], range: AdherenceRange) => {
-  const cacheKey = `${patientId}:${range}:${schedules.map((schedule) => `${schedule.id}:${schedule.endDate ?? ""}:${schedule.status}`).join("|")}`;
-  const now = Date.now();
-  const cached = adherenceTrendCache.get(cacheKey);
-  if (cached && cached.expiresAt > now) return Promise.resolve(cached.data);
+  const cacheKey = getAdherenceTrendCacheKey(patientId, schedules, range);
   const activeRequest = adherenceTrendRequests.get(cacheKey);
   if (activeRequest) return activeRequest;
 
   const request = getMedicationLogsForRange(patientId, range)
     .then((logs) => {
       const trend = buildTrendFromScheduleHistory(schedules, logs, range);
-      adherenceTrendCache.set(cacheKey, { data: trend, expiresAt: Date.now() + adherenceTrendCacheTtl });
+      adherenceTrendCache.set(cacheKey, trend);
       return trend;
     })
     .finally(() => {
@@ -77,7 +81,7 @@ const fetchAdherenceTrend = (patientId: string, schedules: readonly MedicationSc
 
 export default function PatientAdherenceChart({ patient, schedules }: PatientAdherenceChartProps) {
   const [range, setRange] = useState<AdherenceRange>(30);
-  const [trend, setTrend] = useState<ChartTrendPoint[]>([]);
+  const [trend, setTrend] = useState<ChartTrendPoint[]>(() => getCachedAdherenceTrend(patient.id, schedules, 30) ?? []);
   const [ChartLine, setChartLine] = useState<ChartLineComponent | null>(null);
   const chartInitializedRef = useRef(false);
 
@@ -102,12 +106,10 @@ export default function PatientAdherenceChart({ patient, schedules }: PatientAdh
     let isMounted = true;
 
     fetchAdherenceTrend(patient.id, schedules, range)
+      .catch(() => getCachedAdherenceTrend(patient.id, schedules, range) ?? [])
       .then((nextTrend) => {
         if (!isMounted) return;
         setTrend(nextTrend);
-      })
-      .catch(() => {
-        if (isMounted) setTrend([]);
       });
 
     return () => {
@@ -189,7 +191,11 @@ export default function PatientAdherenceChart({ patient, schedules }: PatientAdh
               <button
                 key={currentRange.value}
                 type="button"
-                onClick={() => setRange(currentRange.value)}
+                onClick={() => {
+                  const cachedTrend = getCachedAdherenceTrend(patient.id, schedules, currentRange.value);
+                  if (cachedTrend) setTrend(cachedTrend);
+                  setRange(currentRange.value);
+                }}
                 className={`rounded-full px-3 py-2 text-xs font-extrabold transition-colors ${isActive ? "bg-primary text-white" : "text-muted hover:text-text-main"}`}
               >
                 {currentRange.label}

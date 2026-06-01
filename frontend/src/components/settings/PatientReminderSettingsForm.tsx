@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Save } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { FormDataSkeleton } from "@/components/ui/PageSkeletons";
-import { enableMedicationPushNotifications, getBlockedNotificationPermissionMessage, getMedicationPushPreference, isBrowserPushPermissionDenied, setMedicationPushPreference, supportsBrowserPushNotifications } from "@/lib/pushNotifications";
+import { enableMedicationPushNotifications, getBlockedNotificationPermissionMessage, getCachedMedicationPushPreference, getMedicationPushPreference, isBrowserPushPermissionDenied, setMedicationPushPreference, supportsBrowserPushNotifications } from "@/lib/pushNotifications";
 import { showToast, showWarning } from "@/lib/swal";
 import ToggleRow from "./ToggleRow";
 
@@ -12,9 +12,13 @@ let patientReminderSettingsCache: { medicineReminder: boolean } | null = null;
 
 export default function PatientReminderSettingsForm() {
   const supportsPush = supportsBrowserPushNotifications();
-  const [medicineReminder, setMedicineReminder] = useState(() => patientReminderSettingsCache?.medicineReminder ?? true);
-  const [isLoading, setIsLoading] = useState(!patientReminderSettingsCache);
-  const [hasLoadedSettings, setHasLoadedSettings] = useState(Boolean(patientReminderSettingsCache));
+  const cachedPreference = patientReminderSettingsCache ?? (() => {
+    const cachedApiPreference = getCachedMedicationPushPreference();
+    return cachedApiPreference ? { medicineReminder: cachedApiPreference.enabled && !isBrowserPushPermissionDenied() } : null;
+  })();
+  const [medicineReminder, setMedicineReminder] = useState(() => cachedPreference?.medicineReminder ?? true);
+  const [isLoading, setIsLoading] = useState(!cachedPreference);
+  const [hasLoadedSettings, setHasLoadedSettings] = useState(Boolean(cachedPreference));
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {

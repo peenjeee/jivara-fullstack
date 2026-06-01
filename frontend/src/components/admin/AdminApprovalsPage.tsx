@@ -14,6 +14,7 @@ import IconActionButton from "@/components/ui/IconActionButton";
 import Modal from "@/components/ui/Modal";
 import SearchField from "@/components/ui/SearchField";
 import { SummaryCardsSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
+import RefreshingNotice from "@/components/ui/RefreshingNotice";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import ToolbarCard from "@/components/ui/ToolbarCard";
 import type { User } from "@/types/auth";
@@ -35,6 +36,7 @@ export default function AdminApprovalsPage() {
   const role = useAuthStore((state) => state.user?.role);
   const hasAuthHydrated = useAuthStore((state) => state.hasHydrated);
   const approvals = useAdminApprovals(hasAuthHydrated && role === "super_admin");
+  const isUpdatingApprovals = approvals.loading && approvals.hasLoadedApprovals;
 
   const stats = [
     { label: "Menunggu Diterima", value: String(approvals.summary.pending), tone: approvals.summary.pending ? "critical" as const : "safe" as const, color: "lime" as const, icon: Clock3 },
@@ -74,16 +76,21 @@ export default function AdminApprovalsPage() {
         </ToolbarCard>}
       </m.div>}
 
-      {!approvals.loadError && <m.section className="mt-6 overflow-hidden rounded-3xl bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)]" {...getDashboardEntranceMotion(shouldAnimate, 0.2, 24)}>
-        {approvals.loading && !approvals.hasLoadedApprovals ? <ApprovalSkeleton /> : <ApprovalList approvals={approvals.paginatedApprovals} activeFilter={approvals.filter} processingId={approvals.processingId} onApprove={approvals.handleApprove} onActivate={approvals.handleActivate} onSuspend={approvals.handleSuspend} onRestore={approvals.handleRestore} onReject={approvals.setRejectingUser} />}
-        {approvals.hasLoadedApprovals && <PatientPagination
-          currentPage={approvals.currentPage}
-          totalPages={approvals.totalPages}
-          totalItems={approvals.totalApprovals}
-          pageSize={pageSize}
-          itemLabel="admin"
-          onPageChange={approvals.setCurrentPage}
-        />}
+      {!approvals.loadError && <m.section className="relative mt-6 overflow-hidden rounded-3xl bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)]" aria-busy={isUpdatingApprovals || undefined} {...getDashboardEntranceMotion(shouldAnimate, 0.2, 24)}>
+        <RefreshingNotice active={isUpdatingApprovals} />
+        {approvals.loading && !approvals.hasLoadedApprovals ? <ApprovalSkeleton /> : (
+          <div className={isUpdatingApprovals ? "opacity-60 transition-opacity" : "transition-opacity"}>
+            <ApprovalList approvals={approvals.paginatedApprovals} activeFilter={approvals.filter} processingId={approvals.processingId} onApprove={approvals.handleApprove} onActivate={approvals.handleActivate} onSuspend={approvals.handleSuspend} onRestore={approvals.handleRestore} onReject={approvals.setRejectingUser} />
+            {approvals.hasLoadedApprovals && <PatientPagination
+              currentPage={approvals.currentPage}
+              totalPages={approvals.totalPages}
+              totalItems={approvals.totalApprovals}
+              pageSize={pageSize}
+              itemLabel="admin"
+              onPageChange={approvals.setCurrentPage}
+            />}
+          </div>
+        )}
       </m.section>}
 
       <RejectApprovalModal key={approvals.rejectingUser?.id ?? "empty"} user={approvals.rejectingUser} loading={approvals.processingId === approvals.rejectingUser?.id} onClose={() => approvals.setRejectingUser(null)} onSubmit={approvals.handleReject} />

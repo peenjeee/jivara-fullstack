@@ -1,15 +1,15 @@
 import api from "@/lib/axios";
 import { getApiErrorMessage } from "@/lib/apiErrors";
 import { getTodayAppDateKey } from "@/lib/appTimezone";
+import { notifyDashboardDataChanged } from "@/lib/cacheEvents";
 import { getDateRangeParams } from "@/lib/dateRange";
 import type { FoodScanAnalysis } from "@/helpers/foodScans";
 import type { FoodScanBoundingBox, FoodScanDetectedItem, FoodScanRecord, FoodScanRisk } from "@/lib/mocks/foodScans";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
 
-const foodScansCacheTtl = 15_000;
-const foodScansCache = new Map<string, { data: FoodScanRecord[]; expiresAt: number }>();
+const foodScansCache = new Map<string, { data: FoodScanRecord[] }>();
 const foodScansRequests = new Map<string, Promise<FoodScanRecord[]>>();
-const foodScanDetailCache = new Map<string, { data: FoodScanAnalysis; expiresAt: number }>();
+const foodScanDetailCache = new Map<string, { data: FoodScanAnalysis }>();
 const foodScanDetailRequests = new Map<string, Promise<FoodScanAnalysis>>();
 
 export const clearFoodScansCache = () => {
@@ -22,10 +22,14 @@ export const clearFoodScansCache = () => {
 const clearFoodScanRelatedCaches = async () => {
   clearFoodScansCache();
   await Promise.all([
+    import("./alertsApi").then(({ clearAlertsCache }) => clearAlertsCache()).catch(() => undefined),
+    import("./auditLogApi").then(({ clearAuditLogCache }) => clearAuditLogCache()).catch(() => undefined),
     import("./dashboardApi").then(({ clearDashboardCache }) => clearDashboardCache()).catch(() => undefined),
+    import("./notificationActivitiesApi").then(({ clearNotificationActivityCache }) => clearNotificationActivityCache()).catch(() => undefined),
     import("./patientApi").then(({ clearPatientsCache }) => clearPatientsCache()).catch(() => undefined),
     import("./patientDashboardApi").then(({ clearPatientDashboardCache }) => clearPatientDashboardCache()).catch(() => undefined),
   ]);
+  notifyDashboardDataChanged("food-scans");
 };
 
 interface PatientResponse {
@@ -559,17 +563,14 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
 };
 
 export const getFoodScansFromApi = async (params: { page?: number; limit?: number; patientId?: string; date?: string } = {}): Promise<FoodScanRecord[]> => {
-  const now = Date.now();
   const cacheKey = `${params.page ?? ""}:${params.limit ?? ""}:${params.patientId ?? ""}:${params.date ?? ""}`;
-  const cached = foodScansCache.get(cacheKey);
-  if (cached && cached.expiresAt > now) return cached.data;
   const activeRequest = foodScansRequests.get(cacheKey);
   if (activeRequest) return activeRequest;
 
   const request = api.get<FoodScanListApiResponse>("/food-scans", { params: { page: params.page, limit: params.limit, patient_id: params.patientId, ...getDateRangeParams(params.date) } })
     .then((response) => {
       const scans = response.data.data.map((detail) => mapScanDetail(detail).scan);
-      foodScansCache.set(cacheKey, { data: scans, expiresAt: Date.now() + foodScansCacheTtl });
+      foodScansCache.set(cacheKey, { data: scans });
       return scans;
     })
     .finally(() => {
@@ -600,9 +601,8 @@ export const getFoodScansForPatientFromApi = async (patientId: string, limit = 1
 };
 
 export const getFoodScanAnalysisFromApi = async (scanId: string): Promise<FoodScanAnalysis> => {
-  const now = Date.now();
   const cached = foodScanDetailCache.get(scanId);
-  if (cached && cached.expiresAt > now) return cached.data;
+  if (cached) return cached.data;
 
   const inFlightRequest = foodScanDetailRequests.get(scanId);
   if (inFlightRequest) return inFlightRequest;
@@ -610,7 +610,7 @@ export const getFoodScanAnalysisFromApi = async (scanId: string): Promise<FoodSc
   const request = api.get<FoodScanDetailApiResponse>(`/food-scans/${encodeURIComponent(scanId)}`)
     .then((response) => {
       const analysis = mapScanDetail(response.data.data);
-      foodScanDetailCache.set(scanId, { data: analysis, expiresAt: Date.now() + foodScansCacheTtl });
+      foodScanDetailCache.set(scanId, { data: analysis });
       return analysis;
     })
     .finally(() => {

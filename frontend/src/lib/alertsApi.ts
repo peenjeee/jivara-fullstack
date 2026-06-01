@@ -1,4 +1,5 @@
 import api from "@/lib/axios";
+import { notifyDashboardDataChanged } from "@/lib/cacheEvents";
 import { getDateRangeParams } from "@/lib/dateRange";
 import type { ActivityLogRecord } from "@/lib/mocks/activityLogs";
 
@@ -22,8 +23,7 @@ interface PaginatedResponse<T> {
   meta?: { page: number; limit: number; total: number };
 }
 
-const alertsCacheTtl = 10_000;
-const alertsCache = new Map<string, { data: ActivityLogRecord[]; expiresAt: number }>();
+const alertsCache = new Map<string, { data: ActivityLogRecord[] }>();
 const alertsRequests = new Map<string, Promise<ActivityLogRecord[]>>();
 
 export const clearAlertsCache = () => {
@@ -35,9 +35,8 @@ export const getAlertActivitiesFromApi = async (params: { page?: number; limit?:
   const page = params.page || 1;
   const limit = params.limit || 100;
   const cacheKey = `${page}:${limit}:${params.date ?? ""}:${params.severity ?? ""}`;
-  const now = Date.now();
   const cached = alertsCache.get(cacheKey);
-  if (cached && cached.expiresAt > now) return cached.data;
+  if (cached) return cached.data;
   const activeRequest = alertsRequests.get(cacheKey);
   if (activeRequest) return activeRequest;
 
@@ -61,7 +60,7 @@ export const getAlertActivitiesFromApi = async (params: { page?: number; limit?:
           read: false,
         };
       });
-      alertsCache.set(cacheKey, { data: activities, expiresAt: Date.now() + alertsCacheTtl });
+      alertsCache.set(cacheKey, { data: activities });
       return activities;
     })
     .finally(() => {
@@ -75,9 +74,12 @@ export const getAlertActivitiesFromApi = async (params: { page?: number; limit?:
 export const resolveAlertViaApi = async (alertId: string) => {
   await api.patch(`/alerts/${encodeURIComponent(alertId)}/resolve`);
   clearAlertsCache();
-  // Also clear dashboard cache since alerts affect nurse dashboard stats
-  if (typeof window !== "undefined") {
-    const { clearDashboardCache } = await import("./dashboardApi");
-    clearDashboardCache();
-  }
+  await Promise.all([
+    import("./auditLogApi").then(({ clearAuditLogCache }) => clearAuditLogCache()).catch(() => undefined),
+    import("./dashboardApi").then(({ clearDashboardCache }) => clearDashboardCache()).catch(() => undefined),
+    import("./notificationActivitiesApi").then(({ clearNotificationActivityCache }) => clearNotificationActivityCache()).catch(() => undefined),
+    import("./patientDashboardApi").then(({ clearPatientDashboardCache }) => clearPatientDashboardCache()).catch(() => undefined),
+    import("./patientApi").then(({ clearPatientsCache }) => clearPatientsCache()).catch(() => undefined),
+  ]);
+  notifyDashboardDataChanged("alerts");
 };

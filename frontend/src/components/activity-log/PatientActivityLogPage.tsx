@@ -1,12 +1,13 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useReducer, useRef } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useReducer, useRef } from "react";
 import { m } from "motion/react";
 import { AlertTriangle, Bell, CheckCheck, ClipboardList } from "lucide-react";
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import Button from "@/components/ui/Button";
 import { PatientActivityCalendarSkeleton, SummaryCardsSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
+import RefreshingNotice from "@/components/ui/RefreshingNotice";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import { FoodScanDetailModal } from "@/components/food-scan";
 import PatientMedicineDetailModal from "@/components/schedule/PatientMedicineDetailModal";
@@ -16,7 +17,7 @@ import { getActivityReadIdsFromApi, markActivitiesReadViaApi, markAllUnreadViaAp
 import { isDateInRange } from "@/lib/dateRange";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
 import type { ActivityCategory, ActivityLogRecord } from "@/lib/mocks/activityLogs";
-import { getPatientActivityLogData } from "@/lib/patientDashboardApi";
+import { getCachedPatientActivityLogData, getPatientActivityLogData, type PatientActivityLogData } from "@/lib/patientDashboardApi";
 import { showToast } from "@/lib/swal";
 import { useActivityLogStore } from "@/store/activityLog";
 import { useAuthStore } from "@/store/auth";
@@ -88,6 +89,39 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
   const deferredSearch = useDeferredValue(search);
   const todayKey = getDateKey(new Date());
 
+  const syncPatientActivityLogViewCache = useCallback((schedules: MedicationScheduleRecord[]) => {
+    const currentState = stateRef.current;
+    patientActivityLogViewCache = {
+      search: currentState.search,
+      quickFilter: currentState.quickFilter,
+      category: currentState.category,
+      date: currentState.date,
+      visibleMonth: currentState.visibleMonth,
+      schedules,
+      cachedUserId: currentUserId ?? null,
+    };
+  }, [currentUserId]);
+
+  const applyCachedActivityLogData = useCallback((activityData: PatientActivityLogData) => {
+    setActivities(activityData.activities);
+    schedulesRef.current = activityData.schedules;
+    syncPatientActivityLogViewCache(activityData.schedules);
+    dispatch({ type: "patch", payload: { hasLoadedActivities: true, isLoading: true } });
+  }, [setActivities, syncPatientActivityLogViewCache]);
+
+  const applyFreshActivityLogData = useCallback((activityData: PatientActivityLogData, readIds: Set<string>) => {
+    setActivities(activityData.activities.map((activity) => ({ ...activity, read: readIds.has(activity.id) || activity.read })));
+    schedulesRef.current = activityData.schedules;
+    syncPatientActivityLogViewCache(activityData.schedules);
+    dispatch({ type: "patch", payload: { hasLoadedActivities: true, isLoading: false } });
+  }, [setActivities, syncPatientActivityLogViewCache]);
+
+  const clearFailedActivityLogData = useCallback(() => {
+    setActivities([]);
+    schedulesRef.current = [];
+    dispatch({ type: "patch", payload: { hasLoadedActivities: true, isLoading: false } });
+  }, [setActivities]);
+
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
@@ -102,8 +136,14 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
 
   useEffect(() => {
     let isMounted = true;
+    const cachedData = getCachedPatientActivityLogData(visibleMonth);
+    const hasCachedData = Boolean(cachedData);
 
-    dispatch({ type: "patch", payload: { isLoading: true } });
+    if (cachedData) {
+      applyCachedActivityLogData(cachedData);
+    } else {
+      dispatch({ type: "patch", payload: { isLoading: true } });
+    }
 
     Promise.all([
       getPatientActivityLogData(visibleMonth),
@@ -117,19 +157,7 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
     ])
       .then(([activityData, readIds]) => {
         if (!isMounted) return;
-        setActivities(activityData.activities.map((activity) => ({ ...activity, read: readIds.has(activity.id) || activity.read })));
-        schedulesRef.current = activityData.schedules;
-        const currentState = stateRef.current;
-        patientActivityLogViewCache = {
-          search: currentState.search,
-          quickFilter: currentState.quickFilter,
-          category: currentState.category,
-          date: currentState.date,
-          visibleMonth: currentState.visibleMonth,
-          schedules: activityData.schedules,
-          cachedUserId: currentUserId ?? null,
-        };
-        dispatch({ type: "patch", payload: { hasLoadedActivities: true, isLoading: false } });
+        applyFreshActivityLogData(activityData, readIds);
         void Promise.all([
           getPatientActivityLogData(addMonths(visibleMonth, 1)),
           getPatientActivityLogData(addMonths(visibleMonth, -1)),
@@ -137,15 +165,17 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
       })
       .catch(() => {
         if (!isMounted) return;
-        setActivities([]);
-        schedulesRef.current = [];
+        if (!hasCachedData) {
+          clearFailedActivityLogData();
+          return;
+        }
         dispatch({ type: "patch", payload: { hasLoadedActivities: true, isLoading: false } });
       });
 
     return () => {
       isMounted = false;
     };
-  }, [currentUserId, setActivities, visibleMonth]);
+  }, [applyCachedActivityLogData, applyFreshActivityLogData, clearFailedActivityLogData, visibleMonth]);
 
   useEffect(() => {
     if (!hasLoadedActivities) return;
@@ -196,6 +226,7 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
   const hasUnread = patientActivities.some((activity) => !activity.read);
   const showMarkAllButton = hasUnread || (unreadActivityCount ?? 0) > 0;
   const hasActiveFilters = Boolean(search || quickFilter !== "all" || category !== "all" || date);
+  const isUpdatingActivities = isLoading && hasLoadedActivities;
 
   const resetFilters = () => {
     dispatch({ type: "patch", payload: { search: "", quickFilter: "all", category: "all", date: "" } });
@@ -270,8 +301,13 @@ export default function PatientActivityLogPage({ initialCategory }: PatientActiv
         />}
       </m.div>
 
-      <div className="mt-6">
-        {isLoading && !hasLoadedActivities ? <PatientActivityCalendarSkeleton /> : <PatientActivityCalendar month={visibleMonth} activities={filteredActivities} onMonthChange={(month) => dispatch({ type: "patch", payload: { visibleMonth: month } })} onViewDetail={viewActivityDetail} />}
+      <div className="relative mt-6" aria-busy={isUpdatingActivities || undefined}>
+        <RefreshingNotice active={isUpdatingActivities} />
+        {isLoading && !hasLoadedActivities ? <PatientActivityCalendarSkeleton /> : (
+          <div className={isUpdatingActivities ? "opacity-60 transition-opacity" : "transition-opacity"}>
+            <PatientActivityCalendar month={visibleMonth} activities={filteredActivities} onMonthChange={(month) => dispatch({ type: "patch", payload: { visibleMonth: month } })} onViewDetail={viewActivityDetail} />
+          </div>
+        )}
       </div>
 
       <ActivityDetailModal activity={selectedActivity} useScheduleQuery={false} onClose={() => dispatch({ type: "patch", payload: { selectedActivity: null } })} onViewFoodScan={viewFoodScan} onViewSchedule={viewSchedule} />

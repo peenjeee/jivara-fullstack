@@ -7,6 +7,7 @@ import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import { PatientDashboardContentSkeleton, SummaryCardsSkeleton } from "@/components/ui/PageSkeletons";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import type { SummaryCardItem } from "@/components/ui/SummaryCard";
+import { dashboardDataChangedEvent } from "@/lib/cacheEvents";
 import type { PatientRecord } from "@/lib/mocks/patients";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
 import { getPatientDashboardOverviewData, type PatientAdherenceStatsResponse } from "@/lib/patientDashboardApi";
@@ -97,12 +98,16 @@ export default function PatientDashboardPage() {
   useEffect(() => {
     let isMounted = true;
 
-    getPatientDashboardOverviewData()
+    const applyDashboardData = (data: Awaited<ReturnType<typeof getPatientDashboardOverviewData>>) => {
+      patientDashboardCache = { patient: data.patient, schedules: data.schedules, adherenceStats: data.adherenceStats };
+      dispatch({ type: "loadSuccess", payload: { patient: data.patient, schedules: data.schedules, adherenceStats: data.adherenceStats } });
+      setPatientId(data.patient.id);
+    };
+
+    void getPatientDashboardOverviewData()
       .then((data) => {
         if (!isMounted) return;
-        patientDashboardCache = { patient: data.patient, schedules: data.schedules, adherenceStats: data.adherenceStats };
-        dispatch({ type: "loadSuccess", payload: { patient: data.patient, schedules: data.schedules, adherenceStats: data.adherenceStats } });
-        setPatientId(data.patient.id);
+        applyDashboardData(data);
       })
       .catch(() => {
         if (!isMounted) return;
@@ -116,8 +121,18 @@ export default function PatientDashboardPage() {
         dispatch({ type: "finishLoading" });
       });
 
+    const handleDashboardDataChanged = () => {
+      void getPatientDashboardOverviewData({ forceRefresh: true })
+        .then((data) => {
+          if (isMounted) applyDashboardData(data);
+        })
+        .catch(() => undefined);
+    };
+
+    window.addEventListener(dashboardDataChangedEvent, handleDashboardDataChanged);
     return () => {
       isMounted = false;
+      window.removeEventListener(dashboardDataChangedEvent, handleDashboardDataChanged);
     };
   }, [setPatientId]);
 

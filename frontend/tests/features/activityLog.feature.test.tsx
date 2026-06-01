@@ -18,10 +18,12 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/lib/notificationActivitiesApi", () => ({
+  getCachedNotificationActivityPageFromApi: vi.fn(() => null),
   getNotificationActivityPageFromApi: vi.fn(),
 }));
 
 vi.mock("@/lib/auditLogApi", () => ({
+  getCachedAuditActivityPageFromApi: vi.fn(() => null),
   getAuditActivityPageFromApi: vi.fn(),
 }));
 

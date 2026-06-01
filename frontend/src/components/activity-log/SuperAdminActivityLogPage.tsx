@@ -9,12 +9,13 @@ import Button from "@/components/ui/Button";
 import DatePickerField from "@/components/ui/DatePickerField";
 import FilterPills from "@/components/ui/FilterPills";
 import { ActivityDataSkeleton, SummaryCardsSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
+import RefreshingNotice from "@/components/ui/RefreshingNotice";
 import SearchField from "@/components/ui/SearchField";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import ToolbarCard from "@/components/ui/ToolbarCard";
 import { FORM_PILL_INPUT_CLASS } from "@/components/ui/formStyles";
 import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
-import { getSuperAdminApprovalActivityPageFromApi, type ApprovalLogStatus } from "@/lib/auditLogApi";
+import { getCachedSuperAdminApprovalActivityPageFromApi, getSuperAdminApprovalActivityPageFromApi, type ApprovalLogStatus } from "@/lib/auditLogApi";
 import type { ActivityLogRecord } from "@/lib/mocks/activityLogs";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { useAuthStore } from "@/store/auth";
@@ -112,12 +113,43 @@ export default function SuperAdminActivityLogPage() {
     const forceRefresh = options.forceRefresh ?? false;
     const currentState = stateRef.current;
     const pageKey = `${page}:${currentState.filter}:${currentState.date}:${debouncedSearch}`;
-    if (!forceRefresh && page === 1 && loadedQueryRef.current === pageKey) return;
-    if (!forceRefresh && page === 1 && failedQueryRef.current === pageKey) return;
+    if (!forceRefresh && page === 1 && failedQueryRef.current === pageKey) {
+      dispatch({ type: "patch", payload: { isLoading: false, isLoadingMore: false } });
+      return;
+    }
     if (loadingPagesRef.current.has(pageKey)) return;
 
     loadingPagesRef.current.add(pageKey);
     latestRequestKeyRef.current = pageKey;
+    const cachedPage = forceRefresh ? null : getCachedSuperAdminApprovalActivityPageFromApi({
+      page,
+      limit: pageSize,
+      status: currentState.filter === "all" ? undefined : currentState.filter,
+      date: currentState.date,
+      search: debouncedSearch,
+    });
+    if (page === 1 && cachedPage && latestRequestKeyRef.current === pageKey) {
+      const hasActiveFilters = Boolean(currentState.search || currentState.date || currentState.filter !== "all");
+      const shouldRefreshSummary = !hasActiveFilters || !loadedSummaryRef.current;
+      loadedQueryRef.current = pageKey;
+      failedQueryRef.current = null;
+      if (shouldRefreshSummary) loadedSummaryRef.current = true;
+      dispatch({
+        type: "patch",
+        payload: {
+          activities: cachedPage.activities,
+          activityPage: page,
+          totalFilteredLogCount: cachedPage.meta.total,
+          hasLoadedActivities: true,
+          ...(shouldRefreshSummary ? {
+            hasLoadedSummary: true,
+            totalAuditLogCount: cachedPage.meta.total,
+            totalIncomingApprovalCount: cachedPage.meta.summary?.pending ?? 0,
+            totalProcessedTodayCount: cachedPage.meta.summary?.processedToday ?? 0,
+          } : {}),
+        },
+      });
+    }
     dispatch({ type: "patch", payload: page === 1 ? { isLoading: true, isLoadingMore: false } : { isLoadingMore: true } });
 
     try {
@@ -167,7 +199,7 @@ export default function SuperAdminActivityLogPage() {
           totalProcessedTodayCount: shouldRefreshSummary ? (response.meta.summary?.processedToday ?? 0) : (superAdminLogViewCache?.totalProcessedTodayCount ?? currentState.totalProcessedTodayCount),
           cachedUserId: currentUserId ?? null,
         };
-        if (!forceRefresh && page * pageSize < response.meta.total) {
+        if (page * pageSize < response.meta.total) {
           void getSuperAdminApprovalActivityPageFromApi({
             page: page + 1,
             limit: pageSize,
@@ -191,11 +223,7 @@ export default function SuperAdminActivityLogPage() {
   }, [currentUserId, debouncedSearch]);
 
   useEffect(() => {
-    const timerId = window.setTimeout(() => {
-      void loadPage(1);
-    }, 0);
-
-    return () => window.clearTimeout(timerId);
+    void loadPage(1);
   }, [date, debouncedSearch, filter, loadPage]);
 
   const filteredActivities = useMemo(() => {
@@ -210,6 +238,7 @@ export default function SuperAdminActivityLogPage() {
 
   const hasActiveFilters = Boolean(search || date || filter !== "all");
   const hasMoreFromServer = activityPage * pageSize < totalFilteredLogCount;
+  const isUpdatingActivities = isLoading && hasLoadedActivities;
 
   const resetFilters = () => {
     loadedQueryRef.current = null;
@@ -238,7 +267,14 @@ export default function SuperAdminActivityLogPage() {
       </m.div>
 
       <m.div className="mt-6" {...getDashboardEntranceMotion(shouldAnimate, 0.4, 24)}>
-        {isLoading && !hasLoadedActivities ? <ActivityDataSkeleton /> : <ActivityFeed activities={filteredActivities} visibleCount={filteredActivities.length} readOnly hasMore={hasMoreFromServer} isLoadingMore={isLoadingMore} onLoadMore={loadMoreActivities} onMarkRead={() => {}} onViewDetail={(activity) => dispatch({ type: "patch", payload: { selectedActivity: activity } })} />}
+        <div className="relative" aria-busy={isUpdatingActivities || undefined}>
+          <RefreshingNotice active={isUpdatingActivities} />
+          {isLoading && !hasLoadedActivities ? <ActivityDataSkeleton /> : (
+            <div className={isUpdatingActivities ? "opacity-60 transition-opacity" : "transition-opacity"}>
+              <ActivityFeed activities={filteredActivities} visibleCount={filteredActivities.length} readOnly hasMore={hasMoreFromServer} isLoadingMore={isLoadingMore} onLoadMore={loadMoreActivities} onMarkRead={() => {}} onViewDetail={(activity) => dispatch({ type: "patch", payload: { selectedActivity: activity } })} />
+            </div>
+          )}
+        </div>
       </m.div>
 
       <ActivityDetailModal activity={selectedActivity} onClose={() => dispatch({ type: "patch", payload: { selectedActivity: null } })} />

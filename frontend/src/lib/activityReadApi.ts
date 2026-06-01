@@ -20,12 +20,11 @@ interface ActivityUnreadCountResponse {
   };
 }
 
-const activityReadCacheTtl = 30_000;
-let activityReadCache: { data: Set<string>; expiresAt: number } | null = null;
+let activityReadCache: { data: Set<string> } | null = null;
 let activityReadRequest: Promise<Set<string>> | null = null;
 const scopedActivityReadRequests = new Map<string, Promise<Set<string>>>();
-const scopedActivityReadCache = new Map<string, { data: Set<string>; expiresAt: number }>();
-let activityUnreadCountCache: { data: number; expiresAt: number } | null = null;
+const scopedActivityReadCache = new Map<string, { data: Set<string> }>();
+let activityUnreadCountCache: { data: number } | null = null;
 let activityUnreadCountRequest: Promise<number> | null = null;
 
 type ActivityReadRequestOptions = {
@@ -63,10 +62,10 @@ export const getActivityReadIdsFromApi = async (options: ActivityReadRequestOpti
 
   if (isScoped || !shouldPaginateAll) {
     const cached = scopedActivityReadCache.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) return cached.data;
+    if (cached) return cached.data;
     if (scopedActivityReadRequests.has(cacheKey)) return scopedActivityReadRequests.get(cacheKey)!;
   } else {
-    if (activityReadCache && activityReadCache.expiresAt > Date.now()) return activityReadCache.data;
+    if (activityReadCache) return activityReadCache.data;
     if (activityReadRequest) return activityReadRequest;
   }
 
@@ -95,9 +94,9 @@ export const getActivityReadIdsFromApi = async (options: ActivityReadRequestOpti
     } while (shouldPaginateAll && readIds.size < total);
 
     if (isScoped || !shouldPaginateAll) {
-      scopedActivityReadCache.set(cacheKey, { data: readIds, expiresAt: Date.now() + activityReadCacheTtl });
+      scopedActivityReadCache.set(cacheKey, { data: readIds });
     } else {
-      activityReadCache = { data: readIds, expiresAt: Date.now() + activityReadCacheTtl };
+      activityReadCache = { data: readIds };
     }
     return readIds;
   })();
@@ -118,18 +117,17 @@ export const getActivityReadIdsFromApi = async (options: ActivityReadRequestOpti
 };
 
 export const getActivityUnreadCountFromApi = async (options: { forceRefresh?: boolean } = {}) => {
-  const now = Date.now();
   if (options.forceRefresh) {
     activityUnreadCountCache = null;
     activityUnreadCountRequest = null;
   }
-  if (activityUnreadCountCache && activityUnreadCountCache.expiresAt > now) return activityUnreadCountCache.data;
+  if (activityUnreadCountCache) return activityUnreadCountCache.data;
   if (activityUnreadCountRequest) return activityUnreadCountRequest;
 
   activityUnreadCountRequest = api.get<ActivityUnreadCountResponse>("/activity-reads/unread-count")
     .then((response) => {
       const count = response.data.data.count;
-      activityUnreadCountCache = { data: count, expiresAt: Date.now() + activityReadCacheTtl };
+      activityUnreadCountCache = { data: count };
       return count;
     })
     .finally(() => {

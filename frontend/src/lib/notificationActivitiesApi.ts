@@ -37,9 +37,23 @@ type NotificationActivityParams = {
   forceRefresh?: boolean;
 };
 
-const notificationActivityCacheTtl = 10_000;
-const notificationActivityCache = new Map<string, { data: NotificationActivityPage; expiresAt: number }>();
+const notificationActivityCache = new Map<string, { data: NotificationActivityPage }>();
 const notificationActivityRequests = new Map<string, Promise<NotificationActivityPage>>();
+
+export const clearNotificationActivityCache = () => {
+  notificationActivityCache.clear();
+  notificationActivityRequests.clear();
+};
+
+const getNotificationActivityCacheKey = (params: NotificationActivityParams = {}) => {
+  const page = params.page || 1;
+  const limit = params.limit || 100;
+  const nurseId = params.nurseId;
+  const category = getNotificationCategoryParam(params.category);
+  const search = params.search?.trim() || "";
+
+  return `${page}:${limit}:${nurseId || "all"}:${category || "all"}:${params.date || ""}:${params.severity || ""}:${search}`;
+};
 
 const getNotificationCategory = (type: string): ActivityCategory => {
   if (/food/i.test(type)) return "Scan Makanan";
@@ -68,14 +82,11 @@ export const getNotificationActivityPageFromApi = async (params: NotificationAct
   const nurseId = params.nurseId;
   const category = getNotificationCategoryParam(params.category);
   const search = params.search?.trim() || "";
-  const cacheKey = `${page}:${limit}:${nurseId || "all"}:${category || "all"}:${params.date || ""}:${params.severity || ""}:${search}`;
-  const now = Date.now();
+  const cacheKey = getNotificationActivityCacheKey(params);
   if (params.forceRefresh) {
     notificationActivityCache.delete(cacheKey);
     notificationActivityRequests.delete(cacheKey);
   }
-  const cached = notificationActivityCache.get(cacheKey);
-  if (cached && cached.expiresAt > now) return cached.data;
   const activeRequest = notificationActivityRequests.get(cacheKey);
   if (activeRequest) return activeRequest;
 
@@ -106,7 +117,7 @@ export const getNotificationActivityPageFromApi = async (params: NotificationAct
         activities,
         meta: response.data.meta ?? { page, limit, total: activities.length },
       };
-      notificationActivityCache.set(cacheKey, { data, expiresAt: Date.now() + notificationActivityCacheTtl });
+      notificationActivityCache.set(cacheKey, { data });
       return data;
     })
     .finally(() => {
@@ -115,4 +126,8 @@ export const getNotificationActivityPageFromApi = async (params: NotificationAct
 
   notificationActivityRequests.set(cacheKey, request);
   return request;
+};
+
+export const getCachedNotificationActivityPageFromApi = (params: NotificationActivityParams = {}): NotificationActivityPage | null => {
+  return notificationActivityCache.get(getNotificationActivityCacheKey(params))?.data ?? null;
 };

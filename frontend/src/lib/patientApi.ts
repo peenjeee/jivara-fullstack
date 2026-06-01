@@ -5,6 +5,7 @@ import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
 import { getActivityDistribution, type PatientDetailData } from "@/helpers/patientDetails";
 import type { AddPatientValues } from "@/components/patients/addPatientFormUtils";
 import { getApiDateKey } from "@/lib/appTimezone";
+import { notifyDashboardDataChanged } from "@/lib/cacheEvents";
 import { getFoodScansForPatientFromApi } from "@/lib/foodScanApi";
 
 interface PatientListResponse {
@@ -113,13 +114,11 @@ interface AlertResponse {
   createdAt?: string | null;
 }
 
-const patientsCacheTtl = 30_000;
 const patientAdherenceCacheVersion = "adherence-all-v1";
-let patientsCache: { data: PatientRecord[]; expiresAt: number } | null = null;
+let patientsCache: { data: PatientRecord[] } | null = null;
 let patientsRequest: Promise<PatientRecord[]> | null = null;
 const patientListPageLimit = 100;
-const patientPageCacheTtl = 10_000;
-const patientPageCache = new Map<string, { data: PatientPage; expiresAt: number }>();
+const patientPageCache = new Map<string, { data: PatientPage }>();
 const patientPageRequests = new Map<string, Promise<PatientPage>>();
 
 export type PatientPage = {
@@ -127,16 +126,25 @@ export type PatientPage = {
   meta: { page: number; limit: number; total: number };
 };
 
-const patientDetailCache = new Map<string, { data: PatientDetailData; expiresAt: number }>();
+const patientDetailCache = new Map<string, { data: PatientDetailData }>();
 const patientDetailRequests = new Map<string, Promise<PatientDetailData>>();
-const patientDetailCacheTtl = 30_000;
 const patientDetailPreviewLimit = 5;
 
-const assignedPatientsCache = new Map<string, { data: PatientRecord[]; expiresAt: number }>();
+const assignedPatientsCache = new Map<string, { data: PatientRecord[] }>();
 const assignedPatientsRequests = new Map<string, Promise<PatientRecord[]>>();
-const assignedPatientsCacheTtl = 30_000;
-let currentPatientCache: { data: PatientRecord; expiresAt: number } | null = null;
+let currentPatientCache: { data: PatientRecord } | null = null;
 let currentPatientRequest: Promise<PatientRecord> | null = null;
+
+const getPatientPageCacheKey = (params: { page?: number; limit?: number; search?: string; status?: "active" | "inactive" | "all"; adherenceStatus?: PatientStatus; nurseId?: string } = {}) => {
+  const page = params.page || 1;
+  const limit = params.limit || 20;
+  const status = params.status || "active";
+  const search = params.search?.trim() || "";
+  const adherenceStatus = params.adherenceStatus || "";
+  const nurseId = params.nurseId || "";
+
+  return `${patientAdherenceCacheVersion}:${page}:${limit}:${status}:${search}:${adherenceStatus}:${nurseId}`;
+};
 
 export const clearPatientsCache = () => {
   patientsCache = null;
@@ -154,10 +162,14 @@ export const clearPatientsCache = () => {
 const clearPatientRelatedCaches = async () => {
   clearPatientsCache();
   await Promise.all([
+    import("./alertsApi").then(({ clearAlertsCache }) => clearAlertsCache()).catch(() => undefined),
+    import("./auditLogApi").then(({ clearAuditLogCache }) => clearAuditLogCache()).catch(() => undefined),
     import("./dashboardApi").then(({ clearDashboardCache }) => clearDashboardCache()).catch(() => undefined),
+    import("./notificationActivitiesApi").then(({ clearNotificationActivityCache }) => clearNotificationActivityCache()).catch(() => undefined),
     import("./scheduleApi").then(({ clearSchedulesCache }) => clearSchedulesCache()).catch(() => undefined),
     import("./patientDashboardApi").then(({ clearPatientDashboardCache }) => clearPatientDashboardCache()).catch(() => undefined),
   ]);
+  notifyDashboardDataChanged("patients");
 };
 
 const getAge = (dateOfBirth?: string | null) => {
@@ -348,13 +360,12 @@ const getPatientActivitiesFromApi = async (patient: PatientRecord, scans: Patien
 };
 
 export const getPatientsFromApi = async () => {
-  const now = Date.now();
-  if (patientsCache && patientsCache.expiresAt > now) return patientsCache.data;
+  if (patientsCache) return patientsCache.data;
   if (patientsRequest) return patientsRequest;
 
   patientsRequest = getAllPatientListPagesFromApi({ status: "active" })
     .then((patients) => {
-      patientsCache = { data: patients, expiresAt: Date.now() + patientsCacheTtl };
+      patientsCache = { data: patients };
       return patients;
     })
     .finally(() => {
@@ -365,8 +376,7 @@ export const getPatientsFromApi = async () => {
 };
 
 export const getCachedCurrentPatientFromApi = (): PatientRecord | null => {
-  const now = Date.now();
-  return currentPatientCache && currentPatientCache.expiresAt > now ? currentPatientCache.data : null;
+  return currentPatientCache?.data ?? null;
 };
 
 export const getCurrentPatientFromApi = async (): Promise<PatientRecord> => {
@@ -381,7 +391,7 @@ export const getCurrentPatientFromApi = async (): Promise<PatientRecord> => {
         ? 100
         : Math.round(detail.adherenceRateAll ?? 100);
       const patient = mapPatient({ ...detail, createdAt: detail.registeredAt ?? detail.createdAt }, adherence);
-      currentPatientCache = { data: patient, expiresAt: Date.now() + patientsCacheTtl };
+      currentPatientCache = { data: patient };
       return patient;
     })
     .finally(() => {
@@ -398,14 +408,11 @@ export const getPatientPageFromApi = async (params: { page?: number; limit?: num
   const search = params.search?.trim() || "";
   const adherenceStatus = params.adherenceStatus || "";
   const nurseId = params.nurseId || "";
-  const cacheKey = `${patientAdherenceCacheVersion}:${page}:${limit}:${status}:${search}:${adherenceStatus}:${nurseId}`;
+  const cacheKey = getPatientPageCacheKey(params);
   if (params.forceRefresh) {
     patientPageCache.delete(cacheKey);
     patientPageRequests.delete(cacheKey);
   }
-  const now = Date.now();
-  const cached = patientPageCache.get(cacheKey);
-  if (cached && cached.expiresAt > now) return cached.data;
   const activeRequest = patientPageRequests.get(cacheKey);
   if (activeRequest) return activeRequest;
 
@@ -422,7 +429,7 @@ export const getPatientPageFromApi = async (params: { page?: number; limit?: num
           total: response.data.meta?.total ?? patients.length,
         },
       };
-      patientPageCache.set(cacheKey, { data: result, expiresAt: Date.now() + patientPageCacheTtl });
+      patientPageCache.set(cacheKey, { data: result });
       return result;
     })
     .finally(() => {
@@ -431,6 +438,10 @@ export const getPatientPageFromApi = async (params: { page?: number; limit?: num
 
   patientPageRequests.set(cacheKey, request);
   return request;
+};
+
+export const getCachedPatientPageFromApi = (params: { page?: number; limit?: number; search?: string; status?: "active" | "inactive" | "all"; adherenceStatus?: PatientStatus; nurseId?: string } = {}): PatientPage | null => {
+  return patientPageCache.get(getPatientPageCacheKey(params))?.data ?? null;
 };
 
 export const createPatientViaApi = async (values: AddPatientValues) => {
@@ -469,13 +480,10 @@ export const activatePatientViaApi = async (patientId: string) => {
 };
 
 export const getPatientDetailFromApi = async (patientId: string, options: { readonly forceRefresh?: boolean } = {}): Promise<PatientDetailData> => {
-  const now = Date.now();
   if (options.forceRefresh) {
     patientDetailCache.delete(patientId);
     patientDetailRequests.delete(patientId);
   }
-  const cached = patientDetailCache.get(patientId);
-  if (cached && cached.expiresAt > now) return cached.data;
   const activeRequest = patientDetailRequests.get(patientId);
   if (activeRequest) return activeRequest;
 
@@ -511,7 +519,7 @@ export const getPatientDetailFromApi = async (patientId: string, options: { read
       .sort((first, second) => Date.parse(second.timestamp) - Date.parse(first.timestamp));
 
     const result = { patient: patientFinal, schedules, activities, activityDistribution: activityResult.activityDistribution, scans };
-    patientDetailCache.set(patientId, { data: result, expiresAt: Date.now() + patientDetailCacheTtl });
+    patientDetailCache.set(patientId, { data: result });
     return result;
   })().finally(() => {
     patientDetailRequests.delete(patientId);
@@ -522,15 +530,14 @@ export const getPatientDetailFromApi = async (patientId: string, options: { read
 };
 
 export const getPatientsAssignedToNurseFromApi = async (nurseId: string) => {
-  const now = Date.now();
   const cached = assignedPatientsCache.get(nurseId);
-  if (cached && cached.expiresAt > now) return cached.data;
+  if (cached) return cached.data;
   const activeRequest = assignedPatientsRequests.get(nurseId);
   if (activeRequest) return activeRequest;
 
   const request = getAllPatientListPagesFromApi({ status: "active", nurseId })
     .then((patients) => {
-      assignedPatientsCache.set(nurseId, { data: patients, expiresAt: Date.now() + assignedPatientsCacheTtl });
+      assignedPatientsCache.set(nurseId, { data: patients });
       return patients;
     })
     .finally(() => {

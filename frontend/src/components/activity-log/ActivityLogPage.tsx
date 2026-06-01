@@ -8,13 +8,14 @@ import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import Button from "@/components/ui/Button";
 import { ActivityDataSkeleton, SummaryCardsSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
+import RefreshingNotice from "@/components/ui/RefreshingNotice";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import { FoodScanDetailModal } from "@/components/food-scan";
 import { getActivityDateKey, getTodayDateKey } from "@/helpers/activityLogs";
 import { activityMatchesNurse } from "@/helpers/nurses";
 import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
 import { getActivityReadIdsFromApi, markActivitiesReadViaApi, markAllUnreadViaApi } from "@/lib/activityReadApi";
-import { getAuditActivityPageFromApi } from "@/lib/auditLogApi";
+import { getAuditActivityPageFromApi, getCachedAuditActivityPageFromApi } from "@/lib/auditLogApi";
 import { isDateInRange } from "@/lib/dateRange";
 import type { ActivityCategory, ActivityLogRecord } from "@/lib/mocks/activityLogs";
 import { getNursesFromApi } from "@/lib/nurseApi";
@@ -353,13 +354,47 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
     const forceRefresh = options.forceRefresh ?? false;
     const current = stateRef.current;
     const pageKey = `${page}:${current.nurseId}:${current.category}:${current.date}:${effectiveQuickFilter}:${debouncedSearch}`;
-    if (!forceRefresh && page === 1 && loadedQueryRef.current === pageKey) return;
-    if (!forceRefresh && page === 1 && failedQueryRef.current === pageKey) return;
+    const hasVisibleCachedPage = page === 1 && loadedQueryRef.current === pageKey && current.hasLoadedActivities;
+    if (!forceRefresh && page === 1 && failedQueryRef.current === pageKey) {
+      dispatch({ type: "patch", payload: { isLoading: false, isLoadingMore: false } });
+      return;
+    }
     if (loadingPagesRef.current.has(pageKey)) return;
 
     loadingPagesRef.current.add(pageKey);
     latestRequestKeyRef.current = pageKey;
+    const selectedNurseId = current.nurseId === "all" ? undefined : current.nurseId;
+    const cachedPage = forceRefresh ? null : getCachedAuditActivityPageFromApi({
+      page,
+      limit: serverPageSize,
+      category: current.category,
+      date: current.date,
+      userRole: auditUserRole,
+      nurseId: selectedNurseId,
+      severity: getAuditSeverityFilter(effectiveQuickFilter),
+      search: debouncedSearch,
+    });
+    if (page === 1 && cachedPage && latestRequestKeyRef.current === pageKey) {
+      loadedQueryRef.current = pageKey;
+      failedQueryRef.current = null;
+      dispatch({
+        type: "patch",
+        payload: {
+          activities: cachedPage.activities,
+          patientAssignments: {},
+          serverActivityTotal: cachedPage.meta.total,
+          serverWarningCriticalTotal: null,
+          serverTodayTotal: null,
+          activityPage: page,
+          visibleCount: cachedPage.activities.length,
+          hasLoadedActivities: true,
+        },
+      });
+    }
     dispatch({ type: "patch", payload: page === 1 ? { isLoading: true, isLoadingMore: false } : { isLoadingMore: true } });
+    if (page === 1 && (cachedPage || hasVisibleCachedPage)) {
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+    }
 
     try {
       const activityData = await fetchActivityPageData({
@@ -396,7 +431,7 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
             visibleCount: visibleActivities.length,
           },
         });
-        if (!forceRefresh && page * serverPageSize < activityData.total) {
+        if (page * serverPageSize < activityData.total) {
           void fetchActivityPageData({
             page: page + 1,
             readOnly,
@@ -438,11 +473,7 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
   }, [auditUserRole, debouncedSearch, effectiveQuickFilter, readOnly, showNurseFilter]);
 
   useEffect(() => {
-    const timerId = window.setTimeout(() => {
-      void loadPage(1);
-    }, 0);
-
-    return () => window.clearTimeout(timerId);
+    void loadPage(1);
   }, [loadPage, state.category, state.date, state.nurseId]);
 
   useEffect(() => {
@@ -640,6 +671,7 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
 export default function ActivityLogPage(props: ActivityLogPageProps) {
   const shouldAnimate = useDashboardEntranceMotion();
   const controller = useActivityLogPageController(props);
+  const isUpdatingActivities = controller.state.isLoading && controller.state.hasLoadedActivities;
 
   // Tombol muncul kalo ada unread di page ini ATAU backend bilang ada unread
   const unreadBadgeCount = useActivityLogStore((state) => state.unreadActivityCount);
@@ -681,19 +713,24 @@ export default function ActivityLogPage(props: ActivityLogPageProps) {
       </m.div>
 
       <m.div className="mt-6" {...getDashboardEntranceMotion(shouldAnimate, 0.4, 24)}>
+        <div className="relative" aria-busy={isUpdatingActivities || undefined}>
+          <RefreshingNotice active={isUpdatingActivities} />
         {controller.state.isLoading && !controller.state.hasLoadedActivities ? <ActivityDataSkeleton /> : (
-          <ActivityFeed
-            activities={controller.filteredActivities}
-            visibleCount={controller.filteredActivities.length}
-            readOnly={props.readOnly ?? false}
-            hasMore={controller.hasMoreFromServer}
-            isLoadingMore={controller.state.isLoadingMore}
-            onLoadMore={() => { void controller.handleLoadMore(); }}
-            onMarkRead={controller.markAsRead}
-            processingActivityId={controller.state.processingActivityId}
-            onViewDetail={controller.selectActivity}
-          />
+          <div className={isUpdatingActivities ? "opacity-60 transition-opacity" : "transition-opacity"}>
+            <ActivityFeed
+              activities={controller.filteredActivities}
+              visibleCount={controller.filteredActivities.length}
+              readOnly={props.readOnly ?? false}
+              hasMore={controller.hasMoreFromServer}
+              isLoadingMore={controller.state.isLoadingMore}
+              onLoadMore={() => { void controller.handleLoadMore(); }}
+              onMarkRead={controller.markAsRead}
+              processingActivityId={controller.state.processingActivityId}
+              onViewDetail={controller.selectActivity}
+            />
+          </div>
         )}
+        </div>
       </m.div>
 
       <ActivityDetailModal activity={controller.state.selectedActivity} onClose={() => controller.selectActivity(null)} onViewFoodScan={controller.viewFoodScan} onViewSchedule={controller.viewSchedule} />

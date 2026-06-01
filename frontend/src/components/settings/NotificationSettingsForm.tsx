@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Save } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { FormDataSkeleton } from "@/components/ui/PageSkeletons";
-import { getUserNotificationPreferenceFromApi, updateUserNotificationPreferenceViaApi } from "@/lib/notificationSettingsApi";
+import { getCachedUserNotificationPreference, getUserNotificationPreferenceFromApi, updateUserNotificationPreferenceViaApi } from "@/lib/notificationSettingsApi";
 import { enableUserPushNotifications, getBlockedNotificationPermissionMessage, isBrowserPushPermissionDenied, supportsBrowserPushNotifications } from "@/lib/pushNotifications";
 import { showToast, showWarning } from "@/lib/swal";
 import ToggleRow from "./ToggleRow";
@@ -13,9 +13,13 @@ let notificationSettingsCache: { criticalAlert: boolean } | null = null;
 
 export default function NotificationSettingsForm() {
   const supportsPush = supportsBrowserPushNotifications();
-  const [criticalAlert, setCriticalAlert] = useState(() => notificationSettingsCache?.criticalAlert ?? true);
-  const [isLoading, setIsLoading] = useState(!notificationSettingsCache);
-  const [hasLoadedSettings, setHasLoadedSettings] = useState(Boolean(notificationSettingsCache));
+  const cachedPreference = notificationSettingsCache ?? (() => {
+    const cachedApiPreference = getCachedUserNotificationPreference("nurse_critical_alert");
+    return cachedApiPreference ? { criticalAlert: cachedApiPreference.enabled && !isBrowserPushPermissionDenied() } : null;
+  })();
+  const [criticalAlert, setCriticalAlert] = useState(() => cachedPreference?.criticalAlert ?? true);
+  const [isLoading, setIsLoading] = useState(!cachedPreference);
+  const [hasLoadedSettings, setHasLoadedSettings] = useState(Boolean(cachedPreference));
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {

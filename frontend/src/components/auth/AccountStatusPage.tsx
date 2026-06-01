@@ -46,13 +46,30 @@ function getReviewStatus(status?: string | null): ReviewStatus | null {
 
 import type { User } from "@/types/auth";
 
-const accountStatusCacheTtl = 15_000;
-let accountStatusCache: { data: { user: User | null }; expiresAt: number } | null = null;
+let accountStatusCache: { data: { user: User | null } } | null = null;
 let accountStatusRequest: Promise<{ user: User | null }> | null = null;
 
 export const clearAccountStatusCache = () => {
   accountStatusCache = null;
   accountStatusRequest = null;
+};
+
+const getCachedAccountStatus = () => accountStatusCache?.data ?? null;
+
+const fetchAccountStatus = async () => {
+  if (accountStatusRequest) return accountStatusRequest;
+
+  accountStatusRequest = axios.post<{ data: { user: User } }>("/api/v1/auth/status")
+    .then((res) => {
+      const result = { user: res.data.data.user };
+      accountStatusCache = { data: result };
+      return result;
+    })
+    .finally(() => {
+      accountStatusRequest = null;
+    });
+
+  return accountStatusRequest;
 };
 
 export default function AccountStatusPage() {
@@ -62,34 +79,24 @@ export default function AccountStatusPage() {
   const updateUser = useAuthStore((state) => state.updateUser);
   const hasAutoRefreshedRef = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [hasCheckedStatus, setHasCheckedStatus] = useState(false);
+  const [hasCheckedStatus, setHasCheckedStatus] = useState(() => Boolean(getCachedAccountStatus()));
   const [statusCheckSucceeded, setStatusCheckSucceeded] = useState(false);
   const reviewStatus = getReviewStatus(user?.accountStatus);
   const content = reviewStatus ? statusContent[reviewStatus] : statusContent.pending;
   const Icon = content.icon;
+  const hasStatusSnapshot = Boolean(user?.accountStatus || getCachedAccountStatus()?.user);
 
   const refreshStatus = useCallback(async (showFeedback = true) => {
     setRefreshing(true);
-    try {
-      const now = Date.now();
-      let updatedUser: User | null;
+    const cachedStatus = getCachedAccountStatus();
+    if (!showFeedback && cachedStatus?.user) {
+      updateUser(cachedStatus.user);
+      setStatusCheckSucceeded(true);
+      setHasCheckedStatus(true);
+    }
 
-      if (accountStatusCache && accountStatusCache.expiresAt > now) {
-        updatedUser = accountStatusCache.data.user;
-      } else if (accountStatusRequest) {
-        updatedUser = (await accountStatusRequest).user;
-      } else {
-        accountStatusRequest = axios.post<{ data: { user: User } }>("/api/v1/auth/status")
-          .then((res) => {
-            const result = { user: res.data.data.user };
-            accountStatusCache = { data: result, expiresAt: Date.now() + accountStatusCacheTtl };
-            return result;
-          })
-          .finally(() => {
-            accountStatusRequest = null;
-          });
-        updatedUser = (await accountStatusRequest).user;
-      }
+    try {
+      const updatedUser = (await fetchAccountStatus()).user;
 
       if (updatedUser) updateUser(updatedUser);
       setStatusCheckSucceeded(true);
@@ -107,7 +114,7 @@ export default function AccountStatusPage() {
 
       if (showFeedback) showToast("Status akun berhasil diperbarui.");
     } catch {
-      setStatusCheckSucceeded(false);
+      setStatusCheckSucceeded(Boolean(cachedStatus?.user));
       if (showFeedback) showError("Gagal memperbarui status akun.");
     } finally {
       setRefreshing(false);
@@ -134,7 +141,7 @@ export default function AccountStatusPage() {
 
   if (!hasAuthHydrated || !user || user.role !== "admin" || (statusCheckSucceeded && (user.accountStatus ?? "active") === "active")) return null;
 
-  if (!hasCheckedStatus) {
+  if (!hasCheckedStatus && !hasStatusSnapshot) {
     return (
       <AuthCard title="Status Akun">
         <div className="space-y-4 text-center">

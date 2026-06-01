@@ -8,6 +8,7 @@ import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import { getDashboardEntranceMotion, useDashboardEntranceMotion } from "@/hooks/useDashboardEntranceMotion";
 import Button from "@/components/ui/Button";
 import { ButtonSkeleton, TableDataSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
+import RefreshingNotice from "@/components/ui/RefreshingNotice";
 import AddPatientModal from "./AddPatientModal";
 import AssignPatientNursesModal from "./AssignPatientNursesModal";
 import PatientPagination from "./PatientPagination";
@@ -26,6 +27,7 @@ export default function PatientListPage({ mode = "manage", canDeletePatients = f
   const { push } = useRouter();
   const shouldLoadNurses = canAssignNurses || mode === "readonly";
   const patientList = usePatientList((patientId) => push(`/patients/${encodeURIComponent(patientId)}`), { shouldLoadNurses, assignAfterCreate: canAssignNurses });
+  const isUpdatingPatients = patientList.isLoading && patientList.hasLoadedPatients;
   const baseActions = mode === "readonly"
     ? ["view"] as const
     : canDeletePatients
@@ -62,14 +64,16 @@ export default function PatientListPage({ mode = "manage", canDeletePatients = f
       </m.div>
 
       <m.div
-        className="mt-6 overflow-hidden rounded-3xl shadow-[0_10px_30px_rgba(15,23,42,0.08)]"
+        className="relative mt-6 overflow-hidden rounded-3xl shadow-[0_10px_30px_rgba(15,23,42,0.08)]"
+        aria-busy={isUpdatingPatients || undefined}
         {...getDashboardEntranceMotion(shouldAnimate, 0.18, 24)}
       >
+        <RefreshingNotice active={isUpdatingPatients} />
         {patientList.isLoading && !patientList.hasLoadedPatients ? <TableDataSkeleton /> : (
-          <>
+          <div className={isUpdatingPatients ? "opacity-60 transition-opacity" : "transition-opacity"}>
             <PatientTable patients={patientList.paginatedPatients} actions={patientActions} processingAction={patientList.processingAction} onAction={patientList.handlePatientAction} embedded emptyMessage="Tidak ada data pasien." assignedNurseByPatientId={mode === "readonly" ? patientList.assignedNurseByPatientId : undefined} />
             <PatientPagination currentPage={patientList.currentPage} totalPages={patientList.totalPages} totalItems={patientList.totalPatients} pageSize={patientList.pageSize} onPageChange={patientList.setCurrentPage} />
-          </>
+          </div>
         )}
       </m.div>
       {mode === "manage" && <AddPatientModal isOpen={patientList.isAddModalOpen} onClose={() => patientList.setIsAddModalOpen(false)} onSubmit={patientList.handleAddPatient} />}

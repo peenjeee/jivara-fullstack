@@ -4,6 +4,7 @@ import { getPatientsFromApi } from "@/lib/patientApi";
 import type { PatientRecord, PatientStatus } from "@/lib/mocks/patients";
 import type { ScheduleMedicineFormValues } from "@/components/schedule/scheduleFormUtils";
 import { getApiDateKey } from "@/lib/appTimezone";
+import { notifyDashboardDataChanged } from "@/lib/cacheEvents";
 
 interface ScheduleResponse {
   id: string;
@@ -99,14 +100,23 @@ export type SchedulePatientGroupsPage = {
   meta: { page: number; limit: number; total: number; summary?: ScheduleSummary };
 };
 
-const schedulesCacheTtl = 15_000;
 const scheduleAdherenceCacheVersion = "adherence-all-v1";
-let schedulesCache: { data: MedicationScheduleRecord[]; expiresAt: number } | null = null;
+let schedulesCache: { data: MedicationScheduleRecord[] } | null = null;
 let schedulesRequest: Promise<MedicationScheduleRecord[]> | null = null;
-const schedulePatientsCache = new Map<string, { data: MedicationScheduleRecord[]; expiresAt: number }>();
+const schedulePatientsCache = new Map<string, { data: MedicationScheduleRecord[] }>();
 const schedulePatientsRequests = new Map<string, Promise<MedicationScheduleRecord[]>>();
-const scheduleGroupsCache = new Map<string, { data: SchedulePatientGroupsPage; expiresAt: number }>();
+const scheduleGroupsCache = new Map<string, { data: SchedulePatientGroupsPage }>();
 const scheduleGroupsRequests = new Map<string, Promise<SchedulePatientGroupsPage>>();
+
+const getScheduleGroupsCacheKey = (params: { page?: number; limit?: number; search?: string; status?: "active" | "inactive" | "all"; adherenceStatus?: PatientStatus } = {}) => {
+  const page = params.page || 1;
+  const limit = params.limit || 10;
+  const search = params.search?.trim() || "";
+  const status = params.status || "active";
+  const adherenceStatus = params.adherenceStatus || "";
+
+  return `${scheduleAdherenceCacheVersion}:${page}:${limit}:${status}:${search}:${adherenceStatus}`;
+};
 
 export const clearSchedulesCache = () => {
   schedulesCache = null;
@@ -120,10 +130,14 @@ export const clearSchedulesCache = () => {
 const clearScheduleRelatedCaches = async () => {
   clearSchedulesCache();
   await Promise.all([
+    import("./alertsApi").then(({ clearAlertsCache }) => clearAlertsCache()).catch(() => undefined),
+    import("./auditLogApi").then(({ clearAuditLogCache }) => clearAuditLogCache()).catch(() => undefined),
     import("./dashboardApi").then(({ clearDashboardCache }) => clearDashboardCache()).catch(() => undefined),
+    import("./notificationActivitiesApi").then(({ clearNotificationActivityCache }) => clearNotificationActivityCache()).catch(() => undefined),
     import("./patientApi").then(({ clearPatientsCache }) => clearPatientsCache()).catch(() => undefined),
     import("./patientDashboardApi").then(({ clearPatientDashboardCache }) => clearPatientDashboardCache()).catch(() => undefined),
   ]);
+  notifyDashboardDataChanged("schedules");
 };
 
 const notifyScheduleChanged = (patientIds: readonly string[]) => {
@@ -253,8 +267,7 @@ export const getMedicineCatalogFromApi = async (search = ""): Promise<MedicineCa
 
 export const getSchedulesFromApi = async (providedPatients?: readonly PatientRecord[]): Promise<MedicationScheduleRecord[]> => {
   if (!providedPatients) {
-    const now = Date.now();
-    if (schedulesCache && schedulesCache.expiresAt > now) return schedulesCache.data;
+    if (schedulesCache) return schedulesCache.data;
     if (schedulesRequest) return schedulesRequest;
   }
 
@@ -264,7 +277,7 @@ export const getSchedulesFromApi = async (providedPatients?: readonly PatientRec
   ]).then(([scheduleResponse, patients]) => {
     const patientById = new Map(patients.map((patient) => [patient.id, patient]));
     const schedules = scheduleResponse.data.data.map((schedule) => mapSchedule(schedule, patientById.get(schedule.patientId)));
-    if (!providedPatients) schedulesCache = { data: schedules, expiresAt: Date.now() + schedulesCacheTtl };
+    if (!providedPatients) schedulesCache = { data: schedules };
     return schedules;
   });
 
@@ -291,9 +304,6 @@ export const getSchedulesForPatientsFromApi = async (
     schedulePatientsCache.delete(cacheKey);
     schedulePatientsRequests.delete(cacheKey);
   }
-  const now = Date.now();
-  const cached = schedulePatientsCache.get(cacheKey);
-  if (!options.forceRefresh && cached && cached.expiresAt > now) return cached.data;
   const activeRequest = schedulePatientsRequests.get(cacheKey);
   if (!options.forceRefresh && activeRequest) return activeRequest;
 
@@ -317,7 +327,7 @@ export const getSchedulesForPatientsFromApi = async (
       ...additionalResponses.flatMap((response) => response.data.data),
     ];
     const schedules = scheduleRows.map((schedule) => mapSchedule(schedule, patientById.get(schedule.patientId)));
-    schedulePatientsCache.set(cacheKey, { data: schedules, expiresAt: Date.now() + schedulesCacheTtl });
+    schedulePatientsCache.set(cacheKey, { data: schedules });
     return schedules;
   })().finally(() => {
     schedulePatientsRequests.delete(cacheKey);
@@ -333,16 +343,13 @@ export const getSchedulePatientGroupsPageFromApi = async (params: { page?: numbe
   const search = params.search?.trim() || "";
   const status = params.status || "active";
   const adherenceStatus = params.adherenceStatus || "";
-  const cacheKey = `${scheduleAdherenceCacheVersion}:${page}:${limit}:${status}:${search}:${adherenceStatus}`;
+  const cacheKey = getScheduleGroupsCacheKey(params);
 
   if (params.forceRefresh) {
     scheduleGroupsCache.delete(cacheKey);
     scheduleGroupsRequests.delete(cacheKey);
   }
 
-  const now = Date.now();
-  const cached = scheduleGroupsCache.get(cacheKey);
-  if (cached && cached.expiresAt > now) return cached.data;
   const activeRequest = scheduleGroupsRequests.get(cacheKey);
   if (activeRequest) return activeRequest;
 
@@ -357,7 +364,7 @@ export const getSchedulePatientGroupsPageFromApi = async (params: { page?: numbe
       schedules,
       meta: response.data.meta ?? { page, limit, total: patients.length },
     };
-    scheduleGroupsCache.set(cacheKey, { data: result, expiresAt: Date.now() + schedulesCacheTtl });
+    scheduleGroupsCache.set(cacheKey, { data: result });
     return result;
   }).finally(() => {
     scheduleGroupsRequests.delete(cacheKey);
@@ -365,6 +372,10 @@ export const getSchedulePatientGroupsPageFromApi = async (params: { page?: numbe
 
   scheduleGroupsRequests.set(cacheKey, request);
   return request;
+};
+
+export const getCachedSchedulePatientGroupsPageFromApi = (params: { page?: number; limit?: number; search?: string; status?: "active" | "inactive" | "all"; adherenceStatus?: PatientStatus } = {}): SchedulePatientGroupsPage | null => {
+  return scheduleGroupsCache.get(getScheduleGroupsCacheKey(params))?.data ?? null;
 };
 
 export const createSchedulesViaApi = async (patientId: string, medicines: readonly ScheduleMedicineFormValues[], patients: readonly PatientRecord[]) => {

@@ -9,11 +9,9 @@ interface UserNotificationPreferenceResponse {
   };
 }
 
-const preferenceCacheTtl = 30_000;
-
 const getPreferenceCache = () => {
   const globalStore = globalThis as typeof globalThis & {
-    __jivaraPreferenceCache?: Map<UserNotificationPreferenceKey, { data: UserNotificationPreferenceResponse["data"]; expiresAt: number }>;
+    __jivaraPreferenceCache?: Map<UserNotificationPreferenceKey, { data: UserNotificationPreferenceResponse["data"] }>;
     __jivaraPreferenceRequests?: Map<UserNotificationPreferenceKey, Promise<UserNotificationPreferenceResponse["data"]>>;
   };
 
@@ -26,17 +24,19 @@ const getPreferenceCache = () => {
   };
 };
 
+export const getCachedUserNotificationPreference = (key: UserNotificationPreferenceKey) => {
+  const { cache } = getPreferenceCache();
+  return cache.get(key)?.data ?? null;
+};
+
 export const getUserNotificationPreferenceFromApi = async (key: UserNotificationPreferenceKey) => {
   const { cache, requests } = getPreferenceCache();
-  const cached = cache.get(key);
-  if (cached && cached.expiresAt > Date.now()) return cached.data;
-
   const activeRequest = requests.get(key);
   if (activeRequest) return activeRequest;
 
   const request = api.get<UserNotificationPreferenceResponse>("/notifications/user-preferences", { params: { key } })
     .then((response) => {
-      cache.set(key, { data: response.data.data, expiresAt: Date.now() + preferenceCacheTtl });
+      cache.set(key, { data: response.data.data });
       return response.data.data;
     })
     .finally(() => {
@@ -50,6 +50,6 @@ export const getUserNotificationPreferenceFromApi = async (key: UserNotification
 export const updateUserNotificationPreferenceViaApi = async (key: UserNotificationPreferenceKey, enabled: boolean) => {
   const { cache } = getPreferenceCache();
   const response = await api.patch<UserNotificationPreferenceResponse>("/notifications/user-preferences", { key, enabled });
-  cache.set(key, { data: response.data.data, expiresAt: Date.now() + preferenceCacheTtl });
+  cache.set(key, { data: response.data.data });
   return response.data.data;
 };
