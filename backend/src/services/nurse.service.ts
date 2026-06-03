@@ -122,32 +122,31 @@ const getNursePatientCounts = async (nurseIds: readonly string[], organizationId
   ];
   if (organizationId) countConditions.push(eq(patients.organizationId, organizationId));
 
-  const patientState = db
+  const countRows = await db
     .select({
       nurseId: patientNurseAssignments.nurseId,
-      patientId: patientNurseAssignments.patientId,
-      patientIsActive: patients.isActive,
-      scheduleCount: sql<number>`count(${medicationSchedules.id})::int`.as("schedule_count"),
-      completedScheduleCount: sql<number>`count(${medicationSchedules.id}) filter (where ${medicationSchedules.isActive} = false or coalesce(${medicationSchedules.stock}, 0) <= 0)::int`.as("completed_schedule_count"),
+      assignedPatients: sql<number>`count(distinct ${patientNurseAssignments.patientId})::int`,
+      handledPatients: sql<number>`count(distinct ${patientNurseAssignments.patientId}) filter (
+        where ${patients.isActive} is not false
+        and (
+          not exists (
+            select 1
+            from ${medicationSchedules}
+            where ${medicationSchedules.patientId} = ${patientNurseAssignments.patientId}
+          )
+          or exists (
+            select 1
+            from ${medicationSchedules}
+            where ${medicationSchedules.patientId} = ${patientNurseAssignments.patientId}
+              and not (${medicationSchedules.isActive} = false or coalesce(${medicationSchedules.stock}, 0) <= 0)
+          )
+        )
+      )::int`,
     })
     .from(patientNurseAssignments)
     .innerJoin(patients, eq(patientNurseAssignments.patientId, patients.id))
-    .leftJoin(medicationSchedules, eq(medicationSchedules.patientId, patientNurseAssignments.patientId))
     .where(and(...countConditions))
-    .groupBy(patientNurseAssignments.nurseId, patientNurseAssignments.patientId, patients.isActive)
-    .as("patient_state");
-
-  const countRows = await db
-    .select({
-      nurseId: patientState.nurseId,
-      assignedPatients: sql<number>`count(*)::int`,
-      handledPatients: sql<number>`count(*) filter (
-        where ${patientState.patientIsActive} is not false
-        and not (${patientState.scheduleCount} > 0 and ${patientState.completedScheduleCount} = ${patientState.scheduleCount})
-      )::int`,
-    })
-    .from(patientState)
-    .groupBy(patientState.nurseId);
+    .groupBy(patientNurseAssignments.nurseId);
 
   return new Map(countRows.map((row) => [
     row.nurseId,
