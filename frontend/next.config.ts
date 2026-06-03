@@ -54,7 +54,7 @@ const privateCacheHeaders = [
 const publicAssetCacheHeaders = [
   {
     key: "Cache-Control",
-    value: "public, max-age=604800, stale-while-revalidate=86400",
+    value: "public, max-age=31536000, immutable",
   },
   {
     key: "Expires",
@@ -115,6 +115,7 @@ const nextConfig: NextConfig = {
   },
   images: {
     unoptimized: process.env.NEXT_IMAGE_UNOPTIMIZED === "1",
+    minimumCacheTTL: 31_536_000,
     remotePatterns: [
       {
         protocol: "https",

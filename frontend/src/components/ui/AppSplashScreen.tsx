@@ -62,7 +62,8 @@ export default function AppSplashScreen() {
               alt="Jivara"
               width={200}
               height={60}
-              priority
+              preload
+              fetchPriority="high"
               className="h-[60px] w-[200px] object-contain"
             />
           </m.div>
@@ -87,7 +88,8 @@ export default function AppSplashScreen() {
                 alt="Jivara"
                 width={180}
                 height={180}
-                priority
+                preload
+                fetchPriority="high"
                 sizes="(max-width: 640px) 150px, 180px"
                 className="h-[150px] w-[150px] rounded-[36px] object-contain sm:h-[180px] sm:w-[180px]"
               />

@@ -178,7 +178,8 @@ export default function ModelViewer({
           fill
           sizes="(min-width: 1024px) 460px, 70vw"
           className={`pointer-events-none object-contain transition-opacity duration-500 ${state.loaded ? "opacity-0" : "opacity-100"}`}
-          priority
+          preload
+          fetchPriority="high"
         />
       )}
     </div>

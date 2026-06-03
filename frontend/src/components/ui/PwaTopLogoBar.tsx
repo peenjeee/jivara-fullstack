@@ -17,7 +17,16 @@ export default function PwaTopLogoBar({ rightAction }: PwaTopLogoBarProps) {
       transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
     >
       <div className="flex h-[76px] items-center justify-between">
-        <Image src="/images/logo/notext.png" alt="Jivara" width={132} height={42} sizes="118px" priority className="h-auto w-[118px]" />
+        <Image
+          src="/images/logo/notext.png"
+          alt="Jivara"
+          width={132}
+          height={42}
+          sizes="118px"
+          preload
+          fetchPriority="high"
+          className="h-[42px] w-[118px] object-contain"
+        />
         {rightAction && (
           <m.div className="shrink-0" whileHover={{ y: -1 }} whileTap={{ scale: 0.96 }} transition={{ type: "spring", stiffness: 420, damping: 18 }}>
             {rightAction}

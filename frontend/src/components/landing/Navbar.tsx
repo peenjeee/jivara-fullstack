@@ -75,9 +75,10 @@ export default function Navbar() {
                 alt="Jivara"
                 width={132}
                 height={42}
-                priority
                 sizes="118px"
-                className="h-auto w-[118px] drop-shadow-2xl"
+                preload
+                fetchPriority="high"
+                className="h-[42px] w-[118px] object-contain drop-shadow-2xl"
               />
           </Link>
 
@@ -165,7 +166,7 @@ export default function Navbar() {
                   width={132}
                   height={42}
                   sizes="118px"
-                  className="h-auto w-[118px]"
+                  className="h-[42px] w-[118px] object-contain"
                 />
               </div>
 

@@ -60,7 +60,16 @@ export default function DashboardNavbar({ onLogout }: DashboardNavbarProps) {
     <>
       {!isStandalonePwa && <header className="sticky top-0 z-[35000] bg-surface lg:hidden">
         <div className="flex h-[76px] items-center justify-between px-4">
-          <Image src="/images/logo/notext.png" alt="Jivara" width={132} height={42} sizes="118px" priority className="h-auto w-[118px]" />
+          <Image
+            src="/images/logo/notext.png"
+            alt="Jivara"
+            width={132}
+            height={42}
+            sizes="118px"
+            preload
+            fetchPriority="high"
+            className="h-[42px] w-[118px] object-contain"
+          />
           <button
             type="button"
             ref={menuButtonRef}
@@ -110,7 +119,7 @@ export default function DashboardNavbar({ onLogout }: DashboardNavbarProps) {
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
             >
               <div className="flex items-start justify-between gap-4">
-                <Image src="/images/logo/notext.png" alt="Jivara" width={132} height={42} sizes="118px" className="h-auto w-[118px]" />
+                <Image src="/images/logo/notext.png" alt="Jivara" width={132} height={42} sizes="118px" className="h-[42px] w-[118px] object-contain" />
               </div>
 
               <DashboardSidebar

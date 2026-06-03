@@ -1,6 +1,6 @@
 "use client";
 
-import Lenis from "lenis";
+import type Lenis from "lenis";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, type ReactNode } from "react";
 
@@ -19,45 +19,68 @@ declare global {
   }
 }
 
+const lenisExcludedRoutes = [
+  "/dashboard",
+  "/patients",
+  "/schedule",
+  "/activity-log",
+  "/settings",
+  "/food-scan",
+  "/nurses",
+  "/admin-approvals",
+  "/account-status",
+];
+
 export default function ScrollProvider({ children }: ScrollProviderProps) {
   const pathname = usePathname();
   const lenisRef = useRef<Lenis | null>(null);
-  const shouldUseLenis = true;
+  const shouldUseLenis = !lenisExcludedRoutes.some((route) => pathname.startsWith(route));
 
   useEffect(() => {
     if (!shouldUseLenis) return;
 
-    const lenis = new Lenis({
-      duration: 1.2,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      orientation: "vertical",
-      gestureOrientation: "vertical",
-      smoothWheel: true,
-      syncTouch: true,
-      syncTouchLerp: 0.075,
-      wheelMultiplier: 1,
-      touchMultiplier: 2,
-    });
-    lenisRef.current = lenis;
+    let isCancelled = false;
+    let activeLenis: Lenis | null = null;
+    let rafId = 0;
 
-    // Expose lenis control globally for popup scroll locking
-    window.__lenisControl__ = {
-      stop: () => lenis.stop(),
-      start: () => lenis.start(),
+    const startLenis = async () => {
+      const { default: LenisConstructor } = await import("lenis");
+      if (isCancelled) return;
+
+      const lenis = new LenisConstructor({
+        duration: 1.2,
+        easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+        orientation: "vertical",
+        gestureOrientation: "vertical",
+        smoothWheel: true,
+        syncTouch: true,
+        syncTouchLerp: 0.075,
+        wheelMultiplier: 1,
+        touchMultiplier: 2,
+      });
+      activeLenis = lenis;
+      lenisRef.current = lenis;
+
+      window.__lenisControl__ = {
+        stop: () => lenis.stop(),
+        start: () => lenis.start(),
+      };
+
+      function raf(time: number) {
+        lenis.raf(time);
+        rafId = requestAnimationFrame(raf);
+      }
+
+      rafId = requestAnimationFrame(raf);
     };
 
-    let rafId: number;
-
-    function raf(time: number) {
-      lenis.raf(time);
-      rafId = requestAnimationFrame(raf);
-    }
-
-    rafId = requestAnimationFrame(raf);
+    void startLenis();
 
     const handleAnchorClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       const link = target.closest("a");
+      const lenis = lenisRef.current;
+      if (!lenis) return;
 
       if (link && link.getAttribute("href")?.startsWith("/#")) {
         const id = link.getAttribute("href")?.split("#")[1];
@@ -90,9 +113,10 @@ export default function ScrollProvider({ children }: ScrollProviderProps) {
     document.addEventListener("click", handleAnchorClick);
 
     return () => {
+      isCancelled = true;
       lenisRef.current = null;
-      cancelAnimationFrame(rafId);
-      lenis.destroy();
+      if (rafId) cancelAnimationFrame(rafId);
+      activeLenis?.destroy();
       document.removeEventListener("click", handleAnchorClick);
       delete window.__lenisControl__;
     };
