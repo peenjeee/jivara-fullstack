@@ -18,7 +18,7 @@ export default function DashboardAccountActions({ onLogout, hideSettings = false
       {!hideSettings && (
         <Link
           href="/settings"
-          prefetch
+          prefetch={false}
           aria-current={isSettingsActive ? "page" : undefined}
           className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-bold text-main transition-colors ${
             isSettingsActive ? "text-primary" : "text-main"

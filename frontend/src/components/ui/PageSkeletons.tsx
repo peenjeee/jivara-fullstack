@@ -19,26 +19,32 @@ export function SummaryCardsSkeleton({ count = 3 }: { readonly count?: number })
   );
 }
 
-export function ToolbarSkeleton() {
-  return <div className="h-24 animate-pulse rounded-[28px] bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)]" />;
+export function ToolbarSkeleton({ className = "" }: { readonly className?: string } = {}) {
+  return <div className={`h-24 animate-pulse rounded-[28px] bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)] ${className}`} />;
 }
 
-export function TableDataSkeleton({ rows = 6 }: { readonly rows?: number }) {
+export function ActivityToolbarSkeleton() {
+  return <ToolbarSkeleton className="h-[356px] sm:h-[244px] lg:h-[132px]" />;
+}
+
+export function TableDataSkeleton({ rows = 10 }: { readonly rows?: number }) {
   return (
-    <div className="overflow-hidden rounded-3xl bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
+    <div className="min-h-[620px] overflow-hidden rounded-3xl bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
       <div className="hidden divide-y divide-line md:block">
+        <div className="h-14 animate-pulse bg-surface" />
         {Array.from({ length: rows }).map((_, index) => (
-          <div key={`table-skeleton-${index}`} className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-4 px-5 py-4">
+          <div key={`table-skeleton-${index}`} className="grid min-h-[58px] grid-cols-[2fr_1fr_1fr_1fr] items-center gap-4 px-5 py-4">
             <div className="h-5 animate-pulse rounded-xl bg-line/70" />
             <div className="h-5 animate-pulse rounded-xl bg-line/60" />
             <div className="h-5 animate-pulse rounded-xl bg-line/60" />
             <div className="h-5 animate-pulse rounded-xl bg-line/50" />
           </div>
         ))}
+        <div className="h-20 animate-pulse bg-white" />
       </div>
       <div className="divide-y divide-line md:hidden">
-        {Array.from({ length: 3 }).map((_, index) => (
-          <div key={`card-skeleton-${index}`} className="space-y-3 p-5">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div key={`card-skeleton-${index}`} className="min-h-[126px] space-y-3 p-5">
             <div className="h-5 w-2/3 animate-pulse rounded-xl bg-line/70" />
             <div className="h-4 w-1/2 animate-pulse rounded-xl bg-line/60" />
             <div className="h-10 animate-pulse rounded-2xl bg-line/50" />
@@ -49,9 +55,9 @@ export function TableDataSkeleton({ rows = 6 }: { readonly rows?: number }) {
   );
 }
 
-export function ActivityDataSkeleton({ rows = 5 }: { readonly rows?: number }) {
+export function ActivityDataSkeleton({ rows = 8 }: { readonly rows?: number }) {
   return (
-    <div className="space-y-3">
+    <div className="min-h-[620px] space-y-3">
       {Array.from({ length: rows }).map((_, index) => (
         <div key={`activity-skeleton-${index}`} className="rounded-3xl bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
           <div className="h-5 w-2/3 animate-pulse rounded-xl bg-line/70" />

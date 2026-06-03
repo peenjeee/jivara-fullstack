@@ -127,6 +127,28 @@ describe("adherence service", () => {
     expect(occurrences).toHaveLength(0);
   });
 
+  it("does not backfill missed doses before a schedule was created when startDate is set", () => {
+    const yesterday = addAppDays(getTodayAppDateStartUtc(), -1);
+    const createdAt = new Date(yesterday.getTime() + 12 * 60 * 60_000);
+    const dateKey = getAppDateKey(createdAt);
+
+    const occurrences = __test__.buildScheduledOccurrences(
+      2,
+      [{
+        id: "schedule-1",
+        createdAt,
+        completedAt: null,
+        startDate: dateKey,
+        endDate: dateKey,
+        scheduledTimes: ["08:00"],
+        frequency: 1,
+      }],
+      [],
+    );
+
+    expect(occurrences).toHaveLength(0);
+  });
+
   it("builds adherence stats for multiple patients from grouped schedule and log rows", () => {
     const doseDay = new Date();
     doseDay.setUTCHours(0, 0, 0, 0);

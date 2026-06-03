@@ -22,9 +22,10 @@ interface SelectFieldProps<TValue extends string> {
   readonly inlineOptions?: boolean;
   readonly optionsPlacement?: "top" | "bottom";
   readonly onChange?: (value: TValue) => void;
+  readonly onOpen?: () => void;
 }
 
-export default function SelectField<TValue extends string>({ id, name, value, defaultValue, options, placeholder = "Pilih", disabled = false, required = false, className = "", inlineOptions = false, optionsPlacement = "bottom", onChange }: SelectFieldProps<TValue>) {
+export default function SelectField<TValue extends string>({ id, name, value, defaultValue, options, placeholder = "Pilih", disabled = false, required = false, className = "", inlineOptions = false, optionsPlacement = "bottom", onChange, onOpen }: SelectFieldProps<TValue>) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const isControlled = value !== undefined;
   const [isOpen, setIsOpen] = useState(false);
@@ -58,7 +59,11 @@ export default function SelectField<TValue extends string>({ id, name, value, de
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         aria-labelledby={`${id}-label`}
-        onClick={() => setIsOpen((current) => !current)}
+        onClick={() => setIsOpen((current) => {
+          const nextIsOpen = !current;
+          if (nextIsOpen) onOpen?.();
+          return nextIsOpen;
+        })}
         className={`flex min-w-0 items-center justify-between gap-3 disabled:cursor-not-allowed disabled:text-muted ${className}`}
       >
         <span id={`${id}-label`} className={`min-w-0 truncate ${selectedOption ? "text-text-main" : "text-muted"}`}>

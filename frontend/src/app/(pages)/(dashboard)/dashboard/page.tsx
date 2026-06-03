@@ -8,9 +8,11 @@ import { useAuthStore } from "@/store/auth";
 import { useSplashScreen } from "@/components/ui/AppSplashScreen";
 import { getDashboardRole } from "@/components/dashboard/navigation";
 
-const NurseDashboardPage = dynamic(() => import("@/components/dashboard/NurseDashboardPage"), { ssr: false, loading: () => null });
-const AdminDashboardPage = dynamic(() => import("@/components/admin/AdminDashboardPage"), { ssr: false, loading: () => null });
-const PatientDashboardPage = dynamic(() => import("@/components/patient-dashboard/PatientDashboardPage"), { ssr: false, loading: () => null });
+const dashboardLoadingFallback = () => <DashboardRouteFallback title="Dashboard" />;
+
+const NurseDashboardPage = dynamic(() => import("@/components/dashboard/NurseDashboardPage"), { ssr: false, loading: dashboardLoadingFallback });
+const AdminDashboardPage = dynamic(() => import("@/components/admin/AdminDashboardPage"), { ssr: false, loading: dashboardLoadingFallback });
+const PatientDashboardPage = dynamic(() => import("@/components/patient-dashboard/PatientDashboardPage"), { ssr: false, loading: dashboardLoadingFallback });
 
 export default function DashboardPage() {
   const { replace } = useRouter();

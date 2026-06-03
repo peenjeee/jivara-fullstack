@@ -45,14 +45,14 @@ export function useAdminApprovals(canLoad: boolean) {
   const [filter, setFilter] = useState<ApprovalFilter>(() => approvalsViewCache?.filter ?? "pending");
   const [currentPage, setCurrentPage] = useState(() => approvalsViewCache?.currentPage ?? 1);
   const [loading, setLoading] = useState(!approvalsViewCache);
-  const [hasLoadedApprovals, setHasLoadedApprovals] = useState(Boolean(approvalsViewCache));
-  const [hasLoadedSummary, setHasLoadedSummary] = useState(Boolean(approvalsViewCache));
+  const [hasLoadedApprovals, setHasLoadedApprovals] = useState(true);
+  const [hasLoadedSummary, setHasLoadedSummary] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [rejectingUser, setRejectingUser] = useState<User | null>(null);
   const isInitialLoad = useRef(true);
   const requestSeqRef = useRef(0);
-  const hasLoadedApprovalsRef = useRef(Boolean(approvalsViewCache));
+  const hasLoadedApprovalsRef = useRef(true);
   const debouncedSearch = useDebouncedValue(search);
 
   const totalPages = Math.max(1, Math.ceil(totalApprovals / pageSize));

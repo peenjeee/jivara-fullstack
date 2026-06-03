@@ -6,7 +6,7 @@ import { LogIn } from "lucide-react";
 import { m, AnimatePresence } from "motion/react";
 import { useIsStandalonePwa, useScrollThreshold, useLockBodyScroll } from "@/hooks";
 import Button from "@/components/ui/Button";
-import Image from "next/image";
+import JivaraWordmark from "@/components/ui/JivaraWordmark";
 
 const NAV_LINKS = [
   { name: "Fitur", href: "/#fitur" },
@@ -66,19 +66,11 @@ export default function Navbar() {
       >
         <div className="max-w-[1440px] mx-auto h-full flex justify-between items-center relative w-full">
           <Link
-            className="block w-[118px] shrink-0"
+            className="block shrink-0"
             href="/"
             aria-label="Jivara home"
           >
-              <Image
-                src="/images/logo/notext.png"
-                alt="Jivara"
-                width={132}
-                height={42}
-                priority
-                sizes="118px"
-                className="h-auto w-[118px] drop-shadow-2xl"
-              />
+            <JivaraWordmark priority className="drop-shadow-2xl" />
           </Link>
 
           <div className="flex items-center gap-6">
@@ -159,14 +151,7 @@ export default function Navbar() {
               }}
             >
               <div className="flex items-center mb-4">
-                <Image
-                  src="/images/logo/notext.png"
-                  alt="Jivara"
-                  width={132}
-                  height={42}
-                  sizes="118px"
-                  className="h-auto w-[118px]"
-                />
+                <JivaraWordmark />
               </div>
 
               <div className="flex flex-col gap-7">

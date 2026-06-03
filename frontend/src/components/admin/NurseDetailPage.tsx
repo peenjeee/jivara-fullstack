@@ -13,7 +13,7 @@ import ActivityDetailModal from "@/components/activity-log/ActivityDetailModal";
 import ActivityToolbar, { type ActivityQuickFilter } from "@/components/activity-log/ActivityToolbar";
 import Button from "@/components/ui/Button";
 import DetailItem from "@/components/ui/DetailItem";
-import { ActivityDataSkeleton, DetailDataSkeleton, SummaryCardsSkeleton, TableDataSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
+import { ActivityDataSkeleton, ActivityToolbarSkeleton, DetailDataSkeleton, SummaryCardsSkeleton, TableDataSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
 import RefreshingNotice from "@/components/ui/RefreshingNotice";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import { getNurseInitials } from "@/helpers/nurses";
@@ -51,7 +51,7 @@ function NurseDetailPageContent({ nurseId }: NurseDetailPageProps) {
   if (!controller.nurse) {
     return (
       <DashboardPageShell>
-        <DashboardPageHeader title="Perawat Tidak Ditemukan" description="Data perawat tidak tersedia di saat ini." action={<Link href="/nurses" className="text-sm font-extrabold text-primary">Kembali</Link>} />
+        <DashboardPageHeader title="Perawat Tidak Ditemukan" description="Data perawat tidak tersedia di saat ini." action={<Link href="/nurses" prefetch={false} className="text-sm font-extrabold text-primary">Kembali</Link>} />
       </DashboardPageShell>
     );
   }
@@ -202,7 +202,7 @@ function PatientAssignmentsSection({
                 {data.patients.map((patient, index) => (
                   <tr key={`nurse-detail-patient-${patient.id}-${index}`} className="transition-colors hover:bg-surface/60">
                     <td className="px-5 py-4"><SelectionCheckbox label={`Pilih ${patient.name}`} checked={selection.selectedIds.includes(patient.id)} disabled={patient.status === "Complete" || patient.status === "Nonaktif"} onChange={() => onTogglePatient(patient.id)} /></td>
-                    <td className="px-5 py-4"><Link href={`/patients/${encodeURIComponent(patient.id)}`} className="font-extrabold text-text-main transition-colors hover:text-primary">{patient.name}</Link></td>
+                    <td className="px-5 py-4"><Link href={`/patients/${encodeURIComponent(patient.id)}`} prefetch={false} className="font-extrabold text-text-main transition-colors hover:text-primary">{patient.name}</Link></td>
                     <td className="px-5 py-4"><PatientStatusBadge status={patient.status} /></td>
                     <td className="px-5 py-4"><AdherenceBar value={patient.adherence} /></td>
                   </tr>
@@ -251,7 +251,7 @@ function NurseActivitySection({
     <m.section className="mt-8" {...getDashboardEntranceMotion(motion.shouldAnimate, 0.26, 24)}>
       <h2 className="font-display text-2xl font-extrabold tracking-[-0.04em] text-text-main sm:text-3xl">Log Terkait Perawat</h2>
       <div className="mt-5">
-        {loading.isLoading && !loading.hasLoaded ? <ToolbarSkeleton /> : <ActivityToolbar search={filters.search} quickFilter={filters.quickFilter} category={filters.category} showNurseFilter={false} showUnreadFilter={false} date={filters.date} hasActiveFilters={filters.hasActive} onSearchChange={onSearchChange} onQuickFilterChange={onQuickFilterChange} onCategoryChange={onCategoryChange} onDateChange={onDateChange} onReset={onReset} />}
+        {loading.isLoading && !loading.hasLoaded ? <ActivityToolbarSkeleton /> : <ActivityToolbar search={filters.search} quickFilter={filters.quickFilter} category={filters.category} showNurseFilter={false} showUnreadFilter={false} date={filters.date} hasActiveFilters={filters.hasActive} onSearchChange={onSearchChange} onQuickFilterChange={onQuickFilterChange} onCategoryChange={onCategoryChange} onDateChange={onDateChange} onReset={onReset} />}
       </div>
       <div className="relative mt-6" aria-busy={isUpdatingActivities || undefined}>
         <RefreshingNotice active={isUpdatingActivities} />

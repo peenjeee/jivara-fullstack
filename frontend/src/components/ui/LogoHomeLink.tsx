@@ -17,7 +17,8 @@ export default function LogoHomeLink({ className = "", imageClassName = "", prio
         alt="Jivara"
         width={1080}
         height={1080}
-        priority={priority}
+        preload={priority}
+        fetchPriority={priority ? "high" : "auto"}
         unoptimized={unoptimized}
         sizes="(max-width: 640px) 210px, 260px"
         className={`mb-[-42px] h-auto w-[210px] translate-x-[-6px] sm:w-[260px] ${imageClassName}`}

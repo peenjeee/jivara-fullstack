@@ -65,7 +65,7 @@ export default function ActivityDetailModal({ activity, onClose, onViewFoodScan,
       {hasStickyActions && (
         <FormStickyActions>
           {patientHref && (
-            <Link href={patientHref} onClick={onClose} className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-7 py-3 text-[13px] font-bold uppercase leading-none tracking-[0.1em] !text-white transition-colors hover:bg-primary-hover [&_svg]:text-white">
+            <Link href={patientHref} prefetch={false} onClick={onClose} className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-7 py-3 text-[13px] font-bold uppercase leading-none tracking-[0.1em] !text-white transition-colors hover:bg-primary-hover [&_svg]:text-white">
               <UserRound size={16} /> Lihat Detail Pasien
             </Link>
           )}
@@ -75,7 +75,7 @@ export default function ActivityDetailModal({ activity, onClose, onViewFoodScan,
                 <CalendarClock size={16} /> Lihat Jadwal
               </button>
             ) : (
-              <Link href={scheduleHref} onClick={onClose} className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-7 py-3 text-[13px] font-bold uppercase leading-none tracking-[0.1em] !text-white transition-colors hover:bg-primary-hover [&_svg]:text-white">
+              <Link href={scheduleHref} prefetch={false} onClick={onClose} className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-7 py-3 text-[13px] font-bold uppercase leading-none tracking-[0.1em] !text-white transition-colors hover:bg-primary-hover [&_svg]:text-white">
                 <CalendarClock size={16} /> Lihat Jadwal
               </Link>
             )

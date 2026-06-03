@@ -17,7 +17,7 @@ import type { ReactNode } from "react";
 const archivo = Archivo({
   subsets: ["latin"],
   display: "swap",
-  preload: false,
+  preload: true,
   variable: "--font-archivo",
   weight: ["300", "400", "700"],
 });
@@ -25,7 +25,7 @@ const archivo = Archivo({
 const inter = Inter({
   subsets: ["latin"],
   display: "swap",
-  preload: false,
+  preload: true,
   variable: "--font-inter",
   weight: ["300", "400", "500", "600", "700"],
 });

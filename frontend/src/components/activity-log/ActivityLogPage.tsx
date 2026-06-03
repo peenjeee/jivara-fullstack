@@ -7,7 +7,7 @@ import { AlertTriangle, Bell, CheckCheck, ClipboardList, type LucideIcon } from 
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import Button from "@/components/ui/Button";
-import { ActivityDataSkeleton, SummaryCardsSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
+import { ActivityDataSkeleton, ActivityToolbarSkeleton, SummaryCardsSkeleton } from "@/components/ui/PageSkeletons";
 import RefreshingNotice from "@/components/ui/RefreshingNotice";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import { FoodScanDetailModal } from "@/components/food-scan";
@@ -321,19 +321,11 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
   const todayKey = getTodayDateKey();
   const effectiveQuickFilter = readOnly && state.quickFilter === "unread" ? "all" : state.quickFilter;
 
-  useEffect(() => {
+  const ensureNursesLoaded = useCallback(() => {
     if (!showNurseFilter || nurses.length > 0) return;
-    let isMounted = true;
-
     getNursesFromApi()
-      .then((nextNurses) => {
-        if (isMounted) setNurses(nextNurses);
-      })
+      .then((nextNurses) => setNurses(nextNurses))
       .catch(() => undefined);
-
-    return () => {
-      isMounted = false;
-    };
   }, [nurses.length, setNurses, showNurseFilter]);
 
   useEffect(() => {
@@ -458,20 +450,6 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
             visibleCount: visibleActivities.length,
           },
         });
-        if (page * serverPageSize < activityData.total) {
-          void fetchActivityPageData({
-            page: page + 1,
-            readOnly,
-            auditUserRole,
-            showNurseFilter,
-            nurseId: current.nurseId,
-            category: current.category,
-            date: current.date,
-            quickFilter: effectiveQuickFilter,
-            search: debouncedSearch,
-            fallbackTotal: activityData.total,
-          }).catch(() => undefined);
-        }
       }
     } catch {
       if (latestRequestKeyRef.current === pageKey && page === 1) {
@@ -687,6 +665,7 @@ function useActivityLogPageController({ initialPatientName = "", initialCategory
     handleQuickFilterChange,
     handleCategoryChange,
     handleNurseChange,
+    ensureNursesLoaded,
     handleDateChange,
     handleLoadMore,
     markAsRead,
@@ -721,7 +700,7 @@ export default function ActivityLogPage(props: ActivityLogPageProps) {
       <ActivityLogSummarySection isLoading={controller.state.isSummaryLoading} hasLoaded={controller.state.hasLoadedSummary} summaryStats={controller.summaryStats} />
 
       <m.div className="mt-6" {...getDashboardEntranceMotion(shouldAnimate, 0.32, 20)}>
-        {controller.state.isLoading && !controller.state.hasLoadedActivities ? <ToolbarSkeleton /> : (
+        {controller.state.isLoading && !controller.state.hasLoadedActivities ? <ActivityToolbarSkeleton /> : (
           <ActivityToolbar
             search={controller.state.search}
             quickFilter={controller.effectiveQuickFilter}
@@ -736,6 +715,7 @@ export default function ActivityLogPage(props: ActivityLogPageProps) {
             onQuickFilterChange={controller.handleQuickFilterChange}
             onCategoryChange={controller.handleCategoryChange}
             onNurseChange={controller.handleNurseChange}
+            onNurseFilterOpen={controller.ensureNursesLoaded}
             onDateChange={controller.handleDateChange}
             onReset={controller.resetFilters}
           />
