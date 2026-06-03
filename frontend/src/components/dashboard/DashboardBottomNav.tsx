@@ -54,7 +54,7 @@ export default function DashboardBottomNav() {
             >
               <Link
                 href={item.href}
-                prefetch
+                prefetch={false}
                 aria-current={isActive ? "page" : undefined}
                 className={`group relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[10px] font-extrabold transition-colors ${isFeatured ? "-mt-7 py-1" : "py-2"} ${
                   isActive ? "text-primary" : "text-muted hover:text-primary"

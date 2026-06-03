@@ -1,7 +1,7 @@
 import DashboardAccountActions from "./DashboardAccountActions";
 import DashboardNavItem from "./DashboardNavItem";
 import { getDashboardNavItems, type DashboardNavLabel, type DashboardRole } from "./navigation";
-import Image from "next/image";
+import JivaraWordmark from "@/components/ui/JivaraWordmark";
 import { useActivityLogStore } from "@/store/activityLog";
 import { useAuthStore } from "@/store/auth";
 
@@ -28,17 +28,8 @@ export default function DashboardSidebar({ activeItem, role, onLogout, onNavigat
   return (
     <>
       <div className="hidden lg:flex justify-start">
-        <h1 className="h-[60px] w-[172px] overflow-hidden">
-          <Image
-            src="/images/logo/notext.png"
-            alt="Jivara"
-            width={210}
-            height={68}
-            sizes="190px"
-            preload
-            fetchPriority="high"
-            className="-mt-[58px] h-[68px] w-[190px] object-contain"
-          />
+        <h1>
+          <JivaraWordmark size="sidebar" priority />
         </h1>
       </div>
 

@@ -16,7 +16,7 @@ export default function DashboardNavItem({ item, isActive, badgeCount = 0, isBad
   return (
     <Link
       href={item.href}
-      prefetch
+      prefetch={false}
       onClick={onSelect}
       aria-current={isActive ? "page" : undefined}
       className={`relative flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors duration-200 ${

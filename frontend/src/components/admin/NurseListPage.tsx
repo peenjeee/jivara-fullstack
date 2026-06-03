@@ -136,7 +136,6 @@ export default function NurseListPage() {
       if (requestSeq === requestSeqRef.current) {
         dispatch({ type: "patch", payload: { pageNurses: result.nurses, totalNurses: result.meta.total } });
         setNurses(result.nurses);
-        const totalPagesForQuery = Math.max(1, Math.ceil(result.meta.total / pageSize));
         nurseListViewCache = {
           pageNurses: result.nurses,
           totalNurses: result.meta.total,
@@ -144,13 +143,6 @@ export default function NurseListPage() {
           filter,
           currentPage: page,
         };
-        const adjacentPages = [page + 1, page - 1].filter((nextPage) => nextPage >= 1 && nextPage <= totalPagesForQuery);
-        void Promise.all(adjacentPages.map((nextPage) => getNursesPageFromApi({
-          page: nextPage,
-          limit: pageSize,
-          search: debouncedSearch,
-          status,
-        }).catch(() => undefined)));
       }
     } catch {
       if (requestSeq === requestSeqRef.current && !stateRef.current.hasLoadedNurses) {
@@ -257,7 +249,7 @@ export default function NurseListPage() {
         </ToolbarCard>}
       </m.div>
 
-      <m.section className="relative mt-6 overflow-hidden rounded-3xl bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)]" aria-busy={isUpdatingNurses || undefined} {...getDashboardEntranceMotion(shouldAnimate, 0.18, 24)}>
+      <m.section className="relative mt-6 min-h-[620px] overflow-hidden rounded-3xl bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)]" aria-busy={isUpdatingNurses || undefined} {...getDashboardEntranceMotion(shouldAnimate, 0.18, 24)}>
         <RefreshingNotice active={isUpdatingNurses} />
         {isLoading && !hasLoadedNurses ? <TableDataSkeleton /> : <>
         <div className={isUpdatingNurses ? "opacity-60 transition-opacity" : "transition-opacity"}>

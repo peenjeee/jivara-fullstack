@@ -25,7 +25,7 @@ export default function PatientTable({ patients, title, showViewAll = false, act
       {(title || showViewAll) && (
         <div className="flex items-center justify-between gap-4 px-5 py-5 sm:px-7">
           {title && <h2 className="font-display text-xl font-bold tracking-[-0.03em] text-text-main">{title}</h2>}
-          {showViewAll && <Link href="/patients" className="text-sm font-extrabold text-text-main transition-colors hover:!text-primary">Lihat Semua</Link>}
+          {showViewAll && <Link href="/patients" prefetch={false} className="text-sm font-extrabold text-text-main transition-colors hover:!text-primary">Lihat Semua</Link>}
         </div>
       )}
 

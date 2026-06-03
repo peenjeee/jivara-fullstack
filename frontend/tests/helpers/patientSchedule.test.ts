@@ -7,6 +7,7 @@ import {
   getDayStatus,
   getDoseTrackedSchedules,
   getMonthStart,
+  getScheduleDoseWindow,
   getSchedulesForDate,
   isSameDate,
 } from "@/helpers/patientSchedule";
@@ -98,5 +99,32 @@ describe("patient schedule helpers", () => {
 
   it("counts confirmed schedules for a date", () => {
     expect(getConfirmedCount([activeSchedule, inactiveSchedule], new Date(2026, 4, 9), { "2026-05-09": ["schedule-1"] })).toBe(1);
+  });
+
+  it("keeps confirmation disabled before the first dose in the app timezone", () => {
+    const schedule = { ...activeSchedule, times: ["12:00", "18:00"] };
+    const beforeNoonWib = new Date("2026-05-09T04:59:00.000Z");
+
+    const doseWindow = getScheduleDoseWindow(schedule, new Date(2026, 4, 9), {}, beforeNoonWib);
+
+    expect(doseWindow).toMatchObject({
+      doseIndex: 0,
+      canConfirm: false,
+      isBeforeFirstDose: true,
+      nextDoseTime: "12:00",
+    });
+  });
+
+  it("enables confirmation only for the current due dose", () => {
+    const schedule = { ...activeSchedule, times: ["12:00", "18:00"] };
+    const noonWib = new Date("2026-05-09T05:00:00.000Z");
+
+    const doseWindow = getScheduleDoseWindow(schedule, new Date(2026, 4, 9), {}, noonWib);
+
+    expect(doseWindow).toMatchObject({
+      doseIndex: 0,
+      canConfirm: true,
+      isBeforeFirstDose: false,
+    });
   });
 });

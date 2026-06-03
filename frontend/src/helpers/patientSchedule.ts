@@ -1,4 +1,5 @@
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
+import { getAppScheduledDateTime } from "@/lib/appTimezone";
 
 export type PatientScheduleDayStatus = "empty" | "done" | "active" | "missed" | "upcoming";
 
@@ -70,10 +71,7 @@ export type ScheduleDoseWindow = {
 };
 
 const getDoseDate = (date: Date, time: string) => {
-  const [hours, minutes] = time.split(":").map(Number);
-  const doseDate = new Date(date);
-  doseDate.setHours(Number.isFinite(hours) ? hours : 0, Number.isFinite(minutes) ? minutes : 0, 0, 0);
-  return doseDate;
+  return getAppScheduledDateTime(date, time);
 };
 
 export function getScheduleDoseWindow(schedule: MedicationScheduleRecord, date: Date, confirmedScheduleDates: Readonly<Record<string, readonly string[]>>, now = new Date()): ScheduleDoseWindow {

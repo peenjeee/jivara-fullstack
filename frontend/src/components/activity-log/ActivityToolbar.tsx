@@ -38,11 +38,12 @@ interface ActivityToolbarProps {
   readonly onQuickFilterChange: (value: ActivityQuickFilter) => void;
   readonly onCategoryChange: (value: ActivityCategory | "all") => void;
   readonly onNurseChange?: (value: string) => void;
+  readonly onNurseFilterOpen?: () => void;
   readonly onDateChange: (value: string) => void;
   readonly onReset: () => void;
 }
 
-export default function ActivityToolbar({ search, quickFilter, category, nurseId = "all", nurses = emptyNurses, showNurseFilter = true, showUnreadFilter = true, framed = true, date, hasActiveFilters, onSearchChange, onQuickFilterChange, onCategoryChange, onNurseChange, onDateChange, onReset }: ActivityToolbarProps) {
+export default function ActivityToolbar({ search, quickFilter, category, nurseId = "all", nurses = emptyNurses, showNurseFilter = true, showUnreadFilter = true, framed = true, date, hasActiveFilters, onSearchChange, onQuickFilterChange, onCategoryChange, onNurseChange, onNurseFilterOpen, onDateChange, onReset }: ActivityToolbarProps) {
   const gridClass = showNurseFilter ? "lg:grid-cols-[1fr_220px_220px_180px_auto]" : "lg:grid-cols-[1fr_220px_180px_auto]";
   const visibleQuickFilters = showUnreadFilter ? quickFilters : quickFilters.filter((filter) => filter.value !== "unread");
   const content = (
@@ -65,6 +66,7 @@ export default function ActivityToolbar({ search, quickFilter, category, nurseId
             options={[{ label: "Semua perawat", value: "all" }, ...nurses.map((nurse) => ({ label: nurse.fullName, value: nurse.id }))]}
             className={FORM_PILL_INPUT_CLASS}
             onChange={onNurseChange}
+            onOpen={onNurseFilterOpen}
           />
         )}
 

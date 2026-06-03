@@ -172,7 +172,7 @@ const buildScheduledOccurrences = (
 
       for (const time of getScheduleTimes(schedule.scheduledTimes, schedule.frequency)) {
         const scheduledTime = getOccurrenceDateTime(day, time);
-        if (!schedule.startDate && schedule.createdAt && scheduledTime < schedule.createdAt) continue;
+        if (schedule.createdAt && scheduledTime < schedule.createdAt) continue;
         if (scheduledTime > now) continue;
 
         const bucket = logsByScheduleDate.get(`${schedule.id}|${getDateKey(scheduledTime)}`);

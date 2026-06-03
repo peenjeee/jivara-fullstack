@@ -123,7 +123,6 @@ export function useScheduleManager({ initialPatientId = "", initialPatientName =
         hasLoadedSummaryRef.current = true;
         setHasLoadedSummary(true);
         setIsSummaryLoading(false);
-        const totalPagesForQuery = Math.max(1, Math.ceil(schedulePage.meta.total / pageSize));
         scheduleManagerViewCache = {
           schedules: schedulePage.schedules,
           patients: schedulePage.patients,
@@ -133,14 +132,6 @@ export function useScheduleManager({ initialPatientId = "", initialPatientName =
           activeFilter: nextFilter,
           currentPage: page,
         };
-        const adjacentPages = [page + 1, page - 1].filter((nextPage) => nextPage >= 1 && nextPage <= totalPagesForQuery);
-        void Promise.all(adjacentPages.map((nextPage) => getSchedulePatientGroupsPageFromApi({
-          page: nextPage,
-          limit: pageSize,
-          search: nextSearch,
-          status,
-          adherenceStatus,
-        }).catch(() => undefined)));
       }
     } catch {
       if (requestSeq === requestSeqRef.current && !hasLoadedSchedulesRef.current) {

@@ -20,6 +20,20 @@ export const getAppDateKey = (date: Date) => new Date(date.getTime() + APP_TIMEZ
 
 export const addAppDays = (date: Date, days: number) => new Date(date.getTime() + days * DAY_MS);
 
+const getSafeTimeParts = (time: string) => {
+  const [hours, minutes] = time.split(":").map(Number);
+  return {
+    hours: Number.isFinite(hours) ? hours : 0,
+    minutes: Number.isFinite(minutes) ? minutes : 0,
+  };
+};
+
+export const getAppDateTimeUtc = (dateKey: string, time = "00:00") => {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const { hours, minutes } = getSafeTimeParts(time);
+  return new Date(Date.UTC(year, month - 1, day, hours, minutes, 0, 0) - APP_TIMEZONE_OFFSET_MS);
+};
+
 export const getAppDateStartUtc = (value: unknown) => {
   const dateString = getDateString(value);
   if (!dateString) return null;

@@ -18,7 +18,7 @@ import DashboardBottomNav from "./DashboardBottomNav";
 import DashboardNavbar from "./DashboardNavbar";
 import DashboardRouteFallback from "./DashboardRouteFallback";
 import { getFallbackPathForRole, isPathAllowedForRole } from "./access";
-import { getDashboardBottomNavItems, getDashboardNavItems, getDashboardRole } from "./navigation";
+import { getDashboardRole } from "./navigation";
 
 interface DashboardLayoutProps {
   readonly children: ReactNode;
@@ -26,6 +26,7 @@ interface DashboardLayoutProps {
 
 const MAX_LOADING_SECONDS = 8;
 const USER_STATUS_SYNC_INTERVAL_MS = 60_000;
+const INITIAL_USER_STATUS_SYNC_DELAY_MS = 30_000;
 const USER_STATUS_RATE_LIMIT_BACKOFF_MS = 5 * 60_000;
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
@@ -40,7 +41,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const isRestoringSessionRef = useRef(false);
   const isStandalonePwa = useIsStandalonePwa();
   const pathname = usePathname();
-  const { prefetch, replace } = useRouter();
+  const { replace } = useRouter();
   const userRole = user?.role;
   const dashboardRole = getDashboardRole(userRole);
 
@@ -185,9 +186,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   useEffect(() => {
     if (!hasHydrated || !userRole || isNavigatingAwayRef.current) return;
 
-    if (userRole === "admin") {
+    const initialSyncTimerId = window.setTimeout(() => {
       void syncCurrentUser();
-    }
+    }, INITIAL_USER_STATUS_SYNC_DELAY_MS);
 
     const intervalId = window.setInterval(() => {
       void syncCurrentUser();
@@ -204,29 +205,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
+      window.clearTimeout(initialSyncTimerId);
       window.clearInterval(intervalId);
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [hasHydrated, syncCurrentUser, userRole]);
-
-  useEffect(() => {
-    if (!hasHydrated || !userRole || isLoggingOut || isNavigatingAwayRef.current) return;
-
-    const dashboardHrefs = new Set<string>([
-      getFallbackPathForRole(userRole),
-      ...getDashboardNavItems(dashboardRole).map((item) => item.href),
-      ...getDashboardBottomNavItems(dashboardRole).map((item) => item.href),
-    ]);
-
-    const timerId = window.setTimeout(() => {
-      dashboardHrefs.forEach((href) => {
-        if (href !== pathname) prefetch?.(href);
-      });
-    }, 250);
-
-    return () => window.clearTimeout(timerId);
-  }, [dashboardRole, hasHydrated, isLoggingOut, pathname, prefetch, userRole]);
 
   useEffect(() => {
     if (!hasHydrated || isLoggingOut || isNavigatingAwayRef.current) return;
