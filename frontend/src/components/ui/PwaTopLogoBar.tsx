@@ -25,7 +25,7 @@ export default function PwaTopLogoBar({ rightAction }: PwaTopLogoBarProps) {
           sizes="118px"
           preload
           fetchPriority="high"
-          className="h-[42px] w-[118px] object-contain"
+          className="h-[42px] w-[118px] object-cover"
         />
         {rightAction && (
           <m.div className="shrink-0" whileHover={{ y: -1 }} whileTap={{ scale: 0.96 }} transition={{ type: "spring", stiffness: 420, damping: 18 }}>

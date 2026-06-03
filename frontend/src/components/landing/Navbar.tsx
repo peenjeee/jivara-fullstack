@@ -78,7 +78,7 @@ export default function Navbar() {
                 sizes="118px"
                 preload
                 fetchPriority="high"
-                className="h-[42px] w-[118px] object-contain drop-shadow-2xl"
+                className="h-[42px] w-[118px] object-cover drop-shadow-2xl"
               />
           </Link>
 
@@ -166,7 +166,7 @@ export default function Navbar() {
                   width={132}
                   height={42}
                   sizes="118px"
-                  className="h-[42px] w-[118px] object-contain"
+                  className="h-[42px] w-[118px] object-cover"
                 />
               </div>
 

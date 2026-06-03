@@ -37,7 +37,7 @@ export default function DashboardSidebar({ activeItem, role, onLogout, onNavigat
             sizes="190px"
             preload
             fetchPriority="high"
-            className="-mt-[58px] h-[68px] w-[190px] object-contain"
+            className="-mt-[58px] h-[68px] w-[190px] object-cover"
           />
         </h1>
       </div>
