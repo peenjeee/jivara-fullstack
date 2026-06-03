@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { and, count, desc, eq, ilike, inArray, or } from "drizzle-orm";
+import { and, count, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { medicationSchedules, nurses, organizations, patientNurseAssignments, patients, userNotificationPreferences, users } from "../db/schema";
 import { AUTH_CONSTANTS } from "../types/auth.types";
@@ -113,6 +113,51 @@ const getNurseByIdInternal = async (nurseId: string, user?: AccessUser) => {
   return rows[0];
 };
 
+const getNursePatientCounts = async (nurseIds: readonly string[], organizationId?: string | null) => {
+  if (nurseIds.length === 0) return new Map<string, { assignedPatients: number; handledPatients: number }>();
+
+  const countConditions = [
+    eq(patientNurseAssignments.isActive, true),
+    inArray(patientNurseAssignments.nurseId, [...nurseIds]),
+  ];
+  if (organizationId) countConditions.push(eq(patients.organizationId, organizationId));
+
+  const patientState = db
+    .select({
+      nurseId: patientNurseAssignments.nurseId,
+      patientId: patientNurseAssignments.patientId,
+      patientIsActive: patients.isActive,
+      scheduleCount: sql<number>`count(${medicationSchedules.id})::int`.as("schedule_count"),
+      completedScheduleCount: sql<number>`count(${medicationSchedules.id}) filter (where ${medicationSchedules.isActive} = false or coalesce(${medicationSchedules.stock}, 0) <= 0)::int`.as("completed_schedule_count"),
+    })
+    .from(patientNurseAssignments)
+    .innerJoin(patients, eq(patientNurseAssignments.patientId, patients.id))
+    .leftJoin(medicationSchedules, eq(medicationSchedules.patientId, patientNurseAssignments.patientId))
+    .where(and(...countConditions))
+    .groupBy(patientNurseAssignments.nurseId, patientNurseAssignments.patientId, patients.isActive)
+    .as("patient_state");
+
+  const countRows = await db
+    .select({
+      nurseId: patientState.nurseId,
+      assignedPatients: sql<number>`count(*)::int`,
+      handledPatients: sql<number>`count(*) filter (
+        where ${patientState.patientIsActive} is not false
+        and not (${patientState.scheduleCount} > 0 and ${patientState.completedScheduleCount} = ${patientState.scheduleCount})
+      )::int`,
+    })
+    .from(patientState)
+    .groupBy(patientState.nurseId);
+
+  return new Map(countRows.map((row) => [
+    row.nurseId,
+    {
+      assignedPatients: Number(row.assignedPatients) || 0,
+      handledPatients: Number(row.handledPatients) || 0,
+    },
+  ]));
+};
+
 export const listNurses = async (query: NurseListQuery, user?: AccessUser): Promise<NurseListResult> => {
   const cacheKey = getNurseListCacheKey(query, user);
   const cached = getCached<NurseListResult>(cacheKey);
@@ -179,66 +224,15 @@ export const listNurses = async (query: NurseListQuery, user?: AccessUser): Prom
       .where(where),
   ]);
 
-  const assignmentConditions = [
-    eq(patientNurseAssignments.isActive, true),
-    or(...rows.map((row) => eq(patientNurseAssignments.nurseId, row.id))),
-  ];
-  if (organizationId) assignmentConditions.push(eq(patients.organizationId, organizationId));
-
-  const assignments = rows.length > 0
-    ? await db
-      .select({ nurseId: patientNurseAssignments.nurseId, patientId: patientNurseAssignments.patientId })
-      .from(patientNurseAssignments)
-      .innerJoin(patients, eq(patientNurseAssignments.patientId, patients.id))
-      .where(and(...assignmentConditions))
-    : [];
-
-  const assignmentMap = new Map<string, Set<string>>();
-  const assignedPatientIds = [...new Set(assignments.map((assignment) => assignment.patientId))];
-  const patientStateRows = assignedPatientIds.length > 0
-    ? await db
-      .select({ id: patients.id, isActive: patients.isActive })
-      .from(patients)
-      .where(inArray(patients.id, assignedPatientIds))
-    : [];
-  const medicationStateRows = assignedPatientIds.length > 0
-    ? await db
-      .select({
-        patientId: medicationSchedules.patientId,
-        stock: medicationSchedules.stock,
-        isActive: medicationSchedules.isActive,
-      })
-      .from(medicationSchedules)
-      .where(inArray(medicationSchedules.patientId, assignedPatientIds))
-    : [];
-  const patientActiveById = new Map(patientStateRows.map((patient) => [patient.id, patient.isActive !== false]));
-  const schedulesByPatientId = new Map<string, Array<{ stock: number | null; isActive: boolean | null }>>();
-  for (const schedule of medicationStateRows) {
-    const schedules = schedulesByPatientId.get(schedule.patientId) ?? [];
-    schedules.push({ stock: schedule.stock, isActive: schedule.isActive });
-    schedulesByPatientId.set(schedule.patientId, schedules);
-  }
-  const isHandledPatient = (patientId: string) => {
-    if (patientActiveById.get(patientId) === false) return false;
-    const schedules = schedulesByPatientId.get(patientId) ?? [];
-    const isMedicationComplete = schedules.length > 0
-      && schedules.every((schedule) => schedule.isActive === false || (schedule.stock ?? 0) <= 0);
-    return !isMedicationComplete;
-  };
-
-  assignments.forEach((assignment) => {
-    const patientIds = assignmentMap.get(assignment.nurseId) ?? new Set<string>();
-    patientIds.add(assignment.patientId);
-    assignmentMap.set(assignment.nurseId, patientIds);
-  });
+  const patientCountsByNurseId = await getNursePatientCounts(rows.map((row) => row.id), organizationId);
 
   const result = {
     data: rows.map((row) => {
-      const assignedPatientSet = assignmentMap.get(row.id) ?? new Set<string>();
+      const patientCounts = patientCountsByNurseId.get(row.id);
       return {
         ...row,
-        assignedPatients: assignedPatientSet.size,
-        handledPatients: [...assignedPatientSet].filter(isHandledPatient).length,
+        assignedPatients: patientCounts?.assignedPatients ?? 0,
+        handledPatients: patientCounts?.handledPatients ?? 0,
       };
     }),
     meta: { page, limit, total: totalRows[0]?.total || 0 },
@@ -255,45 +249,9 @@ export const getNurseById = async (nurseId: string, user?: AccessUser): Promise<
 
   const nurse = await getNurseByIdInternal(nurseId, user);
   const organizationId = user?.role === "admin" ? await getOrganizationIdForUser(user.id) : null;
-  const assignmentConditions = [
-    eq(patientNurseAssignments.nurseId, nurseId),
-    eq(patientNurseAssignments.isActive, true),
-  ];
-  if (organizationId) assignmentConditions.push(eq(patients.organizationId, organizationId));
+  const patientCounts = (await getNursePatientCounts([nurseId], organizationId)).get(nurseId);
 
-  const assignedRows = await db
-    .select({ patientId: patientNurseAssignments.patientId, patientIsActive: patients.isActive })
-    .from(patientNurseAssignments)
-    .innerJoin(patients, eq(patientNurseAssignments.patientId, patients.id))
-    .where(and(...assignmentConditions));
-
-  const assignedPatientIds = [...new Set(assignedRows.map((row) => row.patientId))];
-  const medicationStateRows = assignedPatientIds.length > 0
-    ? await db
-      .select({
-        patientId: medicationSchedules.patientId,
-        stock: medicationSchedules.stock,
-        isActive: medicationSchedules.isActive,
-      })
-      .from(medicationSchedules)
-      .where(inArray(medicationSchedules.patientId, assignedPatientIds))
-    : [];
-  const schedulesByPatientId = new Map<string, Array<{ stock: number | null; isActive: boolean | null }>>();
-  for (const schedule of medicationStateRows) {
-    const schedules = schedulesByPatientId.get(schedule.patientId) ?? [];
-    schedules.push({ stock: schedule.stock, isActive: schedule.isActive });
-    schedulesByPatientId.set(schedule.patientId, schedules);
-  }
-  const patientActiveById = new Map(assignedRows.map((row) => [row.patientId, row.patientIsActive !== false]));
-  const handledPatients = assignedPatientIds.filter((patientId) => {
-    if (patientActiveById.get(patientId) === false) return false;
-    const schedules = schedulesByPatientId.get(patientId) ?? [];
-    const isMedicationComplete = schedules.length > 0
-      && schedules.every((schedule) => schedule.isActive === false || (schedule.stock ?? 0) <= 0);
-    return !isMedicationComplete;
-  }).length;
-
-  const result = { ...nurse, assignedPatients: assignedPatientIds.length, handledPatients };
+  const result = { ...nurse, assignedPatients: patientCounts?.assignedPatients ?? 0, handledPatients: patientCounts?.handledPatients ?? 0 };
   setCached(cacheKey, result, NURSE_CACHE_TTL_MS);
   return result;
 };

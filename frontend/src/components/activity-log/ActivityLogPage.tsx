@@ -7,7 +7,7 @@ import { AlertTriangle, Bell, CheckCheck, ClipboardList, type LucideIcon } from 
 import DashboardPageHeader from "@/components/dashboard/DashboardPageHeader";
 import DashboardPageShell from "@/components/dashboard/DashboardPageShell";
 import Button from "@/components/ui/Button";
-import { ActivityDataSkeleton, SummaryCardsSkeleton, ToolbarSkeleton } from "@/components/ui/PageSkeletons";
+import { ActivityDataSkeleton, ActivityToolbarSkeleton, SummaryCardsSkeleton } from "@/components/ui/PageSkeletons";
 import RefreshingNotice from "@/components/ui/RefreshingNotice";
 import SummaryCardGrid from "@/components/ui/SummaryCardGrid";
 import { FoodScanDetailModal } from "@/components/food-scan";
@@ -700,7 +700,7 @@ export default function ActivityLogPage(props: ActivityLogPageProps) {
       <ActivityLogSummarySection isLoading={controller.state.isSummaryLoading} hasLoaded={controller.state.hasLoadedSummary} summaryStats={controller.summaryStats} />
 
       <m.div className="mt-6" {...getDashboardEntranceMotion(shouldAnimate, 0.32, 20)}>
-        {controller.state.isLoading && !controller.state.hasLoadedActivities ? <ToolbarSkeleton /> : (
+        {controller.state.isLoading && !controller.state.hasLoadedActivities ? <ActivityToolbarSkeleton /> : (
           <ActivityToolbar
             search={controller.state.search}
             quickFilter={controller.effectiveQuickFilter}

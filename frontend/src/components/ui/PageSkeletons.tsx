@@ -19,8 +19,12 @@ export function SummaryCardsSkeleton({ count = 3 }: { readonly count?: number })
   );
 }
 
-export function ToolbarSkeleton() {
-  return <div className="h-24 animate-pulse rounded-[28px] bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)]" />;
+export function ToolbarSkeleton({ className = "" }: { readonly className?: string } = {}) {
+  return <div className={`h-24 animate-pulse rounded-[28px] bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)] ${className}`} />;
+}
+
+export function ActivityToolbarSkeleton() {
+  return <ToolbarSkeleton className="h-[356px] sm:h-[244px] lg:h-[132px]" />;
 }
 
 export function TableDataSkeleton({ rows = 10 }: { readonly rows?: number }) {
