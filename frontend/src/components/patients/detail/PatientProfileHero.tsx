@@ -42,7 +42,7 @@ export default function PatientProfileHero({ patient }: PatientProfileHeroProps)
             </div>
           </div>
 
-          <Link href={scheduleHref} className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 text-[13px] font-bold uppercase leading-none tracking-[0.1em] !text-white transition-colors hover:bg-primary-hover">
+          <Link href={scheduleHref} prefetch={false} className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 text-[13px] font-bold uppercase leading-none tracking-[0.1em] !text-white transition-colors hover:bg-primary-hover">
             <CalendarClock size={16} aria-hidden="true" focusable="false" /> Lihat Jadwal
           </Link>
         </div>

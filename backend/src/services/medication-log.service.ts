@@ -11,7 +11,7 @@ import { deleteCachedByPrefix, getCached, invalidateAdherenceCache, invalidateDa
 import { writeAuditLogAsync } from "./audit-log.service";
 import { invalidatePatientCache } from "./patient.service";
 import { invalidateMedicationScheduleCache } from "./medication-schedule.service";
-import { getAppDateRangeFromQuery } from "../utils/app-timezone";
+import { getAppDateKey, getAppDateRangeFromQuery, getAppDateRangeUtc, getAppDateTimeUtc } from "../utils/app-timezone";
 
 const MED_LOG_CACHE_TTL_MS = Number(process.env.MED_LOG_CACHE_TTL_MS || 15_000);
 const MED_LOG_CACHE_PREFIX = "med-log:";
@@ -75,26 +75,59 @@ const getScheduleTimes = (schedule: typeof medicationSchedules.$inferSelect) => 
   ? schedule.scheduledTimes.filter((time): time is string => typeof time === "string")
   : [];
 
-const getDoseDate = (date: Date, time: string) => {
+const getClockDateKey = (date: Date) => date.toISOString().slice(0, 10);
+
+const getClockDoseDate = (dateKey: string, time: string) => {
   const [hours, minutes] = time.split(":").map(Number);
-  const doseDate = new Date(date);
-  doseDate.setHours(Number.isFinite(hours) ? hours : 0, Number.isFinite(minutes) ? minutes : 0, 0, 0);
-  return doseDate;
+  return new Date(Date.UTC(
+    Number(dateKey.slice(0, 4)),
+    Number(dateKey.slice(5, 7)) - 1,
+    Number(dateKey.slice(8, 10)),
+    Number.isFinite(hours) ? hours : 0,
+    Number.isFinite(minutes) ? minutes : 0,
+    0,
+    0,
+  ));
 };
 
-const getDoseScheduleForDate = (schedule: typeof medicationSchedules.$inferSelect, date: Date) => getScheduleTimes(schedule)
-  .map((time) => getDoseDate(date, time))
+const getDoseScheduleForDateKey = (schedule: typeof medicationSchedules.$inferSelect, dateKey: string) => getScheduleTimes(schedule)
+  .map((time) => getAppDateTimeUtc(dateKey, time))
+  .sort((first, second) => first.getTime() - second.getTime());
+
+const getDoseScheduleForDate = (schedule: typeof medicationSchedules.$inferSelect, date: Date) => getDoseScheduleForDateKey(schedule, getAppDateKey(date));
+
+const getClockDoseScheduleForDate = (schedule: typeof medicationSchedules.$inferSelect, date: Date) => getScheduleTimes(schedule)
+  .map((time) => getClockDoseDate(getClockDateKey(date), time))
   .sort((first, second) => first.getTime() - second.getTime());
 
 const getDayBounds = (date: Date) => {
-  const start = new Date(date);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
+  const range = getAppDateRangeUtc(getAppDateKey(date));
+  if (range) return range;
+
+  const start = getAppDateTimeUtc(getAppDateKey(date), "00:00");
+  const end = new Date(start.getTime() + 86_400_000);
   return { start, end };
 };
 
 const findDoseIndex = (doseDates: readonly Date[], scheduledTime: Date) => doseDates.findIndex((doseDate) => doseDate.getTime() === scheduledTime.getTime());
+
+const resolveScheduledDose = (schedule: typeof medicationSchedules.$inferSelect, scheduledTime: Date) => {
+  const doseDates = getDoseScheduleForDate(schedule, scheduledTime);
+  const doseIndex = findDoseIndex(doseDates, scheduledTime);
+
+  if (doseIndex >= 0) return { scheduledTime, doseDates, doseIndex };
+
+  const clockDoseDates = getClockDoseScheduleForDate(schedule, scheduledTime);
+  const clockDoseIndex = findDoseIndex(clockDoseDates, scheduledTime);
+  if (clockDoseIndex < 0) return { scheduledTime, doseDates, doseIndex };
+
+  const normalizedDoseDates = getDoseScheduleForDateKey(schedule, getClockDateKey(scheduledTime));
+  return {
+    scheduledTime: normalizedDoseDates[clockDoseIndex] || scheduledTime,
+    doseDates: normalizedDoseDates,
+    doseIndex: clockDoseIndex,
+  };
+};
 
 const assertConfirmationWindow = (doseDates: readonly Date[], doseIndex: number, now = new Date()) => {
   const startsAt = doseDates[doseIndex];
@@ -149,7 +182,7 @@ export const createMedicationLog = async (dto: MedicationLogCreateDTO, user?: Ac
     throw { status: 400, message: "Reminder tidak sesuai dengan jadwal obat", code: "REMINDER_SCHEDULE_MISMATCH" };
   }
 
-  const scheduledTime = dto.scheduledTime
+  let scheduledTime = dto.scheduledTime
     ? new Date(dto.scheduledTime)
     : reminderJob
       ? reminderJob.scheduledTime
@@ -170,8 +203,9 @@ export const createMedicationLog = async (dto: MedicationLogCreateDTO, user?: Ac
       throw { status: 400, message: "Stok obat habis", code: "MEDICATION_OUT_OF_STOCK" };
     }
 
-    const doseDates = getDoseScheduleForDate(schedule, scheduledTime);
-    const doseIndex = findDoseIndex(doseDates, scheduledTime);
+    const resolvedDose = resolveScheduledDose(schedule, scheduledTime);
+    scheduledTime = resolvedDose.scheduledTime;
+    const { doseDates, doseIndex } = resolvedDose;
     if (doseIndex < 0) {
       throw { status: 400, message: "Waktu konfirmasi tidak sesuai jadwal obat", code: "INVALID_DOSE_TIME" };
     }

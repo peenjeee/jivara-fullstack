@@ -88,7 +88,6 @@ export function usePatientList(onViewPatient: (patientId: string) => void, optio
       if (requestSeq === requestSeqRef.current) {
         setPatientRecords(result.patients);
         setTotalPatients(result.meta.total);
-        const totalPagesForQuery = Math.max(1, Math.ceil(result.meta.total / pageSize));
         patientListViewCache = {
           patientRecords: result.patients,
           totalPatients: result.meta.total,
@@ -96,14 +95,6 @@ export function usePatientList(onViewPatient: (patientId: string) => void, optio
           activeFilter: nextFilter,
           currentPage: page,
         };
-        const adjacentPages = [page + 1, page - 1].filter((nextPage) => nextPage >= 1 && nextPage <= totalPagesForQuery);
-        void Promise.all(adjacentPages.map((nextPage) => getPatientPageFromApi({
-          page: nextPage,
-          limit: pageSize,
-          status,
-          search: nextSearch,
-          adherenceStatus,
-        }).catch(() => undefined)));
       }
     } catch {
       if (requestSeq === requestSeqRef.current && !hasLoadedPatientsRef.current) {

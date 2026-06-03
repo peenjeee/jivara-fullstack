@@ -24,7 +24,7 @@ export default function PatientFoodScanPanel({ scans, patientName }: PatientFood
     <PatientDetailSection
       title="Scan Makanan"
       action={(
-        <Link href={scanLogHref} className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-extrabold text-text-main transition-colors hover:bg-surface">
+        <Link href={scanLogHref} prefetch={false} className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-extrabold text-text-main transition-colors hover:bg-surface">
           Lihat Semua <ArrowRight size={15} />
         </Link>
       )}

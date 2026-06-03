@@ -234,7 +234,7 @@ describe("patientDashboardApi", () => {
     expect(mockedPost).toHaveBeenCalledWith("/medication-logs", expect.objectContaining({
       scheduleId: "schedule-1",
       status: "confirmed",
-      scheduledTime: expect.stringContaining("2026-05-09T"),
+      scheduledTime: "2026-05-09T01:30:00.000Z",
       confirmedAt: expect.any(String),
     }));
   });

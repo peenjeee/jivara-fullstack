@@ -150,7 +150,7 @@ export default function AdminDashboardPage() {
         <div className="mt-6 grid items-start gap-6 xl:grid-cols-3">
           <AdminPanel title="Perawat Perlu Tindak Lanjut" href="/nurses">
           {nurseFollowUps.map(({ nurse, assignedPatientCount, riskyPatientCount }) => (
-            <Link key={`dashboard-nurse-${nurse.id}`} href={`/nurses/${encodeURIComponent(nurse.id)}`} className="flex items-center justify-between gap-4 rounded-2xl bg-surface px-4 py-3 transition-colors hover:bg-primary/5">
+            <Link key={`dashboard-nurse-${nurse.id}`} href={`/nurses/${encodeURIComponent(nurse.id)}`} prefetch={false} className="flex items-center justify-between gap-4 rounded-2xl bg-surface px-4 py-3 transition-colors hover:bg-primary/5">
               <div className="min-w-0">
                 <p className="truncate text-sm font-extrabold text-text-main">{nurse.fullName}</p>
                 <p className="text-xs font-bold text-muted">{getNurseFollowUpMessage(nurse.status, assignedPatientCount, riskyPatientCount)}</p>
@@ -163,7 +163,7 @@ export default function AdminDashboardPage() {
 
         <AdminPanel title="Pasien Perlu Tindak Lanjut" href="/patients">
           {riskyPatients.map((patient, index) => (
-            <Link key={`dashboard-patient-${patient.id}-${index}`} href={`/patients/${encodeURIComponent(patient.id)}`} className="block rounded-2xl bg-surface px-4 py-3 transition-colors hover:bg-primary/5">
+            <Link key={`dashboard-patient-${patient.id}-${index}`} href={`/patients/${encodeURIComponent(patient.id)}`} prefetch={false} className="block rounded-2xl bg-surface px-4 py-3 transition-colors hover:bg-primary/5">
               <p className="truncate text-sm font-extrabold text-text-main">{patient.name}</p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <PatientStatusBadge status={patient.status} />
@@ -199,7 +199,7 @@ function AdminPanel({ title, href, children }: { readonly title: string; readonl
     <m.section className="rounded-[32px] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)]" {...getDashboardEntranceMotion(shouldAnimate, 0.28, 22)}>
       <div className="mb-4 flex items-center justify-between gap-4">
         <h2 className="font-display text-xl font-extrabold tracking-[-0.04em] text-text-main">{title}</h2>
-        <Link href={href} className="text-xs font-extrabold uppercase tracking-[0.1em] text-text-main transition-colors hover:!text-primary focus-visible:!text-primary">Lihat</Link>
+        <Link href={href} prefetch={false} className="text-xs font-extrabold uppercase tracking-[0.1em] text-text-main transition-colors hover:!text-primary focus-visible:!text-primary">Lihat</Link>
       </div>
       <div className="space-y-3">{children}</div>
     </m.section>

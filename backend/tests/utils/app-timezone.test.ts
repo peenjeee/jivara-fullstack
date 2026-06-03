@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addAppDays, getAppDateKey, getAppDateRangeFromQuery, getAppDateRangeUtc, getAppDateStartUtc } from "../../src/utils/app-timezone";
+import { addAppDays, getAppDateKey, getAppDateRangeFromQuery, getAppDateRangeUtc, getAppDateStartUtc, getAppDateTimeUtc } from "../../src/utils/app-timezone";
 
 describe("app timezone date helpers", () => {
   it("converts an app date start to the matching UTC instant for Jakarta", () => {
@@ -8,6 +8,10 @@ describe("app timezone date helpers", () => {
 
   it("formats UTC instants as Jakarta date keys", () => {
     expect(getAppDateKey(new Date("2026-05-31T18:00:00.000Z"))).toBe("2026-06-01");
+  });
+
+  it("converts an app date and medication time to the matching UTC instant", () => {
+    expect(getAppDateTimeUtc("2026-06-03", "12:00").toISOString()).toBe("2026-06-03T05:00:00.000Z");
   });
 
   it("builds an exclusive range for whole app dates", () => {

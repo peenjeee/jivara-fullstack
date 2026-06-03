@@ -295,16 +295,6 @@ export function useNurseDetailPageController(nurseId: string) {
         const nextTotalAssignedPatientCount = canUsePageAsSummary ? response.patients.filter(isPatientStillHandled).length : undefined;
         dispatch({ type: "patients_loaded", patients: response.patients, totalPatientResults: response.meta.total, patientPage: page, summaryPatients: nextSummaryPatients, totalAssignedPatientCount: nextTotalAssignedPatientCount });
         updateNurseDetailViewCache(nurseId, { assignedPatients: response.patients, ...(nextSummaryPatients ? { summaryPatients: nextSummaryPatients } : {}), ...(nextTotalAssignedPatientCount !== undefined ? { totalAssignedPatientCount: nextTotalAssignedPatientCount } : {}), totalPatientResults: response.meta.total, patientSearch: state.patientSearch, patientFilter: state.patientFilter, patientPage: page });
-        const totalPagesForQuery = Math.max(1, Math.ceil(response.meta.total / patientPageSize));
-        const adjacentPages = [page + 1, page - 1].filter((nextPage) => nextPage >= 1 && nextPage <= totalPagesForQuery);
-        void Promise.all(adjacentPages.map((nextPage) => getPatientPageFromApi({
-          page: nextPage,
-          limit: patientPageSize,
-          status: patientStatus,
-          nurseId,
-          search: debouncedPatientSearch,
-          adherenceStatus,
-        }).catch(() => undefined)));
       }
     } catch {
       if (requestSeq === patientRequestSeqRef.current) dispatch({ type: "patients_failed" });
@@ -364,9 +354,6 @@ export function useNurseDetailPageController(nurseId: string) {
           const nextTotalActivities = auditResponse.meta.total;
           dispatch({ type: "activities_loaded", activities: hydratedActivities, totalActivities: nextTotalActivities, activityPage: 1 });
           updateNurseDetailViewCache(nurseId, { activities: hydratedActivities, totalActivities: nextTotalActivities, activityPage: 1, activitySearch: state.activitySearch, activityQuickFilter: state.activityQuickFilter, activityCategory: state.activityCategory, activityDate: state.activityDate });
-          if (loadBatchSize < nextTotalActivities) {
-            void getAuditActivityPageFromApi({ page: 2, limit: loadBatchSize, category: state.activityCategory, date: state.activityDate, nurseId, severity: getAuditSeverityFilter(state.activityQuickFilter), search: debouncedActivitySearch }).catch(() => undefined);
-          }
         }
       }
     } catch {
@@ -485,9 +472,6 @@ export function useNurseDetailPageController(nurseId: string) {
           const nextTotalActivities = auditResponse.meta.total;
           dispatch({ type: "activities_appended", activities: hydratedActivities, totalActivities: nextTotalActivities, activityPage: nextPage });
           updateNurseDetailViewCache(nurseId, { activities: hydratedActivities, totalActivities: nextTotalActivities, activityPage: nextPage });
-          if (nextPage * loadBatchSize < nextTotalActivities) {
-            void getAuditActivityPageFromApi({ page: nextPage + 1, limit: loadBatchSize, category: state.activityCategory, date: state.activityDate, nurseId, severity: getAuditSeverityFilter(state.activityQuickFilter), search: debouncedActivitySearch }).catch(() => undefined);
-          }
         }
       }
     } catch {

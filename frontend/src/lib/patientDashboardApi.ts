@@ -4,7 +4,7 @@ import type { ActivityLogRecord } from "@/lib/mocks/activityLogs";
 import type { PatientRecord } from "@/lib/mocks/patients";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
 import { normalizeAdherenceForVisibleSchedules } from "@/helpers/patientSchedule";
-import { getApiDateKey } from "@/lib/appTimezone";
+import { getApiDateKey, getAppScheduledDateTime } from "@/lib/appTimezone";
 import { notifyDashboardDataChanged } from "@/lib/cacheEvents";
 import { getFoodScansPageFromApi } from "@/lib/foodScanApi";
 import { clearPatientsCache, getCachedCurrentPatientFromApi, getCurrentPatientFromApi } from "@/lib/patientApi";
@@ -493,13 +493,8 @@ export const getPatientActivitiesFromApi = async (monthDate = new Date()): Promi
 };
 
 export const confirmMedicationScheduleViaApi = async (schedule: MedicationScheduleRecord, selectedDate: Date, doseIndex = 0) => {
-  const scheduledTime = new Date(selectedDate);
   const selectedTime = schedule.times[doseIndex] ?? schedule.times[0];
-
-  if (selectedTime) {
-    const [hours, minutes] = selectedTime.split(":").map(Number);
-    scheduledTime.setHours(Number.isFinite(hours) ? hours : 0, Number.isFinite(minutes) ? minutes : 0, 0, 0);
-  }
+  const scheduledTime = getAppScheduledDateTime(selectedDate, selectedTime);
 
   await api.post("/medication-logs", {
     scheduleId: schedule.id,

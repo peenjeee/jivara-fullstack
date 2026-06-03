@@ -24,14 +24,14 @@ export default function ActivityFeed({ activities, visibleCount, onLoadMore, onM
 
   if (activities.length === 0) {
     return (
-      <section className="rounded-3xl bg-white px-5 py-16 text-center shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
+      <section className="grid min-h-[620px] place-items-center rounded-3xl bg-white px-5 py-16 text-center shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
         <p className="text-sm font-bold text-muted">Tidak ada data aktivitas.</p>
       </section>
     );
   }
 
   return (
-    <section className="space-y-7">
+    <section className="min-h-[620px] space-y-7">
       {groups.map((group) => (
         <div key={group.dateKey} className="relative">
           <div className="mb-3 flex items-center gap-3">

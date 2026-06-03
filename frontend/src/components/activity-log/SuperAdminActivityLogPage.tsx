@@ -199,15 +199,6 @@ export default function SuperAdminActivityLogPage() {
           totalProcessedTodayCount: shouldRefreshSummary ? (response.meta.summary?.processedToday ?? 0) : (superAdminLogViewCache?.totalProcessedTodayCount ?? currentState.totalProcessedTodayCount),
           cachedUserId: currentUserId ?? null,
         };
-        if (page * pageSize < response.meta.total) {
-          void getSuperAdminApprovalActivityPageFromApi({
-            page: page + 1,
-            limit: pageSize,
-            status: currentState.filter === "all" ? undefined : currentState.filter,
-            date: currentState.date,
-            search: debouncedSearch,
-          }).catch(() => undefined);
-        }
       }
     } catch {
       if (latestRequestKeyRef.current === pageKey && page === 1) {
