@@ -8,18 +8,18 @@ interface JivaraWordmarkProps {
   readonly className?: string;
 }
 
-const wordmarkSizeClasses: Record<JivaraWordmarkSize, { readonly frame: string; readonly image: string; readonly imageSize: number; readonly sizes: string }> = {
+const wordmarkSizeClasses: Record<JivaraWordmarkSize, { readonly frame: string; readonly width: number; readonly height: number; readonly sizes: string }> = {
   compact: {
-    frame: "h-[50px] w-[132px]",
-    image: "-left-[15px] -top-[56px] h-[162px] w-[162px]",
-    imageSize: 162,
-    sizes: "132px",
+    frame: "h-[56px] w-[148px]",
+    width: 148,
+    height: 56,
+    sizes: "148px",
   },
   sidebar: {
-    frame: "h-[68px] w-[172px]",
-    image: "-left-[24px] -top-[76px] h-[220px] w-[220px]",
-    imageSize: 220,
-    sizes: "172px",
+    frame: "h-[76px] w-[196px]",
+    width: 196,
+    height: 76,
+    sizes: "196px",
   },
 };
 
@@ -31,12 +31,12 @@ export default function JivaraWordmark({ size = "compact", priority = false, cla
       <Image
         src="/images/logo/notext.png"
         alt="Jivara"
-        width={logoSize.imageSize}
-        height={logoSize.imageSize}
+        width={logoSize.width}
+        height={logoSize.height}
         sizes={logoSize.sizes}
         preload={priority}
         fetchPriority={priority ? "high" : "auto"}
-        className={`absolute max-w-none object-contain ${logoSize.image}`}
+        className="h-full w-full object-cover object-center"
       />
     </span>
   );

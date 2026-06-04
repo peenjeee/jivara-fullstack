@@ -18,6 +18,7 @@ interface ModelViewerProps {
   shadowSoftness?: string;
   exposure?: string;
   environmentImage?: string;
+  loadOnInteractionOnly?: boolean;
   style?: React.CSSProperties;
 }
 
@@ -41,6 +42,7 @@ export default function ModelViewer({
   shadowSoftness = "0",
   exposure = "1",
   environmentImage = "neutral",
+  loadOnInteractionOnly = false,
   style,
 }: ModelViewerProps) {
   type ModelViewerState = { loaded: boolean; error: boolean };
@@ -57,7 +59,11 @@ export default function ModelViewer({
   const containerRef = useRef<HTMLDivElement>(null);
   const modelRef = useRef<HTMLElement | null>(null);
   const [state, dispatch] = useReducer(modelViewerReducer, { loaded: false, error: false });
-
+  const [loadRequestCount, requestModelLoad] = useReducer((count: number) => count + 1, loadOnInteractionOnly ? 0 : 1);
+  const shouldLoadModel = loadRequestCount > 0;
+  const handleRequestModelLoad = () => {
+    if (!shouldLoadModel) requestModelLoad();
+  };
   // Suppress Three.js texture blob rejection noise (non-fatal)
   useEffect(() => {
     const handler = (e: PromiseRejectionEvent) => {
@@ -70,6 +76,8 @@ export default function ModelViewer({
   }, []);
 
   useEffect(() => {
+    if (!shouldLoadModel) return;
+
     let cancelled = false;
     let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
     const idleWindow = window as IdleWindow;
@@ -164,23 +172,42 @@ export default function ModelViewer({
       cancelled = true;
       if (fallbackTimer) clearTimeout(fallbackTimer);
     };
-  }, [src, alt, poster, autoRotate, cameraControls, disableZoom, disablePan, cameraOrbit, fieldOfView, shadowIntensity, shadowSoftness, exposure, environmentImage]);
+  }, [shouldLoadModel, src, alt, poster, autoRotate, cameraControls, disableZoom, disablePan, cameraOrbit, fieldOfView, shadowIntensity, shadowSoftness, exposure, environmentImage]);
 
   if (state.error) return null;
+
+  const posterImage = poster && (
+    <Image
+      src={poster}
+      alt=""
+      aria-hidden="true"
+      fill
+      sizes="(min-width: 1024px) 460px, 70vw"
+      className={`pointer-events-none object-contain transition-opacity duration-500 ${state.loaded ? "opacity-0" : "opacity-100"}`}
+      preload
+      fetchPriority="high"
+    />
+  );
+
+  if (loadOnInteractionOnly && !shouldLoadModel) {
+    return (
+      <button
+        type="button"
+        className={`relative block overflow-hidden border-0 bg-transparent p-0 ${className}`}
+        style={style}
+        onPointerEnter={handleRequestModelLoad}
+        onClick={handleRequestModelLoad}
+        aria-label={alt}
+      >
+        {posterImage}
+      </button>
+    );
+  }
 
   return (
     <div ref={containerRef} className={`relative overflow-hidden ${className}`} style={style}>
       {poster && (
-        <Image
-          src={poster}
-          alt=""
-          aria-hidden="true"
-          fill
-          sizes="(min-width: 1024px) 460px, 70vw"
-          className={`pointer-events-none object-contain transition-opacity duration-500 ${state.loaded ? "opacity-0" : "opacity-100"}`}
-          preload
-          fetchPriority="high"
-        />
+        posterImage
       )}
     </div>
   );

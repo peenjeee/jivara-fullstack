@@ -95,11 +95,12 @@ describe("admin approvals feature", () => {
     expect(mockedGet).not.toHaveBeenCalled();
   });
 
-  it("shows an error when approvals cannot be loaded", async () => {
+  it("shows an inline error when approvals cannot be loaded initially", async () => {
     mockedGet.mockRejectedValueOnce(new Error("network"));
 
     render(<AdminApprovalsPage />);
 
-    await waitFor(() => expect(showError).toHaveBeenCalledWith("Gagal memuat daftar pengajuan admin."));
+    expect(await screen.findByText("Data persetujuan admin belum bisa dimuat.")).toBeInTheDocument();
+    expect(showError).not.toHaveBeenCalled();
   });
 });

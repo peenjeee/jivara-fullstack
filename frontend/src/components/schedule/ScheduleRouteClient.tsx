@@ -4,11 +4,12 @@ import { useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import DashboardRouteFallback from "@/components/dashboard/DashboardRouteFallback";
+import { useDashboardInitialUser } from "@/components/dashboard/DashboardInitialUserContext";
 import { getDashboardRole, isOperationalAdminRole } from "@/components/dashboard/navigation";
 import { useAuthStore } from "@/store/auth";
 
-const PatientSchedulePage = dynamic(() => import("./PatientSchedulePage"), { ssr: false, loading: () => null });
-const SchedulePage = dynamic(() => import("./SchedulePage"), { ssr: false, loading: () => null });
+const PatientSchedulePage = dynamic(() => import("./PatientSchedulePage"), { loading: () => <DashboardRouteFallback title="Jadwal Obat" /> });
+const SchedulePage = dynamic(() => import("./SchedulePage"), { loading: () => <DashboardRouteFallback title="Jadwal Obat" /> });
 
 interface ScheduleRouteClientProps {
   readonly initialPatientId?: string;
@@ -19,14 +20,16 @@ export default function ScheduleRouteClient({ initialPatientId, initialPatientNa
   const { replace } = useRouter();
   const user = useAuthStore((state) => state.user);
   const hasAuthHydrated = useAuthStore((state) => state.hasHydrated);
-  const dashboardRole = getDashboardRole(user?.role);
+  const initialUser = useDashboardInitialUser();
+  const isAuthReady = hasAuthHydrated || Boolean(initialUser);
+  const dashboardRole = getDashboardRole(user?.role ?? initialUser?.role);
 
   useEffect(() => {
-    if (!hasAuthHydrated || dashboardRole !== "super_admin") return;
+    if (!isAuthReady || dashboardRole !== "super_admin") return;
       replace("/dashboard");
-  }, [dashboardRole, hasAuthHydrated, replace]);
+  }, [dashboardRole, isAuthReady, replace]);
 
-  if (!hasAuthHydrated) return null;
+  if (!isAuthReady) return <DashboardRouteFallback title="Jadwal Obat" />;
   if (dashboardRole === "super_admin") return <DashboardRouteFallback title="Jadwal Obat" />;
 
   if (isOperationalAdminRole(dashboardRole)) return <SchedulePage initialPatientId={initialPatientId} initialPatientName={initialPatientName} />;

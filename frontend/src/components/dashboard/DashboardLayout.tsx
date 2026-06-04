@@ -14,6 +14,7 @@ import type { User } from "@/types/auth";
 import { useIsStandalonePwa } from "@/hooks";
 import { useActivityBadgeSync } from "@/hooks/useActivityBadgeSync";
 import PwaTopLogoBar from "@/components/ui/PwaTopLogoBar";
+import { DashboardInitialUserProvider } from "./DashboardInitialUserContext";
 import DashboardBottomNav from "./DashboardBottomNav";
 import DashboardNavbar from "./DashboardNavbar";
 import DashboardRouteFallback from "./DashboardRouteFallback";
@@ -31,6 +32,17 @@ const INITIAL_USER_STATUS_SYNC_DELAY_MS = 30_000;
 const USER_STATUS_RATE_LIMIT_BACKOFF_MS = 5 * 60_000;
 
 export default function DashboardLayout({ children, initialUser = null }: DashboardLayoutProps) {
+  const [initialUserSnapshot] = useState(() => {
+    if (!initialUser) return null;
+
+    const authState = useAuthStore.getState();
+    if (!authState.user) {
+      useAuthStore.setState({ user: initialUser, isAuthenticated: true, hasHydrated: true });
+    }
+
+    return initialUser;
+  });
+
   const { logout, user, hasHydrated, setAuth, setHasHydrated, updateUser } = useAuthStore();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isRedirectingToLogin, setIsRedirectingToLogin] = useState(false);
@@ -43,8 +55,8 @@ export default function DashboardLayout({ children, initialUser = null }: Dashbo
   const isStandalonePwa = useIsStandalonePwa();
   const pathname = usePathname();
   const { replace } = useRouter();
-  const effectiveUser = user ?? initialUser;
-  const isAuthReady = hasHydrated || Boolean(initialUser);
+  const effectiveUser = user ?? initialUserSnapshot;
+  const isAuthReady = hasHydrated || Boolean(initialUserSnapshot);
   const userRole = effectiveUser?.role;
   const dashboardRole = getDashboardRole(userRole);
 
@@ -129,12 +141,6 @@ export default function DashboardLayout({ children, initialUser = null }: Dashbo
 
   const restoreSessionRef = useRef(restoreSession);
   useEffect(() => { restoreSessionRef.current = restoreSession; }, [restoreSession]);
-
-  useEffect(() => {
-    if (!initialUser || user || isLoggingOut) return;
-    setAuth(initialUser);
-    setHasHydrated(true);
-  }, [initialUser, isLoggingOut, setAuth, setHasHydrated, user]);
 
   const syncCurrentUser = useCallback(async () => {
     if (!hasHydrated || isLoggingOut || isNavigatingAwayRef.current) return;
@@ -222,14 +228,18 @@ export default function DashboardLayout({ children, initialUser = null }: Dashbo
   }, [isAuthReady, syncCurrentUser, userRole]);
 
   useEffect(() => {
-    if (!isAuthReady || isLoggingOut || isNavigatingAwayRef.current) return;
+    const guardTimer = window.setTimeout(() => {
+      if (!isAuthReady || isLoggingOut || isNavigatingAwayRef.current) return;
 
-    if (!effectiveUser) {
-      void restoreSession();
-      return;
-    }
+      if (!effectiveUser) {
+        void restoreSession();
+        return;
+      }
 
-    if (!isCurrentRouteAllowed) replace(fallbackPath);
+      if (!isCurrentRouteAllowed) replace(fallbackPath);
+    }, 0);
+
+    return () => window.clearTimeout(guardTimer);
   }, [effectiveUser, fallbackPath, isAuthReady, isCurrentRouteAllowed, replace, isLoggingOut, restoreSession]);
 
   useEffect(() => {
@@ -300,21 +310,23 @@ export default function DashboardLayout({ children, initialUser = null }: Dashbo
   if (!isCurrentRouteAllowed) return <DashboardRouteFallback />;
 
   return (
-    <div className="flex min-h-screen flex-col bg-surface" onClickCapture={handleRouteClickCapture}>
-      <DashboardNavbar onLogout={handleLogout} />
-      {isStandalonePwa && (
-        <PwaTopLogoBar
-          rightAction={(
-            <button type="button" onClick={handleLogout} className="group inline-flex size-10 items-center justify-center rounded-full text-text-main transition-colors hover:!text-danger" aria-label="Keluar akun">
-              <LogOut size={19} className="transition-colors group-hover:!text-danger" />
-            </button>
-          )}
-        />
-      )}
-      <div className={`flex-1 ${isStandalonePwa ? "pt-[calc(76px+env(safe-area-inset-top))] pb-28 lg:pt-0 lg:pb-0" : ""}`}>{children}</div>
-      <SimpleFooter className={`lg:ml-[280px] ${isStandalonePwa ? "pt-12 pb-[calc(8.5rem+env(safe-area-inset-bottom))] lg:pt-8 lg:pb-8" : ""}`} />
-      {isStandalonePwa && <DashboardBottomNav />}
-      <ForcePasswordChangeModal />
-    </div>
+    <DashboardInitialUserProvider initialUser={initialUserSnapshot}>
+      <div className="flex min-h-screen flex-col bg-surface" onClickCapture={handleRouteClickCapture}>
+        <DashboardNavbar onLogout={handleLogout} initialUser={initialUserSnapshot} />
+        {isStandalonePwa && (
+          <PwaTopLogoBar
+            rightAction={(
+              <button type="button" onClick={handleLogout} className="group inline-flex size-10 items-center justify-center rounded-full text-text-main transition-colors hover:!text-danger" aria-label="Keluar akun">
+                <LogOut size={19} className="transition-colors group-hover:!text-danger" />
+              </button>
+            )}
+          />
+        )}
+        <div className={`flex-1 ${isStandalonePwa ? "pt-[calc(76px+env(safe-area-inset-top))] pb-28 lg:pt-0 lg:pb-0" : ""}`}>{children}</div>
+        <SimpleFooter className={`lg:ml-[280px] ${isStandalonePwa ? "pt-12 pb-[calc(8.5rem+env(safe-area-inset-bottom))] lg:pt-8 lg:pb-8" : ""}`} />
+        {isStandalonePwa && <DashboardBottomNav />}
+        <ForcePasswordChangeModal />
+      </div>
+    </DashboardInitialUserProvider>
   );
 }

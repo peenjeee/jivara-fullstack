@@ -218,6 +218,7 @@ export default function Hero() {
           shadowIntensity="0"
           exposure="0.6"
           environmentImage=""
+          loadOnInteractionOnly
           className="w-full h-full"
         />
       </m.div>
