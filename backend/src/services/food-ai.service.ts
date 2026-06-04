@@ -146,7 +146,7 @@ const getAiInferenceUrl = () => {
   if (process.env.FOOD_AI_INFERENCE_URL) return process.env.FOOD_AI_INFERENCE_URL;
   if (process.env.AI_INFERENCE_URL) return process.env.AI_INFERENCE_URL;
   if (process.env.FASTAPI_URL) return `${process.env.FASTAPI_URL.replace(/\/$/, "")}/food-scans/detections`;
-  return "https://jivara-ai-api-d948c083975b.herokuapp.com/detect";
+  return "https://food-detection.jivara.web.id";
 };
 
 const getReasoningApiBaseUrl = () => (process.env.FOOD_REASONING_API_URL || process.env.AI_REASONING_URL || "https://ai.jivara.web.id").replace(/\/+$/, "");
