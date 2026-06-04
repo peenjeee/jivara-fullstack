@@ -61,6 +61,7 @@ describe("patientDashboardApi", () => {
     const log = { id: "log-1", scheduleId: "schedule-1", patientId: "patient-1", drugName: "Metformin", status: "confirmed", scheduledTime: "2026-05-09T08:00:00.000Z" };
     mockedGet.mockImplementation(async (url, config) => {
       if (url === "/medication-logs" && config?.params?.limit === 10) return { data: { data: [log] } };
+      if (url === "/medication-logs" && config?.params?.limit === 100) return { data: { data: [], meta: { total: 0 } } };
       if (url === "/adherence") return { data: { data: { adherenceRate: 100, totalScheduled: 1, dailyBreakdown: [{ date: "2026-05-09", scheduled: 1, confirmed: 1 }] } } };
       return { data: { data: [], meta: { total: 0 } } };
     });
@@ -73,6 +74,48 @@ describe("patientDashboardApi", () => {
     expect(data.schedules).toEqual([schedule]);
     expect(data.medicationLogs).toHaveLength(1);
     expect(data.adherenceStats.dailyBreakdown.find((day) => day.date === "2026-05-09")).toMatchObject({ scheduled: 1, confirmed: 1 });
+  });
+
+  it("hydrates dashboard adherence from medication logs when adherence misses recorded confirmations", async () => {
+    const completedSchedule = {
+      ...schedule,
+      stock: 0,
+      status: "Selesai" as const,
+      startDate: "2026-05-14",
+      endDate: undefined,
+      times: ["08:00", "20:00"],
+      frequency: "2 kali sehari",
+    };
+    mockedGetSchedulesForPatients.mockResolvedValueOnce([completedSchedule]);
+    mockedGet.mockImplementation(async (url, config) => {
+      if (url === "/medication-logs" && config?.params?.limit === 10) return { data: { data: [] } };
+      if (url === "/medication-logs" && config?.params?.limit === 100 && !config?.params?.start_date) {
+        return {
+          data: {
+            data: [
+              { id: "log-before-start", scheduleId: "schedule-1", patientId: "patient-1", drugName: "Metformin", status: "confirmed", scheduledTime: "2026-05-11T01:00:00.000Z" },
+              { id: "log-1", scheduleId: "schedule-1", patientId: "patient-1", drugName: "Metformin", status: "confirmed", scheduledTime: "2026-05-14T01:00:00.000Z" },
+              { id: "log-2", scheduleId: "schedule-1", patientId: "patient-1", drugName: "Metformin", status: "confirmed", scheduledTime: "2026-05-14T13:00:00.000Z" },
+              { id: "log-3", scheduleId: "schedule-1", patientId: "patient-1", drugName: "Metformin", status: "missed", scheduledTime: "2026-05-14T13:00:00.000Z" },
+            ],
+            meta: { total: 4 },
+          },
+        };
+      }
+      if (url === "/adherence") return { data: { data: { adherenceRate: 0, totalScheduled: 0, totalConfirmed: 0, dailyBreakdown: [] } } };
+      return { data: { data: [], meta: { total: 0 } } };
+    });
+
+    const data = await getPatientDashboardData({ forceRefresh: true });
+
+    expect(data.schedules[0]).toMatchObject({ endDate: "2026-05-14" });
+    expect(data.adherenceStats).toMatchObject({ adherenceRate: 100, totalScheduled: 2, totalConfirmed: 2, totalMissed: 0 });
+    expect(data.adherenceStats.dailyBreakdown.find((day) => day.date === "2026-05-11")).toBeUndefined();
+    expect(data.adherenceStats.dailyBreakdown.find((day) => day.date === "2026-05-14")).toMatchObject({
+      scheduled: 2,
+      confirmed: 2,
+      missed: 0,
+    });
   });
 
   it("filters adherence days to the visible schedule window", async () => {
@@ -134,6 +177,7 @@ describe("patientDashboardApi", () => {
   it("keeps dashboard adherence at 100 when no visible dose is due yet", async () => {
     mockedGet.mockImplementation(async (url, config) => {
       if (url === "/medication-logs" && config?.params?.limit === 10) return { data: { data: [] } };
+      if (url === "/medication-logs" && config?.params?.limit === 100) return { data: { data: [], meta: { total: 0 } } };
       if (url === "/adherence") return { data: { data: { adherenceRate: 0, totalScheduled: 0, totalConfirmed: 0, dailyBreakdown: [{ date: "2026-05-09", scheduled: 0, confirmed: 0 }] } } };
       return { data: { data: [], meta: { total: 0 } } };
     });
@@ -168,10 +212,33 @@ describe("patientDashboardApi", () => {
   });
 
   it("falls back to the latest medication log date for completed schedules without an end date", async () => {
-    const completedSchedule = { ...schedule, stock: 0, status: "Selesai" as const, endDate: undefined };
+    const completedSchedule = {
+      ...schedule,
+      stock: 0,
+      status: "Selesai" as const,
+      endDate: undefined,
+      medicineName: "Atorvastatin",
+      dose: "5 mg",
+      medicineForm: "Tablet" as const,
+      frequency: "2 kali sehari",
+      times: ["08:00", "20:00"],
+      mealRule: "Tidak tergantung makan" as const,
+      reminderEnabled: true,
+      compositionNormalized: "Tidak ada",
+      activeSubstances: "Tidak ada",
+      instructions: "Bersama makanan",
+    };
     mockedGetSchedulesForPatients.mockResolvedValueOnce([completedSchedule]);
-    mockedGet.mockImplementation(async (url) => {
-      if (url === "/medication-logs") {
+    mockedGet.mockImplementation(async (url, config) => {
+      if (url === "/medication-logs" && config?.params?.start_date) {
+        return {
+          data: {
+            data: [],
+            meta: { total: 0 },
+          },
+        };
+      }
+      if (url === "/medication-logs" && config?.params?.limit === 100) {
         return {
           data: {
             data: [
@@ -184,9 +251,24 @@ describe("patientDashboardApi", () => {
       return { data: { data: [], meta: { total: 0 } } };
     });
 
-    const data = await getPatientScheduleData(new Date(2026, 4, 1), { forceRefresh: true });
+    const data = await getPatientScheduleData(new Date(2026, 5, 1), { forceRefresh: true });
 
-    expect(data.schedules[0]).toMatchObject({ endDate: "2026-05-19" });
+    expect(data.schedules[0]).toMatchObject({
+      medicineName: "Atorvastatin",
+      dose: "5 mg",
+      medicineForm: "Tablet",
+      stock: 0,
+      frequency: "2 kali sehari",
+      times: ["08:00", "20:00"],
+      mealRule: "Tidak tergantung makan",
+      reminderEnabled: true,
+      compositionNormalized: "Tidak ada",
+      activeSubstances: "Tidak ada",
+      instructions: "Bersama makanan",
+      startDate: "2026-05-09",
+      endDate: "2026-05-19",
+    });
+    expect(getConfirmedScheduleDates(data.medicationLogs)).toEqual({ "2026-05-19": ["schedule-1"] });
   });
 
   it("maps medication logs to patient activities", async () => {

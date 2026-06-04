@@ -149,6 +149,72 @@ describe("adherence service", () => {
     expect(occurrences).toHaveLength(0);
   });
 
+  it("honors an explicit backdated start date for adherence history", () => {
+    const today = getTodayAppDateStartUtc();
+    const start = addAppDays(today, -5);
+    const createdAt = new Date(addAppDays(today, -1).getTime() + 12 * 60 * 60_000);
+    const completedAt = new Date(addAppDays(today, -1).getTime() + 18 * 60 * 60_000);
+    const startDateKey = getAppDateKey(start);
+    const completedDateKey = getAppDateKey(completedAt);
+
+    const occurrences = __test__.buildScheduledOccurrences(
+      6,
+      [{
+        id: "schedule-1",
+        createdAt,
+        completedAt,
+        startDate: startDateKey,
+        endDate: completedDateKey,
+        stock: 0,
+        isActive: false,
+        scheduledTimes: ["08:00"],
+        frequency: 1,
+      }],
+      [],
+    );
+
+    expect(occurrences.map((occurrence) => getAppDateKey(occurrence.scheduledTime))).toEqual([
+      startDateKey,
+      getAppDateKey(addAppDays(start, 1)),
+      getAppDateKey(addAppDays(start, 2)),
+      getAppDateKey(addAppDays(start, 3)),
+      completedDateKey,
+    ]);
+  });
+
+  it("keeps confirmed history when logs predate the current explicit start date", () => {
+    const today = getTodayAppDateStartUtc();
+    const logDate = addAppDays(today, -7);
+    const currentStartDate = addAppDays(today, -2);
+    const logDateKey = getAppDateKey(logDate);
+    const currentStartDateKey = getAppDateKey(currentStartDate);
+    const firstDoseTime = new Date(logDate.getTime() + 8 * 60 * 60_000);
+    const secondDoseTime = new Date(logDate.getTime() + 20 * 60 * 60_000);
+
+    const stats = __test__.buildAdherenceStatsSnapshot(
+      "all",
+      [{
+        id: "schedule-1",
+        createdAt: addAppDays(today, -10),
+        completedAt: secondDoseTime,
+        startDate: currentStartDateKey,
+        endDate: logDateKey,
+        stock: 0,
+        isActive: false,
+        scheduledTimes: ["08:00", "20:00"],
+        frequency: 2,
+      }],
+      [
+        { scheduleId: "schedule-1", scheduledTime: firstDoseTime, status: "confirmed" },
+        { scheduleId: "schedule-1", scheduledTime: secondDoseTime, status: "confirmed" },
+      ],
+    );
+
+    const logDay = stats.dailyBreakdown.find((day) => day.date === logDateKey);
+    expect(logDay).toMatchObject({ scheduled: 2, confirmed: 2, missed: 0 });
+    expect(stats).toMatchObject({ adherenceRate: 100, totalScheduled: 2, totalConfirmed: 2 });
+  });
+
   it("builds adherence stats for multiple patients from grouped schedule and log rows", () => {
     const doseDay = new Date();
     doseDay.setUTCHours(0, 0, 0, 0);

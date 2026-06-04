@@ -10,6 +10,7 @@ import {
   getScheduleDoseWindow,
   getSchedulesForDate,
   isSameDate,
+  normalizeAdherenceForVisibleSchedules,
 } from "@/helpers/patientSchedule";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
 
@@ -113,6 +114,23 @@ describe("patient schedule helpers", () => {
       isBeforeFirstDose: true,
       nextDoseTime: "12:00",
     });
+  });
+
+  it("keeps recorded adherence activity even when the local schedule window misses that date", () => {
+    const narrowedSchedule = { ...activeSchedule, startDate: "2026-05-19", endDate: "2026-05-19" };
+    const stats = normalizeAdherenceForVisibleSchedules({
+      adherenceRate: 50,
+      totalScheduled: 4,
+      totalConfirmed: 2,
+      dailyBreakdown: [
+        { date: "2026-05-14", scheduled: 2, confirmed: 2, missed: 0, snoozed: 0 },
+        { date: "2026-05-20", scheduled: 2, confirmed: 0, missed: 0, snoozed: 0 },
+      ],
+    }, [narrowedSchedule]);
+
+    expect(stats.dailyBreakdown.find((day) => day.date === "2026-05-14")).toMatchObject({ scheduled: 2, confirmed: 2 });
+    expect(stats.dailyBreakdown.find((day) => day.date === "2026-05-20")).toMatchObject({ scheduled: 0, confirmed: 0 });
+    expect(stats).toMatchObject({ adherenceRate: 100, totalScheduled: 2, totalConfirmed: 2 });
   });
 
   it("enables confirmation only for the current due dose", () => {

@@ -3,7 +3,7 @@ import { applyKnownActivityReadState } from "@/lib/activityReadApi";
 import type { ActivityLogRecord } from "@/lib/mocks/activityLogs";
 import type { PatientRecord } from "@/lib/mocks/patients";
 import type { MedicationScheduleRecord } from "@/lib/mocks/schedules";
-import { normalizeAdherenceForVisibleSchedules } from "@/helpers/patientSchedule";
+import { getScheduleDoseCount, normalizeAdherenceForVisibleSchedules } from "@/helpers/patientSchedule";
 import { getApiDateKey, getAppScheduledDateTime } from "@/lib/appTimezone";
 import { notifyDashboardDataChanged } from "@/lib/cacheEvents";
 import { getFoodScansPageFromApi } from "@/lib/foodScanApi";
@@ -81,6 +81,8 @@ let dashboardRequest: Promise<PatientDashboardData> | null = null;
 let dashboardOverviewRequest: Promise<PatientDashboardOverviewData> | null = null;
 const patientScheduleCache = new Map<string, { data: PatientScheduleData }>();
 const patientScheduleRequests = new Map<string, Promise<PatientScheduleData>>();
+const patientMedicationLogHistoryCache = new Map<string, MedicationLogResponse[]>();
+const patientMedicationLogHistoryRequests = new Map<string, Promise<MedicationLogResponse[]>>();
 
 const activitiesCache = new Map<string, { data: PatientActivityLogData }>();
 const activitiesRequests = new Map<string, Promise<PatientActivityLogData>>();
@@ -90,12 +92,15 @@ export const clearPatientDashboardCache = () => {
   dashboardOverviewRequest = null;
   patientScheduleCache.clear();
   patientScheduleRequests.clear();
+  patientMedicationLogHistoryCache.clear();
+  patientMedicationLogHistoryRequests.clear();
   activitiesCache.clear();
   activitiesRequests.clear();
   clearSchedulesCache();
 };
 
 const medicationLogMonthPageSize = 100;
+const medicationLogHistoryPageSize = 100;
 const activityMonthPageSize = 100;
 
 const formatDateParam = (date: Date) => {
@@ -148,12 +153,19 @@ const getPatientDashboardBaseData = async (options: PatientDashboardRequestOptio
   dashboardOverviewRequest = (async () => {
     const patient = await getCurrentPatientForDashboard(options);
 
-    const [schedules, adherenceResponse] = await Promise.all([
+    const [schedules, adherenceResponse, medicationLogs] = await Promise.all([
       getSchedulesForPatientsFromApi([patient]),
       api.get<{ data: AdherenceStatsApiResponse }>("/adherence", { params: { patient_id: patient.id, period: "all" } }),
+      getMedicationLogsForPatient(patient.id, { forceRefresh: options.forceRefresh }),
     ]);
-    const patientSchedules = schedules.filter((schedule) => schedule.patientId === patient.id);
-    const adherenceStats = normalizeAdherenceForVisibleSchedules(adherenceResponse.data.data, patientSchedules);
+    const patientSchedules = applyCompletedScheduleEndDates(
+      schedules.filter((schedule) => schedule.patientId === patient.id),
+      medicationLogs,
+    );
+    const adherenceStats = normalizeAdherenceForVisibleSchedules(
+      mergeAdherenceStatsWithMedicationLogs(adherenceResponse.data.data, patientSchedules, medicationLogs),
+      patientSchedules,
+    );
 
     const result = {
       patient: { ...patient, adherence: Math.round(adherenceStats.adherenceRate) },
@@ -234,6 +246,56 @@ const getMedicationLogsForRange = async (patientId: string, startDate: string, e
   ];
 };
 
+const getMedicationLogsForPatient = async (patientId: string, options: { readonly forceRefresh?: boolean } = {}) => {
+  if (options.forceRefresh) {
+    patientMedicationLogHistoryCache.delete(patientId);
+    patientMedicationLogHistoryRequests.delete(patientId);
+  }
+
+  const cachedLogs = patientMedicationLogHistoryCache.get(patientId);
+  if (cachedLogs) return cachedLogs;
+
+  const activeRequest = patientMedicationLogHistoryRequests.get(patientId);
+  if (activeRequest) return activeRequest;
+
+  const request = (async () => {
+    const params = {
+      patient_id: patientId,
+      limit: medicationLogHistoryPageSize,
+    };
+
+    const firstResponse = await api.get<PaginatedResponse<MedicationLogResponse>>("/medication-logs", {
+      params: { ...params, page: 1 },
+    });
+    const firstPage = firstResponse.data.data;
+    const total = firstResponse.data.meta?.total ?? firstPage.length;
+    const totalPages = Math.ceil(total / medicationLogHistoryPageSize);
+
+    if (totalPages <= 1) {
+      patientMedicationLogHistoryCache.set(patientId, firstPage);
+      return firstPage;
+    }
+
+    const additionalResponses = await Promise.all(
+      Array.from({ length: totalPages - 1 }, (_, index) => api.get<PaginatedResponse<MedicationLogResponse>>("/medication-logs", {
+        params: { ...params, page: index + 2 },
+      })),
+    );
+
+    const logs = [
+      ...firstPage,
+      ...additionalResponses.flatMap((response) => response.data.data),
+    ];
+    patientMedicationLogHistoryCache.set(patientId, logs);
+    return logs;
+  })().finally(() => {
+    patientMedicationLogHistoryRequests.delete(patientId);
+  });
+
+  patientMedicationLogHistoryRequests.set(patientId, request);
+  return request;
+};
+
 const getFoodScansForPatientMonth = async (patientId: string, monthDate: Date) => {
   const { startDate, endDate } = getMonthLogRange(monthDate);
   const date = `${startDate}..${endDate}`;
@@ -283,13 +345,164 @@ export const getLatestPatientActivityMonth = async (patientId: string) => {
 
 const getMedicationLogDateKey = (log: MedicationLogResponse) => getApiDateKey(log.scheduledTime || log.confirmedAt || log.createdAt, "");
 
+const isTrackedMedicationLogStatus = (status: string) => status === "confirmed" || status === "missed" || status === "snoozed";
+
+const isDateWithinScheduleWindow = (dateKey: string, schedule: MedicationScheduleRecord) => {
+  if (dateKey < schedule.startDate) return false;
+  if (schedule.endDate && dateKey > schedule.endDate) return false;
+  return true;
+};
+
+const mergeMedicationLogs = (
+  primaryLogs: readonly MedicationLogResponse[],
+  secondaryLogs: readonly MedicationLogResponse[],
+) => {
+  const logsById = new Map<string, MedicationLogResponse>();
+  [...primaryLogs, ...secondaryLogs].forEach((log) => {
+    logsById.set(log.id, log);
+  });
+
+  return Array.from(logsById.values()).sort((first, second) => {
+    const firstTime = first.scheduledTime || first.confirmedAt || first.createdAt || "";
+    const secondTime = second.scheduledTime || second.confirmedAt || second.createdAt || "";
+    return secondTime.localeCompare(firstTime);
+  });
+};
+
+type LogDerivedAdherenceDay = Required<PatientAdherenceDayResponse>;
+
+const buildMedicationLogAdherenceDays = (
+  schedules: readonly MedicationScheduleRecord[],
+  medicationLogs: readonly MedicationLogResponse[],
+) => {
+  const schedulesById = new Map(schedules.map((schedule) => [schedule.id, schedule]));
+  const activityByScheduleDate = new Map<string, { date: string; scheduleId: string; confirmed: number; missed: number; snoozed: number }>();
+
+  medicationLogs.forEach((log) => {
+    if (!isTrackedMedicationLogStatus(log.status)) return;
+    const schedule = schedulesById.get(log.scheduleId);
+    if (!schedule) return;
+
+    const dateKey = getMedicationLogDateKey(log);
+    if (!dateKey) return;
+    if (!isDateWithinScheduleWindow(dateKey, schedule)) return;
+
+    const bucketKey = `${log.scheduleId}:${dateKey}`;
+    const bucket = activityByScheduleDate.get(bucketKey) ?? {
+      date: dateKey,
+      scheduleId: log.scheduleId,
+      confirmed: 0,
+      missed: 0,
+      snoozed: 0,
+    };
+
+    activityByScheduleDate.set(bucketKey, {
+      ...bucket,
+      confirmed: bucket.confirmed + (log.status === "confirmed" ? 1 : 0),
+      missed: bucket.missed + (log.status === "missed" ? 1 : 0),
+      snoozed: bucket.snoozed + (log.status === "snoozed" ? 1 : 0),
+    });
+  });
+
+  const daysByDate = new Map<string, LogDerivedAdherenceDay>();
+  activityByScheduleDate.forEach((activity) => {
+    const schedule = schedulesById.get(activity.scheduleId);
+    if (!schedule) return;
+
+    const scheduled = getScheduleDoseCount(schedule);
+    const confirmed = Math.min(scheduled, activity.confirmed);
+    const remainingAfterConfirmed = Math.max(scheduled - confirmed, 0);
+    const snoozed = confirmed >= scheduled ? 0 : Math.min(remainingAfterConfirmed, activity.snoozed);
+    const missed = confirmed >= scheduled ? 0 : Math.min(Math.max(remainingAfterConfirmed - snoozed, 0), activity.missed);
+    const day = daysByDate.get(activity.date) ?? {
+      date: activity.date,
+      scheduled: 0,
+      confirmed: 0,
+      missed: 0,
+      snoozed: 0,
+    };
+
+    daysByDate.set(activity.date, {
+      date: activity.date,
+      scheduled: day.scheduled + scheduled,
+      confirmed: day.confirmed + confirmed,
+      missed: day.missed + missed,
+      snoozed: day.snoozed + snoozed,
+    });
+  });
+
+  return daysByDate;
+};
+
+const mergeAdherenceStatsWithMedicationLogs = <T extends PatientAdherenceStatsResponse>(
+  adherenceStats: T,
+  schedules: readonly MedicationScheduleRecord[],
+  medicationLogs: readonly MedicationLogResponse[],
+): T => {
+  const logDays = buildMedicationLogAdherenceDays(schedules, medicationLogs);
+  if (logDays.size === 0) return adherenceStats;
+
+  const dailyBreakdownByDate = new Map<string, LogDerivedAdherenceDay>(
+    adherenceStats.dailyBreakdown.map((day) => [day.date, {
+      date: day.date,
+      scheduled: day.scheduled,
+      confirmed: day.confirmed,
+      missed: day.missed ?? 0,
+      snoozed: day.snoozed ?? 0,
+    }]),
+  );
+
+  logDays.forEach((logDay, date) => {
+    const existingDay = dailyBreakdownByDate.get(date);
+    if (!existingDay) {
+      dailyBreakdownByDate.set(date, logDay);
+      return;
+    }
+
+    const scheduled = Math.max(existingDay.scheduled, logDay.scheduled);
+    const confirmed = Math.min(scheduled, Math.max(existingDay.confirmed, logDay.confirmed));
+    const remainingAfterConfirmed = Math.max(scheduled - confirmed, 0);
+    const snoozed = Math.min(remainingAfterConfirmed, Math.max(existingDay.snoozed, logDay.snoozed));
+    const missed = Math.min(Math.max(remainingAfterConfirmed - snoozed, 0), Math.max(existingDay.missed, logDay.missed));
+
+    dailyBreakdownByDate.set(date, {
+      date,
+      scheduled,
+      confirmed,
+      missed,
+      snoozed,
+    });
+  });
+
+  const dailyBreakdown = Array.from(dailyBreakdownByDate.values())
+    .sort((first, second) => first.date.localeCompare(second.date));
+  const totalScheduled = dailyBreakdown.reduce((total, day) => total + day.scheduled, 0);
+  const totalConfirmed = dailyBreakdown.reduce((total, day) => total + day.confirmed, 0);
+
+  return {
+    ...adherenceStats,
+    totalScheduled,
+    totalConfirmed,
+    totalMissed: dailyBreakdown.reduce((total, day) => total + day.missed, 0),
+    totalSnoozed: dailyBreakdown.reduce((total, day) => total + day.snoozed, 0),
+    adherenceRate: totalScheduled > 0 ? Number(((totalConfirmed / totalScheduled) * 100).toFixed(1)) : 100,
+    dailyBreakdown,
+  };
+};
+
 const applyCompletedScheduleEndDates = (
   schedules: readonly MedicationScheduleRecord[],
   medicationLogs: readonly MedicationLogResponse[],
 ): MedicationScheduleRecord[] => {
+  const schedulesById = new Map(schedules.map((schedule) => [schedule.id, schedule]));
   const latestLogDateBySchedule = medicationLogs.reduce<Record<string, string>>((latestDates, log) => {
+    if (!isTrackedMedicationLogStatus(log.status)) return latestDates;
+    const schedule = schedulesById.get(log.scheduleId);
+    if (!schedule || schedule.status !== "Selesai" || schedule.endDate) return latestDates;
+
     const dateKey = getMedicationLogDateKey(log);
     if (!dateKey) return latestDates;
+    if (dateKey < schedule.startDate) return latestDates;
 
     const currentDate = latestDates[log.scheduleId];
     if (currentDate && currentDate >= dateKey) return latestDates;
@@ -325,15 +538,16 @@ export const getPatientScheduleData = async (monthDate = new Date(), options: Pa
 
   const request = (async () => {
     const patient = await getCurrentPatientForDashboard(options);
-    const [baseData, medicationLogs] = await Promise.all([
+    const [baseData, medicationLogs, medicationHistoryLogs] = await Promise.all([
       getPatientScheduleBaseData({ ...options, patient }),
       getMedicationLogsForMonth(patient.id, monthDate),
+      getMedicationLogsForPatient(patient.id, { forceRefresh: options.forceRefresh }),
     ]);
 
     const result = {
       ...baseData,
-      schedules: applyCompletedScheduleEndDates(baseData.schedules, medicationLogs),
-      medicationLogs,
+      schedules: applyCompletedScheduleEndDates(baseData.schedules, medicationHistoryLogs),
+      medicationLogs: mergeMedicationLogs(medicationLogs, medicationHistoryLogs),
     };
     patientScheduleCache.set(cacheKey, { data: result });
     return result;

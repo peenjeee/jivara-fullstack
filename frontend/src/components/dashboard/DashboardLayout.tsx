@@ -22,6 +22,7 @@ import { getDashboardRole } from "./navigation";
 
 interface DashboardLayoutProps {
   readonly children: ReactNode;
+  readonly initialUser?: User | null;
 }
 
 const MAX_LOADING_SECONDS = 8;
@@ -29,7 +30,7 @@ const USER_STATUS_SYNC_INTERVAL_MS = 60_000;
 const INITIAL_USER_STATUS_SYNC_DELAY_MS = 30_000;
 const USER_STATUS_RATE_LIMIT_BACKOFF_MS = 5 * 60_000;
 
-export default function DashboardLayout({ children }: DashboardLayoutProps) {
+export default function DashboardLayout({ children, initialUser = null }: DashboardLayoutProps) {
   const { logout, user, hasHydrated, setAuth, setHasHydrated, updateUser } = useAuthStore();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isRedirectingToLogin, setIsRedirectingToLogin] = useState(false);
@@ -42,12 +43,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const isStandalonePwa = useIsStandalonePwa();
   const pathname = usePathname();
   const { replace } = useRouter();
-  const userRole = user?.role;
+  const effectiveUser = user ?? initialUser;
+  const isAuthReady = hasHydrated || Boolean(initialUser);
+  const userRole = effectiveUser?.role;
   const dashboardRole = getDashboardRole(userRole);
 
   const isCurrentRouteAllowed = isPathAllowedForRole(pathname, userRole);
   const fallbackPath = getFallbackPathForRole(userRole);
-  useActivityBadgeSync({ enabled: hasHydrated && Boolean(user) && !isLoggingOut, role: dashboardRole, userId: user?.id });
+  useActivityBadgeSync({ enabled: isAuthReady && Boolean(effectiveUser) && !isLoggingOut, role: dashboardRole, userId: effectiveUser?.id });
 
   const redirectToLogin = useCallback(() => {
     replace("/login?loggedOut=1");
@@ -127,6 +130,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const restoreSessionRef = useRef(restoreSession);
   useEffect(() => { restoreSessionRef.current = restoreSession; }, [restoreSession]);
 
+  useEffect(() => {
+    if (!initialUser || user || isLoggingOut) return;
+    setAuth(initialUser);
+    setHasHydrated(true);
+  }, [initialUser, isLoggingOut, setAuth, setHasHydrated, user]);
+
   const syncCurrentUser = useCallback(async () => {
     if (!hasHydrated || isLoggingOut || isNavigatingAwayRef.current) return;
 
@@ -176,15 +185,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   }, [hasHydrated, setHasHydrated]);
 
   useEffect(() => {
-    if (user && hasHydrated) return;
+    if (effectiveUser && isAuthReady) return;
     if (isNavigatingAwayRef.current) return;
 
     const timer = window.setTimeout(() => void navigateToLogin(), MAX_LOADING_SECONDS * 1000);
     return () => window.clearTimeout(timer);
-  }, [user, hasHydrated, navigateToLogin]);
+  }, [effectiveUser, isAuthReady, navigateToLogin]);
 
   useEffect(() => {
-    if (!hasHydrated || !userRole || isNavigatingAwayRef.current) return;
+    if (!isAuthReady || !userRole || isNavigatingAwayRef.current) return;
 
     const initialSyncTimerId = window.setTimeout(() => {
       void syncCurrentUser();
@@ -210,21 +219,21 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [hasHydrated, syncCurrentUser, userRole]);
+  }, [isAuthReady, syncCurrentUser, userRole]);
 
   useEffect(() => {
-    if (!hasHydrated || isLoggingOut || isNavigatingAwayRef.current) return;
+    if (!isAuthReady || isLoggingOut || isNavigatingAwayRef.current) return;
 
-    if (!user) {
+    if (!effectiveUser) {
       void restoreSession();
       return;
     }
 
     if (!isCurrentRouteAllowed) replace(fallbackPath);
-  }, [fallbackPath, hasHydrated, isCurrentRouteAllowed, replace, user, isLoggingOut, restoreSession]);
+  }, [effectiveUser, fallbackPath, isAuthReady, isCurrentRouteAllowed, replace, isLoggingOut, restoreSession]);
 
   useEffect(() => {
-    if (user || isLoggingOut || isNavigatingAwayRef.current) return;
+    if (effectiveUser || isLoggingOut || isNavigatingAwayRef.current) return;
 
     const handleResume = () => {
       if (document.visibilityState === "visible") {
@@ -241,7 +250,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       window.removeEventListener("pageshow", handleResume);
       document.removeEventListener("visibilitychange", handleResume);
     };
-  }, [isLoggingOut, user]);
+  }, [effectiveUser, isLoggingOut]);
 
   const handleLogout = async () => {
     const result = await showConfirm("Keluar Akun?", "Anda perlu masuk kembali untuk mengakses data Anda.", "Ya, Keluar");
@@ -275,7 +284,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     );
   }
 
-  if (!hasHydrated || !user || isRestoringSession) {
+  if (!isAuthReady || !effectiveUser || isRestoringSession) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-surface" aria-label="Memuat halaman">
         <div className="flex flex-col items-center gap-y-4">

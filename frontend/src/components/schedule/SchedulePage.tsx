@@ -49,7 +49,7 @@ export default function SchedulePage({ initialPatientId = "", initialPatientName
       </m.div>
 
       <m.div
-        className="relative mt-6 min-h-[620px] overflow-hidden rounded-3xl shadow-[0_10px_30px_rgba(15,23,42,0.08)]"
+        className="relative mt-6 overflow-hidden rounded-3xl shadow-[0_10px_30px_rgba(15,23,42,0.08)]"
         aria-busy={isUpdatingSchedules || undefined}
         {...getDashboardEntranceMotion(shouldAnimate, 0.4, 24)}
       >
