@@ -79,7 +79,7 @@ export default function ScrollProvider({ children }: ScrollProviderProps) {
     const handleAnchorClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       const link = target.closest("a");
-      const lenis = lenisRef.current;
+      const lenis = activeLenis;
       if (!lenis) return;
 
       if (link && link.getAttribute("href")?.startsWith("/#")) {
@@ -114,7 +114,6 @@ export default function ScrollProvider({ children }: ScrollProviderProps) {
 
     return () => {
       isCancelled = true;
-      lenisRef.current = null;
       if (rafId) cancelAnimationFrame(rafId);
       activeLenis?.destroy();
       document.removeEventListener("click", handleAnchorClick);
@@ -127,14 +126,14 @@ export default function ScrollProvider({ children }: ScrollProviderProps) {
       return;
     }
 
-    const lenis = lenisRef.current;
+    const lenis = shouldUseLenis ? lenisRef.current : null;
     if (lenis) {
       lenis.scrollTo(0, { immediate: true });
       return;
     }
 
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
-  }, [pathname]);
+  }, [pathname, shouldUseLenis]);
 
   return <>{children}</>;
 }

@@ -19,6 +19,7 @@ interface HeatmapDay {
   readonly level: number;
   readonly total: number;
   readonly confirmed: number;
+  readonly missed: number;
   readonly isOutsideYear: boolean;
   readonly isFuture: boolean;
 }
@@ -35,6 +36,7 @@ interface HeatmapTooltipState {
 const monthFormatter = new Intl.DateTimeFormat("id-ID", { month: "short" });
 const dateFormatter = new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "long", year: "numeric" });
 const levelClasses = ["bg-surface", "bg-primary/15", "bg-primary/30", "bg-primary/55", "bg-primary"];
+const missedClass = "bg-danger/70";
 const emptySchedules: readonly MedicationScheduleRecord[] = [];
 
 export default function PatientAdherenceHeatmap({ dailyBreakdown, schedules = emptySchedules }: PatientAdherenceHeatmapProps) {
@@ -186,6 +188,8 @@ export default function PatientAdherenceHeatmap({ dailyBreakdown, schedules = em
 function HeatmapLegend() {
   return (
     <div className="mt-5 flex items-center justify-end gap-2 text-xs font-bold text-muted">
+      <span>terlewat</span>
+      <span className={`size-4 rounded-[5px] ${missedClass}`} />
       <span>rendah</span>
       {levelClasses.map((className) => <span key={className} className={`size-4 rounded-[5px] ${className}`} />)}
       <span>tinggi</span>
@@ -199,7 +203,7 @@ function HeatmapDayCell({ day, sizeClass, onShow, onHide }: { readonly day: Heat
   }
 
   const label = getTooltipLabel(day);
-  const surfaceClass = day.isFuture ? "bg-surface" : levelClasses[day.level];
+  const surfaceClass = getDaySurfaceClass(day);
 
   return (
     <button
@@ -216,7 +220,7 @@ function HeatmapDayCell({ day, sizeClass, onShow, onHide }: { readonly day: Heat
   );
 }
 
-function getHeatmapWeeks(selectedYear: number, today: Date, dailyStats: ReadonlyMap<string, { readonly total: number; readonly confirmed: number }>) {
+function getHeatmapWeeks(selectedYear: number, today: Date, dailyStats: ReadonlyMap<string, { readonly total: number; readonly confirmed: number; readonly missed: number }>) {
   const startOfYear = new Date(selectedYear, 0, 1);
   const endOfYear = new Date(selectedYear, 11, 31);
   const start = new Date(startOfYear);
@@ -240,6 +244,7 @@ function getHeatmapWeeks(selectedYear: number, today: Date, dailyStats: Readonly
       level: isOutsideYear || isFuture ? 0 : getAdherenceLevel(stats),
       total: isOutsideYear ? 0 : stats?.total ?? 0,
       confirmed: isOutsideYear ? 0 : stats?.confirmed ?? 0,
+      missed: isOutsideYear ? 0 : stats?.missed ?? 0,
       isOutsideYear,
       isFuture,
     };
@@ -307,16 +312,18 @@ function getTooltipPosition(x: number, tooltipWidth: number) {
 
 
 function getDailyAdherenceStats(days: readonly PatientAdherenceDayResponse[], schedules: readonly MedicationScheduleRecord[]) {
-  return days.reduce<Map<string, { total: number; confirmed: number }>>((statsByDate, day) => {
+  return days.reduce<Map<string, { total: number; confirmed: number; missed: number }>>((statsByDate, day) => {
     const date = getDateFromKey(day.date);
-    if (date && schedules.length > 0 && getSchedulesForDate(schedules, date).length === 0) {
-      statsByDate.set(day.date, { total: 0, confirmed: 0 });
+    const hasRecordedActivity = day.confirmed > 0 || (day.missed ?? 0) > 0 || (day.snoozed ?? 0) > 0;
+    if (date && schedules.length > 0 && getSchedulesForDate(schedules, date).length === 0 && !hasRecordedActivity) {
+      statsByDate.set(day.date, { total: 0, confirmed: 0, missed: 0 });
       return statsByDate;
     }
 
     statsByDate.set(day.date, {
       total: day.scheduled,
       confirmed: day.confirmed,
+      missed: day.missed ?? Math.max(day.scheduled - day.confirmed, 0),
     });
     return statsByDate;
   }, new Map());
@@ -333,10 +340,18 @@ function getAdherenceLevel(stats: { readonly total: number; readonly confirmed: 
   return 0;
 }
 
+function getDaySurfaceClass(day: HeatmapDay) {
+  if (day.isFuture || day.total === 0) return "bg-surface";
+  if (day.confirmed === 0) return missedClass;
+  return levelClasses[day.level];
+}
+
 function getTooltipLabel(day: HeatmapDay) {
   if (day.isFuture || day.total === 0) return `${dateFormatter.format(day.date)} - Belum ada data`;
 
   const percentage = Math.round((day.confirmed / day.total) * 100);
+  const missed = Math.max(day.missed, day.total - day.confirmed, 0);
+  if (day.confirmed === 0) return `${dateFormatter.format(day.date)} - 0% (0/${day.total} dosis dikonfirmasi, ${missed} terlewat)`;
   return `${dateFormatter.format(day.date)} - ${percentage}% (${day.confirmed}/${day.total} dosis dikonfirmasi)`;
 }
 

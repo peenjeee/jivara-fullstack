@@ -199,6 +199,8 @@ export function normalizeAdherenceForVisibleSchedules<T extends AdherenceStatsFo
     if (!date) return day;
 
     const schedulesForDate = getSchedulesForDate(schedules, date);
+    const hasRecordedActivity = day.confirmed > 0 || (day.missed ?? 0) > 0 || (day.snoozed ?? 0) > 0;
+    if (schedulesForDate.length === 0 && hasRecordedActivity) return day;
     if (schedulesForDate.length === 0) return { ...day, scheduled: 0, confirmed: 0, missed: 0, snoozed: 0 };
     if (day.scheduled <= 0) return day;
 

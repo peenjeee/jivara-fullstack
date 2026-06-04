@@ -38,6 +38,7 @@ export const clearApprovalsCache = () => {
 };
 
 export function useAdminApprovals(canLoad: boolean) {
+  const hasInitialApprovals = Boolean(approvalsViewCache);
   const [approvals, setApprovals] = useState<User[]>(() => approvalsViewCache?.approvals ?? []);
   const [summary, setSummary] = useState<AdminApprovalSummary>(() => approvalsViewCache?.summary ?? emptySummary);
   const [totalApprovals, setTotalApprovals] = useState(() => approvalsViewCache?.totalApprovals ?? 0);
@@ -45,14 +46,14 @@ export function useAdminApprovals(canLoad: boolean) {
   const [filter, setFilter] = useState<ApprovalFilter>(() => approvalsViewCache?.filter ?? "pending");
   const [currentPage, setCurrentPage] = useState(() => approvalsViewCache?.currentPage ?? 1);
   const [loading, setLoading] = useState(!approvalsViewCache);
-  const [hasLoadedApprovals, setHasLoadedApprovals] = useState(true);
-  const [hasLoadedSummary, setHasLoadedSummary] = useState(true);
+  const [hasLoadedApprovals, setHasLoadedApprovals] = useState(hasInitialApprovals);
+  const [hasLoadedSummary, setHasLoadedSummary] = useState(hasInitialApprovals);
   const [loadError, setLoadError] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [rejectingUser, setRejectingUser] = useState<User | null>(null);
   const isInitialLoad = useRef(true);
   const requestSeqRef = useRef(0);
-  const hasLoadedApprovalsRef = useRef(true);
+  const hasLoadedApprovalsRef = useRef(hasInitialApprovals);
   const debouncedSearch = useDebouncedValue(search);
 
   const totalPages = Math.max(1, Math.ceil(totalApprovals / pageSize));
@@ -159,7 +160,9 @@ export function useAdminApprovals(canLoad: boolean) {
         setSummary(emptySummary);
         setTotalApprovals(0);
       }
-      showError(getApiErrorMessage(error, "Gagal memuat daftar pengajuan admin."));
+      if (hasLoadedApprovalsRef.current) {
+        showError(getApiErrorMessage(error, "Gagal memuat daftar pengajuan admin."));
+      }
     } finally {
       if (requestSeq === requestSeqRef.current) {
         setHasLoadedApprovals(true);

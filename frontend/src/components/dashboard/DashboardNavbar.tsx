@@ -6,21 +6,24 @@ import { AnimatePresence, m } from "motion/react";
 import JivaraWordmark from "@/components/ui/JivaraWordmark";
 import { useIsStandalonePwa, useLockBodyScroll } from "@/hooks";
 import { useAuthStore } from "@/store/auth";
+import type { User } from "@/types/auth";
 import DashboardSidebar from "./DashboardSidebar";
 import { getDashboardNavItems, getDashboardRole, type DashboardNavLabel, type DashboardRole } from "./navigation";
 
 interface DashboardNavbarProps {
   readonly onLogout: () => void;
+  readonly initialUser?: User | null;
 }
 
-export default function DashboardNavbar({ onLogout }: DashboardNavbarProps) {
+export default function DashboardNavbar({ onLogout, initialUser = null }: DashboardNavbarProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const drawerRef = useRef<HTMLElement | null>(null);
   const isStandalonePwa = useIsStandalonePwa();
   const pathname = usePathname();
-  const userRole = useAuthStore((state) => state.user?.role);
+  const userRole = useAuthStore((state) => state.user?.role) ?? initialUser?.role;
   const hasAuthHydrated = useAuthStore((state) => state.hasHydrated);
+  const isNavReady = hasAuthHydrated || Boolean(initialUser?.role);
   const dashboardRole = getDashboardRole(userRole);
   const activeItem = getActiveNavLabel(pathname, dashboardRole);
 
@@ -81,14 +84,14 @@ export default function DashboardNavbar({ onLogout }: DashboardNavbarProps) {
         </div>
       </header>}
 
-      {hasAuthHydrated && (
+      {isNavReady && (
         <aside className="fixed inset-y-0 left-0 z-[10000] hidden w-[280px] flex-col bg-white px-7 py-8 shadow-[8px_0_26px_rgba(15,23,42,0.06)] lg:flex">
           <DashboardSidebar activeItem={activeItem} role={dashboardRole} onLogout={onLogout} />
         </aside>
       )}
 
       <AnimatePresence>
-        {isMenuOpen && !isStandalonePwa && hasAuthHydrated && (
+        {isMenuOpen && !isStandalonePwa && isNavReady && (
           <div className="fixed inset-0 z-[35000] lg:hidden">
             <m.div
               className="absolute inset-0 bg-black/25 backdrop-blur-[6px]"

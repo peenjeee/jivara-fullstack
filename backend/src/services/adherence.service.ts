@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, inArray, isNotNull, or } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, isNotNull, lte, or } from "drizzle-orm";
 import { db } from "../db";
 import {
   foodScans,
@@ -31,6 +31,20 @@ const isDateKey = (value: unknown): value is string => typeof value === "string"
 const getScheduleStartDateKey = (schedule: { startDate?: string | null; createdAt: Date | null }) => {
   if (isDateKey(schedule.startDate)) return schedule.startDate;
   return schedule.createdAt ? getDateKey(schedule.createdAt) : null;
+};
+
+const getScheduleActivityStartDateKey = (
+  schedule: { startDate?: string | null; createdAt: Date | null },
+  earliestLogDateKey: string | null,
+) => {
+  const explicitStartDateKey = isDateKey(schedule.startDate) ? schedule.startDate : null;
+  const createdDateKey = schedule.createdAt ? getDateKey(schedule.createdAt) : null;
+
+  if (explicitStartDateKey && earliestLogDateKey) {
+    return earliestLogDateKey < explicitStartDateKey ? earliestLogDateKey : explicitStartDateKey;
+  }
+
+  return explicitStartDateKey || createdDateKey || earliestLogDateKey;
 };
 
 const getStartDate = (days: number) => {
@@ -130,6 +144,21 @@ const getScheduleOccurrenceEndDateKey = (schedule: { startDate?: string | null; 
   return effectiveCompletedDateKey < displayEndDateKey ? effectiveCompletedDateKey : displayEndDateKey;
 };
 
+const shouldSkipOccurrenceBeforeCreation = (
+  schedule: { startDate?: string | null; createdAt: Date | null },
+  scheduledTime: Date,
+) => {
+  if (!schedule.createdAt) return false;
+
+  const configuredStartDateKey = isDateKey(schedule.startDate) ? schedule.startDate : null;
+  if (!configuredStartDateKey) return scheduledTime < schedule.createdAt;
+
+  const createdDateKey = getDateKey(schedule.createdAt);
+  if (configuredStartDateKey < createdDateKey) return false;
+
+  return scheduledTime < schedule.createdAt;
+};
+
 const buildScheduledOccurrences = (
   days: number,
   schedules: Array<{ id: string; startDate?: string | null; endDate?: string | null; createdAt: Date | null; completedAt?: Date | null; stock?: number | null; isActive?: boolean | null; scheduledTimes: unknown; frequency?: number | null }>,
@@ -161,10 +190,9 @@ const buildScheduledOccurrences = (
     const day = addAppDays(start, index);
 
     for (const schedule of schedules) {
-      const configuredStartDateKey = getScheduleStartDateKey(schedule);
       const earliestLogDate = earliestLogDateBySchedule.get(schedule.id);
       const earliestLogDateKey = earliestLogDate ? getDateKey(earliestLogDate) : null;
-      const startDateKey = configuredStartDateKey || earliestLogDateKey;
+      const startDateKey = getScheduleActivityStartDateKey(schedule, earliestLogDateKey);
       if (startDateKey && getDateKey(day) < startDateKey) continue;
       const occurrenceEndDateKey = getScheduleOccurrenceEndDateKey(schedule, latestLogDateBySchedule.get(schedule.id));
       if (occurrenceEndDateKey && getDateKey(day) > occurrenceEndDateKey) continue;
@@ -172,7 +200,7 @@ const buildScheduledOccurrences = (
 
       for (const time of getScheduleTimes(schedule.scheduledTimes, schedule.frequency)) {
         const scheduledTime = getOccurrenceDateTime(day, time);
-        if (schedule.createdAt && scheduledTime < schedule.createdAt) continue;
+        if (shouldSkipOccurrenceBeforeCreation(schedule, scheduledTime)) continue;
         if (scheduledTime > now) continue;
 
         const bucket = logsByScheduleDate.get(`${schedule.id}|${getDateKey(scheduledTime)}`);
@@ -314,7 +342,7 @@ const getPatientName = async (patientId?: string) => {
 };
 
 const ADHERENCE_CACHE_TTL_MS = Math.max(Number(process.env.ADHERENCE_CACHE_TTL_MS || (process.env.NODE_ENV === "test" ? 0 : 10_000)), 0);
-const ADHERENCE_CACHE_PREFIX = "adherence:v1:";
+const ADHERENCE_CACHE_PREFIX = "adherence:v3:";
 
 const getAdherenceCacheKey = (scope: string, query: AdherenceQuery, user?: AccessUser) => {
   const normalizedQuery = Object.entries(query)
@@ -333,7 +361,7 @@ const loadAdherenceStats = async (query: AdherenceQuery, user?: AccessUser) => {
     ? await getNurseIdForUser(user.id)
     : query.nurseId || query.nurse_id;
   const logConditions = startDate ? [gte(medicationLogs.scheduledTime, startDate)] : [];
-  const scheduleConditions = [or(eq(medicationSchedules.isActive, true), isNotNull(medicationSchedules.completedAt))];
+  const scheduleConditions = [or(eq(medicationSchedules.isActive, true), isNotNull(medicationSchedules.completedAt), lte(medicationSchedules.stock, 0))];
 
   if (patientId) {
     if (user) await assertCanAccessPatient(user, patientId);
@@ -429,7 +457,7 @@ const loadAggregateAdherenceStats = async (query: AdherenceQuery = {}, user?: Ac
   if (!scope.allowed) return emptyAggregateStats(period);
 
   const patientConditions = [eq(patients.isActive, true)];
-  const scheduleConditions = [or(eq(medicationSchedules.isActive, true), isNotNull(medicationSchedules.completedAt))];
+  const scheduleConditions = [or(eq(medicationSchedules.isActive, true), isNotNull(medicationSchedules.completedAt), lte(medicationSchedules.stock, 0))];
   const logConditions = startDate ? [gte(medicationLogs.scheduledTime, startDate)] : [];
   const foodScanConditions = startDate ? [gte(foodScans.createdAt, startDate)] : [];
   const nurseConditions = [eq(nurses.isActive, true)];

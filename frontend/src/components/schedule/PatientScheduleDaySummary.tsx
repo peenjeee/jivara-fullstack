@@ -25,7 +25,7 @@ const statusContent = {
 
 export default function PatientScheduleDaySummary({ selectedDate, schedulesForDate, allSchedules, confirmedScheduleDates }: PatientScheduleDaySummaryProps) {
   const shouldAnimate = useDashboardEntranceMotion();
-  const [selectedSchedule, setSelectedSchedule] = useState<MedicationScheduleRecord | null>(null);
+  const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
   const status = getDayStatus(allSchedules, selectedDate, confirmedScheduleDates, new Date());
   const content = statusContent[status];
   const Icon = content.icon;
@@ -41,6 +41,7 @@ export default function PatientScheduleDaySummary({ selectedDate, schedulesForDa
   const activeSchedules = allSchedules.filter((s) => s.status === "Aktif");
   const completedSchedules = allSchedules.filter((s) => s.status === "Selesai");
   const inactiveSchedules = allSchedules.filter((s) => s.status === "Nonaktif");
+  const selectedSchedule = selectedScheduleId ? allSchedules.find((schedule) => schedule.id === selectedScheduleId) ?? null : null;
 
   return (
     <m.section
@@ -93,7 +94,7 @@ export default function PatientScheduleDaySummary({ selectedDate, schedulesForDa
               <button
                 type="button"
                 className="flex size-9 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-line/60 hover:text-text-main"
-                onClick={() => setSelectedSchedule(schedule)}
+                onClick={() => setSelectedScheduleId(schedule.id)}
                 aria-label={`Lihat detail ${schedule.medicineName}`}
               >
                 <Eye size={17} />
@@ -121,7 +122,7 @@ export default function PatientScheduleDaySummary({ selectedDate, schedulesForDa
               <button
                 type="button"
                 className="flex size-9 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-line/60 hover:text-text-main"
-                onClick={() => setSelectedSchedule(schedule)}
+                onClick={() => setSelectedScheduleId(schedule.id)}
                 aria-label={`Lihat detail ${schedule.medicineName}`}
               >
                 <Eye size={17} />
@@ -149,7 +150,7 @@ export default function PatientScheduleDaySummary({ selectedDate, schedulesForDa
               <button
                 type="button"
                 className="flex size-9 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-line/60 hover:text-text-main"
-                onClick={() => setSelectedSchedule(schedule)}
+                onClick={() => setSelectedScheduleId(schedule.id)}
                 aria-label={`Lihat detail ${schedule.medicineName}`}
               >
                 <Eye size={17} />
@@ -161,7 +162,7 @@ export default function PatientScheduleDaySummary({ selectedDate, schedulesForDa
         </div>
       </div>
 
-      <PatientMedicineDetailModal schedule={selectedSchedule} onClose={() => setSelectedSchedule(null)} />
+      <PatientMedicineDetailModal schedule={selectedSchedule} onClose={() => setSelectedScheduleId(null)} />
     </m.section>
   );
 }

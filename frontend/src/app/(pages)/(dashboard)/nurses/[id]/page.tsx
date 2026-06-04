@@ -9,5 +9,5 @@ interface NurseDetailRouteProps {
 
 export default async function NurseDetailRoute({ params }: NurseDetailRouteProps) {
   const { id } = await params;
-  return <DashboardRoleGate allowedRoles={["admin", "nurse"]}><NurseDetailPage nurseId={decodeURIComponent(id)} /></DashboardRoleGate>;
+  return <DashboardRoleGate allowedRoles={["admin", "nurse"]} fallbackTitle="Detail Perawat"><NurseDetailPage nurseId={decodeURIComponent(id)} /></DashboardRoleGate>;
 }

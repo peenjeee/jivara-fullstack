@@ -13,5 +13,5 @@ export default async function PatientDetailRoute({ params }: PatientDetailRouteP
   const patientId = decodeURIComponent(id);
   const data = getInitialPatientDetail(patientId);
 
-  return <DashboardRoleGate allowedRoles={["admin", "nurse"]}><PatientDetailPage data={data} patientId={patientId} /></DashboardRoleGate>;
+  return <DashboardRoleGate allowedRoles={["admin", "nurse"]} fallbackTitle="Detail Pasien"><PatientDetailPage data={data} patientId={patientId} /></DashboardRoleGate>;
 }

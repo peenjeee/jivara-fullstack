@@ -23,6 +23,11 @@ async function createContentSecurityPolicy(nonce: string, pathname: string, host
   const allowWasmEval = isDev || isLandingPage;
   const apiOrigin = getConfiguredApiOrigin();
   const shouldUpgradeInsecureRequests = !apiOrigin?.startsWith('http://');
+  const vercelScriptSource = 'https://va.vercel-scripts.com';
+  const vercelInsightSources = [
+    'https://vitals.vercel-insights.com',
+    'https://vitals.vercel-analytics.com',
+  ];
   const connectSources = [
     "'self'",
     'blob:',
@@ -30,6 +35,7 @@ async function createContentSecurityPolicy(nonce: string, pathname: string, host
     'https://*.supabase.in',
     'https://api.jivara.web.id',
     'https://jivara-production.up.railway.app',
+    ...vercelInsightSources,
     ...(apiOrigin ? [apiOrigin] : []),
     ...(isDev ? ['http://localhost:3001', 'ws://localhost:3000', 'ws://127.0.0.1:3000'] : []),
   ].join(' ');
@@ -44,11 +50,11 @@ async function createContentSecurityPolicy(nonce: string, pathname: string, host
 
   const jsonLdHash = await createSha256Hash(JSON_LD_SCRIPT);
   const scriptSource = isDev
-    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: http://localhost:* http://127.0.0.1:* https://ajax.googleapis.com"
-    : `script-src 'self' 'nonce-${nonce}' 'sha256-${jsonLdHash}'${allowWasmEval ? " 'wasm-unsafe-eval'" : ''} 'strict-dynamic' https://ajax.googleapis.com`;
+    ? `script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: http://localhost:* http://127.0.0.1:* https://ajax.googleapis.com ${vercelScriptSource}`
+    : `script-src 'self' 'nonce-${nonce}' 'sha256-${jsonLdHash}'${allowWasmEval ? " 'wasm-unsafe-eval'" : ''} 'strict-dynamic' https://ajax.googleapis.com ${vercelScriptSource}`;
   const scriptElementSource = isDev
-    ? "script-src-elem 'self' 'unsafe-inline' blob: http://localhost:* http://127.0.0.1:* https://ajax.googleapis.com"
-    : `script-src-elem 'self' 'nonce-${nonce}' 'sha256-${jsonLdHash}' https://ajax.googleapis.com`;
+    ? `script-src-elem 'self' 'unsafe-inline' blob: http://localhost:* http://127.0.0.1:* https://ajax.googleapis.com ${vercelScriptSource}`
+    : `script-src-elem 'self' 'nonce-${nonce}' 'sha256-${jsonLdHash}' https://ajax.googleapis.com ${vercelScriptSource}`;
   const styleSource = allowInlineStyles
     ? "style-src 'self' 'unsafe-inline'"
     : `style-src 'self' 'nonce-${nonce}' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'sha256-RpGvlRbRQP1LZDBLDKCjN1VY9+ac/RHqgjmDHc2Y6PA='`;

@@ -249,7 +249,7 @@ export default function NurseListPage() {
         </ToolbarCard>}
       </m.div>
 
-      <m.section className="relative mt-6 min-h-[620px] overflow-hidden rounded-3xl bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)]" aria-busy={isUpdatingNurses || undefined} {...getDashboardEntranceMotion(shouldAnimate, 0.18, 24)}>
+      <m.section className="relative mt-6 overflow-hidden rounded-3xl bg-white shadow-[0_10px_30px_rgba(15,23,42,0.08)]" aria-busy={isUpdatingNurses || undefined} {...getDashboardEntranceMotion(shouldAnimate, 0.18, 24)}>
         <RefreshingNotice active={isUpdatingNurses} />
         {isLoading && !hasLoadedNurses ? <TableDataSkeleton /> : <>
         <div className={isUpdatingNurses ? "opacity-60 transition-opacity" : "transition-opacity"}>
