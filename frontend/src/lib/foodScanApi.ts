@@ -99,14 +99,6 @@ interface AnalyzedMedicationDetailResponse {
   medicineForm?: string | null;
 }
 
-interface RecommendationResponse {
-  patient_medications?: string[];
-  patient_medication_details?: AnalyzedMedicationDetailResponse[];
-  analyzed_medications_count?: number;
-  recommended_foods?: FoodRecommendationResponse[];
-  foods_to_avoid?: FoodRecommendationResponse[];
-}
-
 interface NutritionResponse {
   items: NutritionItemResponse[];
   total: {
@@ -237,8 +229,14 @@ const mapDetailDetectedItem = (item: NonNullable<FoodScanDetailResponse["detecte
 });
 
 const toRisk = (riskLevel: string): FoodScanRisk => {
-  if (["sedang", "menengah", "moderate", "medium", "tinggi", "kritis", "critical", "high"].includes(riskLevel.toLowerCase())) return "High Risk";
+  const normalized = riskLevel.trim().toLowerCase();
+  if (["tinggi", "kritis", "critical", "high", "high risk"].includes(normalized)) return "High Risk";
   return "Low Risk";
+};
+
+const isAttentionRiskLevel = (riskLevel?: string | null) => {
+  const normalized = String(riskLevel || "").trim().toLowerCase();
+  return ["sedang", "menengah", "moderate", "medium", "tinggi", "kritis", "critical", "high", "high risk"].includes(normalized);
 };
 
 const getBackendImageUrl = (imageUrl: string) => {
@@ -296,6 +294,20 @@ const mapSafeFood = (item: { food_item: string; food_display: string; status: st
 
 const formatFoodDisplay = (value: string) => value.replace(/-/g, " ");
 
+const foodDetectionModelDisplayName = "Jivara Food Detection";
+const inferenceDurationFormatter = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 1 });
+
+const formatInferenceDuration = (durationMs?: number | null) => {
+  if (!durationMs || durationMs <= 0) return "";
+  const seconds = Math.max(durationMs / 1000, 0.1);
+  return `${inferenceDurationFormatter.format(seconds)} detik`;
+};
+
+const formatInferencePhrase = (durationMs?: number | null) => {
+  const duration = formatInferenceDuration(durationMs);
+  return duration ? ` dalam ${duration}` : "";
+};
+
 const mapNutritionItem = (item: NutritionItemResponse) => ({
   foodItem: item.food_item,
   foodDisplay: item.food_display,
@@ -306,7 +318,7 @@ const mapNutritionItem = (item: NutritionItemResponse) => ({
     fatG: item.nutrition.fat_g,
     carbsG: item.nutrition.carbs_g,
   },
-  source: item.source,
+  source: item.source.replace(/\bJivara AI Nutrition\b/gi, "Jivara Nutrition"),
 });
 
 const mapNutritionTotal = (total: NutritionResponse["total"]) => ({
@@ -370,7 +382,7 @@ const mapScanDetail = (detail: FoodScanDetailResponse, patientName = detail.pati
   const risk = toRisk(detail.overallRiskLevel || "rendah");
   const analyzedMedicationNames = getAnalyzedMedicationNames(detail, detailInteractions);
   const analyzedMedicationCount = getAnalyzedMedicationCount(detail.analyzedMedicationCount, analyzedMedicationNames);
-  const hasRiskyInteractions = detailInteractions.some((interaction) => toRisk(interaction.severity) === "High Risk");
+  const hasAttentionInteractions = isAttentionRiskLevel(detail.overallRiskLevel) || detailInteractions.some((interaction) => isAttentionRiskLevel(interaction.severity));
   const scan: FoodScanRecord = {
     id: detail.id,
     patientId: detail.patientId,
@@ -380,13 +392,13 @@ const mapScanDetail = (detail: FoodScanDetailResponse, patientName = detail.pati
     risk,
     hasDetectedFood,
     aiReasoning: hasDetectedFood
-      ? `Model ${detail.modelVersion || "AI"} menganalisis ${foodName}${detail.inferenceTimeMs ? ` dalam ${detail.inferenceTimeMs} ms` : ""}${analyzedMedicationCount > 0 ? " dan mencocokkannya dengan obat aktif pasien" : ""}.`
-      : `Model ${detail.modelVersion || "AI"} tidak mendeteksi makanan yang didukung${detail.inferenceTimeMs ? ` dalam ${detail.inferenceTimeMs} ms` : ""}. Pastikan gambar berisi makanan dan kamera aktif, lalu coba scan ulang.`,
+      ? `Model ${foodDetectionModelDisplayName} menganalisis ${foodName}${formatInferencePhrase(detail.inferenceTimeMs)}${analyzedMedicationCount > 0 ? " dan mencocokkannya dengan obat aktif pasien" : ""}.`
+      : `Model ${foodDetectionModelDisplayName} tidak mendeteksi makanan yang didukung${formatInferencePhrase(detail.inferenceTimeMs)}. Pastikan gambar berisi makanan dan kamera aktif, lalu coba scan ulang.`,
     result: hasDetectedFood
-      ? hasRiskyInteractions ? "Ditemukan potensi interaksi obat-makanan." : "Tidak ditemukan interaksi signifikan pada makanan yang terdeteksi."
+      ? hasAttentionInteractions ? "Ditemukan potensi interaksi obat-makanan." : "Tidak ditemukan interaksi signifikan pada makanan yang terdeteksi."
       : "Tidak ada makanan yang dapat dianalisis dari gambar ini.",
     recommendation: hasDetectedFood
-      ? detail.overallRecommendation || (hasRiskyInteractions ? "Ditemukan potensi interaksi obat-makanan. Ikuti alternatif makanan aman dari rekomendasi AI." : "Tidak ditemukan interaksi signifikan pada makanan yang terdeteksi.")
+      ? detail.overallRecommendation || (hasAttentionInteractions ? "Ditemukan potensi interaksi obat-makanan. Baca penjelasan AI per obat dan konsultasikan dengan dokter atau apoteker." : "Tidak ditemukan interaksi signifikan pada makanan yang terdeteksi.")
       : "Gunakan foto makanan yang lebih jelas atau upload gambar makanan dari galeri.",
     detectedItems: detectedItems.map(mapDetailDetectedItem),
   };
@@ -417,7 +429,7 @@ const mapScanDetail = (detail: FoodScanDetailResponse, patientName = detail.pati
       },
       risk: toRisk(interaction.severity),
       reasoning: interaction.interactionDescription || "Interaksi terdeteksi dari hasil analisis makanan-obat.",
-      recommendation: interaction.recommendation || "Ikuti rekomendasi tenaga kesehatan.",
+      recommendation: interaction.recommendation ?? "",
     };
   });
   const riskyFoodItems = new Set(rawDetailInteractions.map((interaction) => interaction.foodItem));
@@ -500,7 +512,7 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
         scannedAt: upload.timestamp,
         risk: "Low Risk",
         hasDetectedFood: false,
-        aiReasoning: `Model ${detection.model_version} tidak mendeteksi makanan yang didukung dalam ${detection.inference_time_ms} ms. Pastikan gambar berisi makanan dan kamera aktif, lalu coba scan ulang.`,
+        aiReasoning: `Model ${foodDetectionModelDisplayName} tidak mendeteksi makanan yang didukung${formatInferencePhrase(detection.inference_time_ms)}. Pastikan gambar berisi makanan dan kamera aktif, lalu coba scan ulang.`,
         result: "Tidak ada makanan yang dapat dianalisis dari gambar ini.",
         recommendation: "Gunakan foto makanan yang lebih jelas atau upload gambar makanan dari galeri.",
         detectedItems: [],
@@ -518,15 +530,11 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
     };
   }
 
-  const [interactionResult, recommendationResult, nutritionResult] = await Promise.allSettled([
+  const [interactionResult, nutritionResult] = await Promise.allSettled([
     api.post<{ data: InteractionResponse }>(`/food-scans/${encodeURIComponent(upload.image_id)}/interactions`, {
       patientId,
       detectedItems: detectedLabels,
       includeRecommendations: false,
-    }),
-    api.post<{ data: RecommendationResponse }>(`/food-scans/${encodeURIComponent(upload.image_id)}/recommendations`, {
-      patientId,
-      topN: 100,
     }),
     api.post<{ data: NutritionResponse }>("/nutrition-estimates", {
       scanId: upload.image_id,
@@ -540,24 +548,20 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
 
   const interactionData = interactionResult.value.data.data;
   const uniqueInteractions = dedupeInteractions(interactionData.interactions);
-  const recommendationData = recommendationResult.status === "fulfilled"
-    ? recommendationResult.value.data.data
-    : null;
   const nutritionData = nutritionResult.status === "fulfilled"
     ? nutritionResult.value.data.data
     : null;
   const nutritionItems = nutritionData?.items.map(mapNutritionItem) ?? [];
   const risk = toRisk(interactionData.overall_risk_level);
+  const hasAttentionInteractions = isAttentionRiskLevel(interactionData.overall_risk_level) || uniqueInteractions.some((interaction) => isAttentionRiskLevel(interaction.severity));
   const foodName = toFoodName(detection.detected_items);
   const analyzedMedicationNames = uniqueStrings([
-    ...(recommendationData?.patient_medications || []),
     ...(interactionData.patient_medications || []),
-    ...(recommendationData?.patient_medication_details || []).map((medicine) => medicine.drugName),
     ...(interactionData.patient_medication_details || []).map((medicine) => medicine.drugName),
     ...uniqueInteractions.map((interaction) => interaction.medication),
   ]);
   const analyzedMedicationCount = getAnalyzedMedicationCount(
-    recommendationData?.analyzed_medications_count ?? interactionData.analyzed_medications_count,
+    interactionData.analyzed_medications_count,
     analyzedMedicationNames,
   );
   const scan: FoodScanRecord = {
@@ -568,8 +572,8 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
     scannedAt: upload.timestamp,
     risk,
     hasDetectedFood: detection.detected_items.length > 0,
-    aiReasoning: `Model ${detection.model_version} mendeteksi ${foodName} dalam ${detection.inference_time_ms} ms${analyzedMedicationCount > 0 ? " dan mencocokkannya dengan obat aktif pasien" : ""}.`,
-    result: risk === "High Risk" ? "Ditemukan potensi interaksi obat-makanan." : "Tidak ditemukan interaksi signifikan pada makanan yang terdeteksi.",
+    aiReasoning: `Model ${foodDetectionModelDisplayName} mendeteksi ${foodName}${formatInferencePhrase(detection.inference_time_ms)}${analyzedMedicationCount > 0 ? " dan mencocokkannya dengan obat aktif pasien" : ""}.`,
+    result: hasAttentionInteractions ? "Ditemukan potensi interaksi obat-makanan." : "Tidak ditemukan interaksi signifikan pada makanan yang terdeteksi.",
     recommendation: interactionData.overall_recommendation || interactionData.disclaimer,
     detectedItems: detection.detected_items.map(mapDetectedItem),
   };
@@ -584,8 +588,8 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
   await clearFoodScanRelatedCaches();
 
   const recommendationGroups = splitRecommendationsByRisk(
-    recommendationData?.recommended_foods || interactionData.recommended_foods || [],
-    recommendationData?.foods_to_avoid || interactionData.foods_to_avoid || [],
+    interactionData.recommended_foods || [],
+    interactionData.foods_to_avoid || [],
   );
 
   return {
@@ -593,10 +597,7 @@ export const scanFoodImage = async (file: File): Promise<FoodScanAnalysis> => {
     patientName: patient.fullName || "Pasien",
     analyzedMedicationCount,
     analyzedMedications: analyzedMedicationNames,
-    analyzedMedicationDetails:
-      recommendationData?.patient_medication_details
-      ?? interactionData.patient_medication_details
-      ?? [],
+    analyzedMedicationDetails: interactionData.patient_medication_details ?? [],
     schedules: interactions.map((interaction) => interaction.schedule),
     interactions,
     nutritionItems: nutritionItems.length > 0 ? nutritionItems : undefined,

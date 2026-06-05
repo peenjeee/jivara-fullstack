@@ -116,7 +116,7 @@ describe("FoodScanAnalysisView", () => {
           ...analysis,
           scan: {
             ...analysis.scan,
-            recommendation: "Ditemukan potensi interaksi obat-makanan. Ikuti alternatif makanan aman dari rekomendasi AI.",
+            recommendation: "Ditemukan potensi interaksi obat-makanan. Baca penjelasan AI per obat dan konsultasikan dengan dokter atau apoteker.",
           },
           interactions: [
             {
@@ -148,7 +148,177 @@ describe("FoodScanAnalysisView", () => {
     );
 
     expect(screen.getByText("Rekomendasi keseluruhan")).toBeInTheDocument();
-    expect(screen.getByText("Ditemukan potensi interaksi obat-makanan. Ikuti alternatif makanan aman dari rekomendasi AI.")).toBeInTheDocument();
+    expect(screen.getByText("Ditemukan potensi interaksi obat-makanan. Baca penjelasan AI per obat dan konsultasikan dengan dokter atau apoteker.")).toHaveClass("text-justify");
+  });
+
+  it("hides per-interaction recommendation text when Jivara Interaction Check returns no recommended foods", () => {
+    render(
+      <FoodScanAnalysisView
+        scanId="scan-1"
+        analysisData={{
+          ...analysis,
+          interactions: [
+            {
+              foodItem: "tumis-kangkung",
+              foodDisplay: "tumis kangkung",
+              schedule: {
+                id: "interaction-1",
+                patientId: "patient-1",
+                patientName: "Budi Santoso",
+                patientAvatar: "BS",
+                medicineName: "WARFARIN",
+                dose: "-",
+                medicineForm: "Tablet",
+                stock: 0,
+                frequency: "Sesuai jadwal aktif",
+                times: [],
+                mealRule: "Tidak tergantung makan",
+                startDate: "2026-05-09",
+                reminderEnabled: true,
+                status: "Aktif",
+              },
+              risk: "High Risk",
+              reasoning: "Reasoning OpenRouter dari backend.",
+              recommendation: "",
+            },
+          ],
+          recommendedFoods: [],
+          foodsToAvoid: [],
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Reasoning OpenRouter dari backend.")).toBeInTheDocument();
+    expect(screen.queryByText("Rekomendasi AI")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Alternatif makanan aman dari Jivara Interaction Check/i)).not.toBeInTheDocument();
+  });
+
+  it("shows safe and limited food recommendation sections when a high-risk interaction exists", () => {
+    render(
+      <FoodScanAnalysisView
+        scanId="scan-1"
+        analysisData={{
+          ...analysis,
+          overallRisk: "High Risk",
+          scan: {
+            ...analysis.scan,
+            risk: "High Risk",
+            recommendation: "Pilih alternatif makanan aman dari Jivara Interaction Check.",
+          },
+          interactions: [
+            {
+              foodItem: "susu",
+              foodDisplay: "Susu",
+              schedule: {
+                id: "interaction-1",
+                patientId: "patient-1",
+                patientName: "Budi Santoso",
+                patientAvatar: "BS",
+                medicineName: "CEFIXIME",
+                dose: "-",
+                medicineForm: "Tablet",
+                stock: 0,
+                frequency: "Sesuai jadwal aktif",
+                times: [],
+                mealRule: "Tidak tergantung makan",
+                startDate: "2026-05-09",
+                reminderEnabled: true,
+                status: "Aktif",
+              },
+              risk: "High Risk",
+              reasoning: "Susu dapat mengganggu penyerapan.",
+              recommendation: "",
+            },
+          ],
+          recommendedFoods: [{ foodName: "ayam-goreng", severityScore: 0, riskLevel: "aman", worstCategory: null }],
+          foodsToAvoid: [{ foodName: "susu", severityScore: 5, riskLevel: "tinggi", worstCategory: "antibiotik" }],
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Rekomendasi AI")).toBeInTheDocument();
+    expect(screen.getByText("Makanan Aman")).toBeInTheDocument();
+    expect(screen.getByText("Perlu Dibatasi")).toBeInTheDocument();
+    expect(screen.getByText("ayam goreng")).toBeInTheDocument();
+    expect(screen.getByText("susu")).toBeInTheDocument();
+  });
+
+  it("does not show safe-food recommendations for low-risk scans", () => {
+    render(
+      <FoodScanAnalysisView
+        scanId="scan-1"
+        analysisData={{
+          ...analysis,
+          recommendedFoods: [{ foodName: "apel", severityScore: 0, riskLevel: "aman", worstCategory: null }],
+        }}
+      />,
+    );
+
+    expect(screen.queryByText("Rekomendasi AI")).not.toBeInTheDocument();
+    expect(screen.queryByText("apel")).not.toBeInTheDocument();
+  });
+
+  it("labels nutrition values as estimates per 100 grams", () => {
+    render(
+      <FoodScanAnalysisView
+        scanId="scan-1"
+        analysisData={{
+          ...analysis,
+          nutritionItems: [
+            {
+              foodItem: "nasi-goreng",
+              foodDisplay: "Nasi Goreng",
+              portion: "100 gram",
+              nutrition: { calories: 276, proteinG: 3.2, fatG: 3.2, carbsG: 30.2 },
+              source: "Jivara Nutrition",
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Estimasi per 100 gram • Jivara Nutrition")).toBeInTheDocument();
+  });
+
+  it("renders AI reasoning without raw markdown star symbols", () => {
+    render(
+      <FoodScanAnalysisView
+        scanId="scan-1"
+        analysisData={{
+          ...analysis,
+          interactions: [
+            {
+              foodItem: "nasi-goreng",
+              foodDisplay: "nasi goreng",
+              schedule: {
+                id: "interaction-1",
+                patientId: "patient-1",
+                patientName: "Budi Santoso",
+                patientAvatar: "BS",
+                medicineName: "CELESTAR",
+                dose: "-",
+                medicineForm: "Tablet",
+                stock: 0,
+                frequency: "Sesuai jadwal aktif",
+                times: [],
+                mealRule: "Tidak tergantung makan",
+                startDate: "2026-05-09",
+                reminderEnabled: true,
+                status: "Aktif",
+              },
+              risk: "Low Risk",
+              reasoning: "Hai! Obat **CELESTAR** memiliki *risk level* **ringan** dengan skor **2,5/5**. AI service tidak memberikan rekomendasi makanan pengganti, sehingga cukup ikuti arahan dokter.",
+              recommendation: "",
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Obat CELESTAR memiliki risk level ringan dengan skor 2,5/5.")).toHaveClass("text-justify");
+    expect(screen.queryByText(/^Hai!/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/rekomendasi makanan pengganti/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\*/)).not.toBeInTheDocument();
   });
 
   it("renders normalized detection boxes without shrinking them as pixel coordinates", () => {

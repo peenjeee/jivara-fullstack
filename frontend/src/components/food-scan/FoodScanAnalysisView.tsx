@@ -44,6 +44,17 @@ const formatMedicineInfo = (value?: string | null) => {
   return trimmed;
 };
 
+const cleanAiText = (value: string) => value
+  .replace(/\s*(?:AI service tidak memberikan|Tidak ada) rekomendasi makanan(?: pengganti)?(?: dari AI service)?[^.?!]*(?:[.?!]|$)/gi, " ")
+  .replace(/^\s*(?:hai|halo|hello|hi)\b(?:\s+(?:semua|dok|pasien|anda))?\s*[!,.:;-]?\s*/i, "")
+  .replace(/\bAI service\b/gi, "Jivara Interaction Check")
+  .replace(/\*/g, "")
+  .replace(/`([^`]+)`/g, "$1")
+  .replace(/[ \t]+\n/g, "\n")
+  .replace(/\n{3,}/g, "\n\n")
+  .replace(/[ \t]{2,}/g, " ")
+  .trim();
+
 
 export default function FoodScanAnalysisView({ scanId, imageSizes = "(max-width: 1280px) 100vw, 620px", analysisData }: FoodScanAnalysisViewProps) {
   const shouldAnimate = useDashboardEntranceMotion();
@@ -53,6 +64,7 @@ export default function FoodScanAnalysisView({ scanId, imageSizes = "(max-width:
 
   const analyzedMedicationCount = analysis.analyzedMedicationCount ?? analysis.analyzedMedications?.length ?? analysis.interactions.length;
   const hasDetectedFood = analysis.scan.hasDetectedFood !== false;
+  const hasHighRiskInteraction = analysis.overallRisk === "High Risk" || analysis.interactions.some((interaction) => interaction.risk === "High Risk");
 
   return (
     <div className="space-y-5">
@@ -64,13 +76,13 @@ export default function FoodScanAnalysisView({ scanId, imageSizes = "(max-width:
         <DetailItem label="Obat Dianalisis" value={`${analyzedMedicationCount} obat`} />
       </m.div>
 
-      <FoodInsightCard icon={<BrainCircuit size={20} />} title="AI Detection & Reasoning" text={analysis.scan.aiReasoning} risk={analysis.overallRisk} hasDetectedFood={hasDetectedFood} delay={0.12} shouldAnimate={shouldAnimate} />
+      <FoodInsightCard icon={<BrainCircuit size={20} />} title="Deteksi Makanan" text={analysis.scan.aiReasoning} risk={analysis.overallRisk} hasDetectedFood={hasDetectedFood} delay={0.12} shouldAnimate={shouldAnimate} />
 
       {hasDetectedFood && <InteractionAnalysisCard interactions={analysis.interactions} analyzedMedications={analysis.analyzedMedications ?? []} analyzedMedicationDetails={analysis.analyzedMedicationDetails ?? []} safeFoods={analysis.safeFoods ?? []} overallRecommendation={analysis.scan.recommendation} disclaimer={analysis.disclaimer} shouldAnimate={shouldAnimate} />}
 
       <NutritionCard items={analysis.nutritionItems ?? []} total={analysis.nutritionTotal} shouldAnimate={shouldAnimate} />
 
-      <RecommendationCard recommendedFoods={analysis.recommendedFoods ?? []} foodsToAvoid={analysis.foodsToAvoid ?? []} safeFoods={analysis.safeFoods ?? []} shouldAnimate={shouldAnimate} />
+      <RecommendationCard recommendedFoods={analysis.recommendedFoods ?? []} foodsToAvoid={analysis.foodsToAvoid ?? []} shouldShow={hasHighRiskInteraction} shouldAnimate={shouldAnimate} />
     </div>
   );
 }
@@ -258,7 +270,7 @@ function NutritionCard({ items, total, shouldAnimate }: { readonly items: NonNul
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h4 className="font-display text-xl font-extrabold tracking-[-0.04em] text-text-main">{item.foodDisplay}</h4>
-                  <p className="mt-1 text-sm font-bold text-muted">{item.portion} • {item.source}</p>
+                  <p className="mt-1 text-sm font-bold text-muted">{formatNutritionPortion(item.portion)} • {item.source}</p>
                 </div>
                 <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-extrabold uppercase tracking-[0.1em] text-primary">{Math.round(item.nutrition.calories)} kkal</span>
               </div>
@@ -271,28 +283,31 @@ function NutritionCard({ items, total, shouldAnimate }: { readonly items: NonNul
   );
 }
 
+function formatNutritionPortion(portion: string) {
+  const trimmed = portion.trim();
+  return /^100\s*gram$/i.test(trimmed) ? "Estimasi per 100 gram" : `Estimasi per ${trimmed || "porsi"}`;
+}
+
 type FoodRecommendationItem = NonNullable<FoodScanAnalysis["recommendedFoods"]>[number];
 
-function RecommendationCard({ recommendedFoods, foodsToAvoid, safeFoods, shouldAnimate }: { readonly recommendedFoods: NonNullable<FoodScanAnalysis["recommendedFoods"]>; readonly foodsToAvoid: NonNullable<FoodScanAnalysis["foodsToAvoid"]>; readonly safeFoods: NonNullable<FoodScanAnalysis["safeFoods"]>; readonly shouldAnimate: boolean }) {
+function RecommendationCard({ recommendedFoods, foodsToAvoid, shouldShow, shouldAnimate }: { readonly recommendedFoods: NonNullable<FoodScanAnalysis["recommendedFoods"]>; readonly foodsToAvoid: NonNullable<FoodScanAnalysis["foodsToAvoid"]>; readonly shouldShow: boolean; readonly shouldAnimate: boolean }) {
   const { safeRecommendations, avoidRecommendations } = splitRecommendationsByRisk(recommendedFoods, foodsToAvoid);
-  const showsSafeFallback = safeRecommendations.length === 0 && safeFoods.length > 0;
-  const showsAvoidSection = avoidRecommendations.length > 0 || safeRecommendations.length > 0 || showsSafeFallback;
-  const visibleSectionCount = Number(safeRecommendations.length > 0) + Number(showsSafeFallback) + Number(showsAvoidSection);
+  const showsAvoidSection = avoidRecommendations.length > 0 || safeRecommendations.length > 0;
+  const visibleSectionCount = Number(safeRecommendations.length > 0) + Number(showsAvoidSection);
 
-  if (safeRecommendations.length === 0 && avoidRecommendations.length === 0 && safeFoods.length === 0) return null;
+  if (!shouldShow || (safeRecommendations.length === 0 && avoidRecommendations.length === 0)) return null;
 
   return (
     <m.section className="space-y-5" {...getDashboardEntranceMotion(shouldAnimate, 0.26, 18)}>
       <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-        <Apple size={20} className="text-primary" />
-        <h3 className="font-display text-2xl font-extrabold tracking-[-0.04em] text-text-main">Rekomendasi AI</h3>
+          <Apple size={20} className="text-primary" />
+          <h3 className="font-display text-2xl font-extrabold tracking-[-0.04em] text-text-main">Rekomendasi AI</h3>
         </div>
       </div>
 
       <div className={`grid gap-4 ${visibleSectionCount > 1 ? "lg:grid-cols-2" : ""}`}>
         {safeRecommendations.length > 0 && <FoodScoreList title="Makanan Aman" items={safeRecommendations} tone="safe" />}
-        {showsSafeFallback && <SafeFoodList items={safeFoods} />}
         {showsAvoidSection && <FoodScoreList title="Perlu Dibatasi" items={avoidRecommendations} tone="avoid" emptyMessage="Tidak ada makanan yang perlu dihindari. Namun selalu konsultasikan dengan dokter atau apoteker Anda." />}
       </div>
     </m.section>
@@ -373,21 +388,6 @@ function formatRiskLabel(value: string) {
   return value.replace(/_/g, " ").replace(/-/g, " ");
 }
 
-function SafeFoodList({ items }: { readonly items: NonNullable<FoodScanAnalysis["safeFoods"]> }) {
-  return (
-    <div className="rounded-3xl bg-surface p-4">
-      <h4 className="font-display text-xl font-extrabold tracking-[-0.04em] text-text-main">Makanan Terdeteksi Aman</h4>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {items.map((item) => (
-          <span key={`safe-${item.foodItem}`} className="rounded-full bg-leaf/10 px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-leaf">
-            {item.foodDisplay} • {item.status}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function InteractionAnalysisCard({ interactions, analyzedMedications, analyzedMedicationDetails, safeFoods, overallRecommendation, disclaimer, shouldAnimate }: { readonly interactions: FoodScanAnalysis["interactions"]; readonly analyzedMedications: NonNullable<FoodScanAnalysis["analyzedMedications"]>; readonly analyzedMedicationDetails: NonNullable<FoodScanAnalysis["analyzedMedicationDetails"]>; readonly safeFoods: NonNullable<FoodScanAnalysis["safeFoods"]>; readonly overallRecommendation?: string; readonly disclaimer?: string; readonly shouldAnimate: boolean }) {
   const overallRecommendationText = overallRecommendation?.trim();
   const disclaimerText = disclaimer?.trim() || defaultMedicalDisclaimer;
@@ -448,8 +448,8 @@ function InteractionAnalysisCard({ interactions, analyzedMedications, analyzedMe
                   </div>
                 </div>
               </div>
-              <p className="mt-4 text-sm font-semibold leading-6 text-muted">{interaction.reasoning}</p>
-              <p className="mt-3 text-sm font-bold leading-6 text-text-main">{interaction.recommendation}</p>
+              <p className="mt-4 whitespace-pre-line text-justify text-sm font-semibold leading-6 text-muted">{cleanAiText(interaction.reasoning)}</p>
+              {interaction.recommendation.trim() && <p className="mt-3 text-justify text-sm font-bold leading-6 text-text-main">{cleanAiText(interaction.recommendation)}</p>}
             </article>
           ))}
         </div>
@@ -458,7 +458,7 @@ function InteractionAnalysisCard({ interactions, analyzedMedications, analyzedMe
       {overallRecommendationText && (
         <article className="rounded-3xl bg-surface p-4">
           <p className="text-xs font-extrabold uppercase tracking-[0.08em] text-primary">Rekomendasi keseluruhan</p>
-          <p className="mt-2 text-sm font-bold leading-6 text-text-main">{overallRecommendationText}</p>
+          <p className="mt-2 text-justify text-sm font-bold leading-6 text-text-main">{cleanAiText(overallRecommendationText)}</p>
         </article>
       )}
 
@@ -480,7 +480,7 @@ function FoodInsightCard({ icon, title, text, risk, hasDetectedFood, delay, shou
         <span className={iconClassName}>{icon}</span>
         <h3 className="font-display text-xl font-extrabold tracking-[-0.04em] text-text-main">{title}</h3>
       </div>
-      <p className="text-sm font-semibold leading-6 text-muted">{text}</p>
+      <p className="text-justify text-sm font-semibold leading-6 text-muted">{cleanAiText(text)}</p>
     </m.section>
   );
 }

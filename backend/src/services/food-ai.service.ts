@@ -89,6 +89,34 @@ type ReasoningInteractionResponse = {
   alert_sent?: boolean;
 };
 
+type FoodMedicationInteractionCheck = {
+  food: string;
+  medication: string;
+  response: ReasoningInteractionResponse;
+};
+
+type ReasoningPrediction = ReasoningInteractionResponse["detailed_predictions"][number];
+
+type GeneratedReasoning = {
+  text: string;
+  source?: string;
+};
+
+type OpenRouterChatResponse = {
+  choices?: Array<{
+    message?: {
+      content?: string | Array<{ type?: string; text?: string }>;
+    };
+  }>;
+};
+
+type OpenRouterChatMessage = {
+  role: "system" | "user";
+  content: string;
+};
+
+type OpenRouterMessageContent = NonNullable<NonNullable<OpenRouterChatResponse["choices"]>[number]["message"]>["content"];
+
 type ReasoningRecommendResponse = {
   patient_medications: string[];
   matched_categories?: Record<string, string[]>;
@@ -151,6 +179,34 @@ const getAiInferenceUrl = () => {
 
 const getReasoningApiBaseUrl = () => (process.env.FOOD_REASONING_API_URL || process.env.AI_REASONING_URL || "https://ai.jivara.web.id").replace(/\/+$/, "");
 
+const getOpenRouterApiKey = () => process.env.OPENROUTER_API_KEY?.trim();
+
+const getOpenRouterModel = () => process.env.OPENROUTER_REASONING_MODEL || "moonshotai/kimi-k2.6:free";
+
+const DEFAULT_OPENROUTER_FALLBACK_MODELS = [
+  "openai/gpt-oss-120b:free",
+  "nvidia/nemotron-3-super-120b-a12b:free",
+  "poolside/laguna-m.1:free",
+  "z-ai/glm-4.5-air:free",
+  "poolside/laguna-xs.2:free",
+  "openai/gpt-oss-20b:free",
+  "nvidia/nemotron-3-ultra-550b-a55b:free",
+  "nvidia/nemotron-3-nano-30b-a3b:free",
+  "google/gemma-4-31b-it:free",
+  "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+].join(",");
+
+const getOpenRouterFallbackModels = () => (process.env.OPENROUTER_REASONING_FALLBACK_MODELS || DEFAULT_OPENROUTER_FALLBACK_MODELS)
+  .split(",")
+  .map((model) => model.trim())
+  .filter(Boolean);
+
+const getOpenRouterModels = () => Array.from(new Set([getOpenRouterModel(), ...getOpenRouterFallbackModels()]));
+
+const getOpenRouterApiUrl = () => `${(process.env.OPENROUTER_API_URL || "https://openrouter.ai/api/v1").replace(/\/+$/, "")}/chat/completions`;
+
+const getOpenRouterTimeoutMs = () => Number(process.env.OPENROUTER_TIMEOUT_MS || process.env.FOOD_REASONING_TIMEOUT_MS || 15000);
+
 const shouldUseDevelopmentFallback = () =>
   process.env.FOOD_AI_ALLOW_LOCAL_FALLBACK === "true";
 
@@ -195,13 +251,20 @@ const mapRiskScoreToLevel = (score: number) => {
   return "rendah";
 };
 
+const formatFoodName = (value: string) => value.replace(/[-_]/g, " ");
+
 const isAttentionRiskLevel = (riskLevel?: string | null) => {
   const normalized = String(riskLevel || "").trim().toLocaleLowerCase("id-ID");
-  return ["sedang", "menengah", "moderate", "medium", "tinggi", "kritis", "critical", "high"].includes(normalized);
+  return ["sedang", "menengah", "moderate", "medium", "tinggi", "kritis", "critical", "high", "high risk"].includes(normalized);
 };
 
+const getPredictionSeverityScore = (prediction: ReasoningPrediction) => Number(prediction.severity_score || 0);
+
+const hasPredictionInteractionAttention = (prediction: ReasoningPrediction) =>
+  getPredictionSeverityScore(prediction) >= 2 || isAttentionRiskLevel(prediction.risk_level);
+
 const getOverallRecommendationText = (riskLevel?: string | null) => isAttentionRiskLevel(riskLevel)
-  ? "Ditemukan potensi interaksi obat-makanan. Ikuti alternatif makanan aman dari rekomendasi AI."
+  ? "Ditemukan potensi interaksi obat-makanan. Baca penjelasan AI per obat dan konsultasikan dengan dokter atau apoteker."
   : "Tidak ditemukan interaksi signifikan pada makanan yang terdeteksi.";
 
 type FoodInteractionResult = {
@@ -228,6 +291,250 @@ const dedupeInteractionResults = (interactions: FoodInteractionResult[]) => Arra
   if (!uniqueInteractions.has(key)) uniqueInteractions.set(key, interaction);
   return uniqueInteractions;
 }, new Map<string, FoodInteractionResult>()).values());
+
+const formatRecommendationNames = (foods: readonly ReasoningFoodScore[] = []) => foods
+  .map((food) => formatFoodName(food.food_name))
+  .filter((foodName) => foodName.trim())
+  .join(", ");
+
+const getInteractionRecommendationText = (foods: readonly ReasoningFoodScore[] = []) => {
+  const foodNames = formatRecommendationNames(foods);
+  return foodNames ? `Alternatif makanan aman dari Jivara Interaction Check: ${foodNames}.` : "";
+};
+
+const cleanAiReasoningText = (value: string) => value
+  .replace(/\s*(?:AI service tidak memberikan|Tidak ada) rekomendasi makanan(?: pengganti)?(?: dari AI service)?[^.?!]*(?:[.?!]|$)/gi, " ")
+  .replace(/^\s*(?:hai|halo|hello|hi)\b(?:\s+(?:semua|dok|pasien|anda))?\s*[!,.:;-]?\s*/i, "")
+  .replace(/\bAI service\b/gi, "Jivara Interaction Check")
+  .replace(/\*/g, "")
+  .replace(/`([^`]+)`/g, "$1")
+  .replace(/[ \t]+\n/g, "\n")
+  .replace(/\n{3,}/g, "\n\n")
+  .replace(/[ \t]{2,}/g, " ")
+  .trim();
+
+const buildReasoningFallback = (food: string, medication: string, prediction: ReasoningPrediction): string => {
+  const foodName = formatFoodName(food);
+  const severityScore = getPredictionSeverityScore(prediction);
+  const riskLevel = prediction.risk_level || mapRiskScoreToLevel(severityScore);
+  const mechanisms = prediction.mechanisms?.map((mechanism) => mechanism.trim()).filter(Boolean).join("; ");
+  const categories = [
+    ...(prediction.matched_categories || []),
+    ...(prediction.risky_categories || []),
+  ].map((category) => category.trim()).filter(Boolean).join(", ");
+
+  if (hasPredictionInteractionAttention(prediction)) {
+    return [
+      `${foodName} dengan ${medication} terdeteksi memiliki potensi interaksi ${riskLevel} dengan skor ${severityScore.toFixed(1)}/5 berdasarkan analisis Jivara Interaction Check.`,
+      mechanisms
+        ? `Faktor utamanya: ${mechanisms}. Hindari konsumsi bersamaan sebelum mendapat arahan dokter atau apoteker.`
+        : categories
+          ? `Kategori yang cocok: ${categories}. Perhatikan porsi, waktu konsumsi obat, dan konsultasikan dengan dokter atau apoteker bila ada keluhan.`
+          : "Perhatikan porsi, waktu konsumsi obat, dan konsultasikan dengan dokter atau apoteker bila ada keluhan.",
+    ].join(" ");
+  }
+
+  return [
+    `${foodName} dengan ${medication} diprediksi tidak menunjukkan interaksi signifikan pada data Jivara Interaction Check.`,
+    "Tetap ikuti jadwal minum obat dan pantau kondisi tubuh sesuai anjuran tenaga kesehatan.",
+  ].join(" ");
+};
+
+const parseOpenRouterContent = (content: OpenRouterMessageContent) => {
+  if (typeof content === "string") return content.trim();
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => typeof part.text === "string" ? part.text : "")
+      .join("")
+      .trim();
+  }
+
+  return "";
+};
+
+const buildOpenRouterPrompt = (food: string, medication: string, prediction: ReasoningPrediction, recommendedFoods: readonly ReasoningFoodScore[] = []) => {
+  const riskLevel = prediction.risk_level || mapRiskScoreToLevel(Number(prediction.severity_score || 0));
+  const mechanisms = prediction.mechanisms?.length ? prediction.mechanisms.join("; ") : "Tidak ada mekanisme spesifik dari Jivara Interaction Check.";
+  const matchedCategories = prediction.matched_categories?.length ? prediction.matched_categories.join(", ") : "-";
+  const riskyCategories = prediction.risky_categories?.length ? prediction.risky_categories.join(", ") : "-";
+  const recommendationNames = formatRecommendationNames(recommendedFoods);
+
+  return [
+    `Makanan: ${formatFoodName(food)} (${food})`,
+    `Obat: ${medication}`,
+    `Risk level dari Jivara Interaction Check: ${riskLevel}`,
+    `Severity score: ${Number(prediction.severity_score || 0).toFixed(1)}/5`,
+    `Kategori cocok: ${matchedCategories}`,
+    `Kategori berisiko: ${riskyCategories}`,
+    `Mekanisme: ${mechanisms}`,
+    recommendationNames
+      ? `Rekomendasi makanan pengganti dari Jivara Interaction Check: ${recommendationNames}`
+      : "Rekomendasi makanan pengganti dari Jivara Interaction Check: kosong. Jangan menyebut daftar makanan pengganti dalam narasi.",
+    "",
+    "Tulis penjelasan untuk pasien dalam Bahasa Indonesia, ramah, 2 paragraf singkat.",
+    "Jelaskan mengapa kombinasi ini berisiko atau aman, apa yang perlu diwaspadai, dan saran tindakan umum.",
+    "Jika severity score 2.0 atau lebih, jelaskan sebagai potensi interaksi walaupun risk level tertulis ringan.",
+    "Jangan membuka dengan sapaan seperti Hai, Halo, atau sejenisnya.",
+    "Tulis sebagai teks biasa tanpa Markdown, tanpa bullet list, tanpa tanda bintang, tanpa heading, dan tanpa penebalan kata.",
+    "Jangan mengarang diagnosis, dosis obat, atau daftar makanan alternatif di luar data rekomendasi Jivara Interaction Check.",
+  ].join("\n");
+};
+
+const generateOpenRouterText = async (
+  messages: readonly OpenRouterChatMessage[],
+  maxTokens: number,
+): Promise<GeneratedReasoning | null> => {
+  const apiKey = getOpenRouterApiKey();
+
+  if (!apiKey) {
+    return null;
+  }
+
+  try {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    };
+    const referer = process.env.OPENROUTER_HTTP_REFERER || process.env.FRONTEND_URL;
+    if (referer) headers["HTTP-Referer"] = referer;
+    headers["X-OpenRouter-Title"] = process.env.OPENROUTER_APP_TITLE || "Jivara";
+
+    for (const model of getOpenRouterModels()) {
+      try {
+        const response = await axios.post<OpenRouterChatResponse>(
+          getOpenRouterApiUrl(),
+          {
+            model,
+            temperature: 0.3,
+            max_tokens: maxTokens,
+            messages,
+          },
+          { headers, timeout: getOpenRouterTimeoutMs() },
+        );
+        const text = cleanAiReasoningText(parseOpenRouterContent(response.data.choices?.[0]?.message?.content));
+        if (text) return { text, source: `OpenRouter ${model}` };
+      } catch {
+        // Try the next configured OpenRouter model before falling back to local text.
+      }
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+const generateFoodMedicationReasoning = async (
+  food: string,
+  medication: string,
+  prediction: ReasoningPrediction,
+  recommendedFoods: readonly ReasoningFoodScore[] = [],
+): Promise<GeneratedReasoning> => {
+  const fallback = cleanAiReasoningText(buildReasoningFallback(food, medication, prediction));
+  const generated = await generateOpenRouterText([
+    {
+      role: "system",
+      content: "Anda adalah asisten kesehatan virtual bernama Jivara. Anda menjelaskan interaksi makanan dan obat berdasarkan data Jivara Interaction Check, bukan hasil deteksi YOLO.",
+    },
+    {
+      role: "user",
+      content: buildOpenRouterPrompt(food, medication, prediction, recommendedFoods),
+    },
+  ], 450);
+
+  return generated || { text: fallback };
+};
+
+const buildOverallRecommendationFallback = (
+  interactions: readonly FoodInteractionResult[],
+  overallRiskLevel?: string | null,
+  recommendedFoods: readonly ReasoningFoodScore[] = [],
+): string => {
+  if (interactions.length === 0) return getOverallRecommendationText(overallRiskLevel);
+
+  const attentionInteractions = interactions.filter((interaction) => isAttentionRiskLevel(interaction.severity));
+  const foodCount = new Set(interactions.map((interaction) => interaction.food_item)).size;
+  const medicationCount = new Set(interactions.map((interaction) => interaction.medication.toLocaleUpperCase("id-ID"))).size;
+  const recommendedFoodNames = formatRecommendationNames(recommendedFoods);
+
+  if (attentionInteractions.length > 0) {
+    const priorityPairs = attentionInteractions
+      .slice(0, 3)
+      .map((interaction) => `${formatFoodName(interaction.food_item)} dengan ${interaction.medication}`)
+      .join(", ");
+    return [
+      `Secara keseluruhan, ditemukan ${attentionInteractions.length} potensi interaksi dari ${foodCount} makanan dan ${medicationCount} obat yang dianalisis.`,
+      priorityPairs ? `Prioritaskan perhatian pada ${priorityPairs}.` : "",
+      recommendedFoodNames ? `Alternatif makanan aman dari Jivara Interaction Check: ${recommendedFoodNames}.` : "",
+      "Ikuti jadwal obat, perhatikan respons tubuh setelah makan, dan konsultasikan dengan dokter atau apoteker sebelum mengubah pola konsumsi obat.",
+    ].filter(Boolean).join(" ");
+  }
+
+  return [
+    `Secara keseluruhan, ${foodCount} makanan dan ${medicationCount} obat yang dianalisis tidak menunjukkan interaksi signifikan pada data Jivara Interaction Check.`,
+    recommendedFoodNames ? `Pilihan makanan yang tetap aman dari Jivara Interaction Check: ${recommendedFoodNames}.` : "",
+    "Tetap ikuti jadwal minum obat dan pantau kondisi tubuh sesuai anjuran tenaga kesehatan.",
+  ].filter(Boolean).join(" ");
+};
+
+const buildOverallRecommendationPrompt = (
+  interactions: readonly FoodInteractionResult[],
+  overallRiskLevel: string,
+  recommendedFoods: readonly ReasoningFoodScore[] = [],
+  foodsToAvoid: readonly ReasoningFoodScore[] = [],
+) => {
+  const recommendedFoodNames = formatRecommendationNames(recommendedFoods);
+  const foodsToAvoidNames = formatRecommendationNames(foodsToAvoid);
+  const interactionLines = interactions.map((interaction, index) => [
+    `${index + 1}. Makanan: ${formatFoodName(interaction.food_item)}`,
+    `Obat: ${interaction.medication}`,
+    `Risk level: ${interaction.severity}`,
+    `Penjelasan: ${interaction.interaction_description}`,
+    interaction.recommendation ? `Rekomendasi pasangan: ${interaction.recommendation}` : "Rekomendasi pasangan: kosong",
+  ].join(" | ")).join("\n");
+
+  return [
+    `Overall risk level: ${overallRiskLevel}`,
+    recommendedFoodNames
+      ? `Rekomendasi makanan aman dari Jivara Interaction Check: ${recommendedFoodNames}`
+      : "Rekomendasi makanan aman dari Jivara Interaction Check: kosong. Jangan menyebut makanan pengganti jika kosong.",
+    foodsToAvoidNames
+      ? `Makanan yang perlu dihindari dari Jivara Interaction Check: ${foodsToAvoidNames}`
+      : "Makanan yang perlu dihindari dari Jivara Interaction Check: kosong.",
+    "",
+    "Penjelasan per pasangan makanan-obat:",
+    interactionLines || "Tidak ada interaksi spesifik.",
+    "",
+    "Buat rekomendasi keseluruhan untuk pasien dari semua penjelasan di atas.",
+    "Tulis 1 paragraf pendek dalam Bahasa Indonesia, ramah, praktis, dan aman secara medis.",
+    "Jangan membuka dengan sapaan seperti Hai, Halo, atau sejenisnya.",
+    "Tanpa Markdown, tanpa bullet list, tanpa tanda bintang, tanpa heading, dan tanpa penebalan kata.",
+    "Jangan mengarang diagnosis, dosis obat, atau daftar makanan alternatif di luar data Jivara Interaction Check.",
+  ].join("\n");
+};
+
+const generateOverallInteractionRecommendation = async (
+  interactions: readonly FoodInteractionResult[],
+  overallRiskLevel: string,
+  recommendedFoods: readonly ReasoningFoodScore[] = [],
+  foodsToAvoid: readonly ReasoningFoodScore[] = [],
+): Promise<string> => {
+  const fallback = cleanAiReasoningText(buildOverallRecommendationFallback(interactions, overallRiskLevel, recommendedFoods));
+  if (interactions.length === 0) return fallback;
+
+  const generated = await generateOpenRouterText([
+    {
+      role: "system",
+      content: "Anda adalah asisten kesehatan virtual bernama Jivara. Anda membuat rekomendasi keseluruhan berdasarkan semua penjelasan interaksi makanan dan obat dari Jivara Interaction Check.",
+    },
+    {
+      role: "user",
+      content: buildOverallRecommendationPrompt(interactions, overallRiskLevel, recommendedFoods, foodsToAvoid),
+    },
+  ], 320);
+
+  return cleanAiReasoningText(generated?.text || fallback);
+};
 
 const getReasoningTimeoutMs = () => Number(process.env.FOOD_REASONING_TIMEOUT_MS || process.env.FOOD_AI_TIMEOUT_MS || 10000);
 
@@ -391,6 +698,38 @@ const splitRecommendationsByRisk = (recommendationData: ReasoningRecommendRespon
   };
 };
 
+const mergeCategory = (categories: Record<string, string[]>, medication: string, values: readonly string[] = []) => {
+  const current = new Set(categories[medication] || []);
+  values.forEach((value) => {
+    const category = value.trim();
+    if (category) current.add(category);
+  });
+  if (current.size > 0) categories[medication] = Array.from(current);
+};
+
+const getRecommendationsFromInteractionChecks = (
+  checks: readonly FoodMedicationInteractionCheck[],
+  patientMedications: string[],
+): ReasoningRecommendResponse => {
+  const matchedCategories: Record<string, string[]> = {};
+
+  checks.forEach((check) => {
+    check.response.detailed_predictions.forEach((prediction) => {
+      mergeCategory(matchedCategories, prediction.medication || check.medication, [
+        ...(prediction.matched_categories || []),
+        ...(prediction.risky_categories || []),
+      ]);
+    });
+  });
+
+  return {
+    patient_medications: patientMedications,
+    matched_categories: matchedCategories,
+    recommended_foods: checks.flatMap((check) => check.response.recommended_foods || []),
+    foods_to_avoid: [],
+  };
+};
+
 const toFoodScoreArray = (value: unknown): ReasoningFoodScore[] => (
   Array.isArray(value) ? value.filter((item): item is ReasoningFoodScore => Boolean(item && typeof item === "object" && "food_name" in item)) : []
 );
@@ -440,7 +779,7 @@ const toNutritionItem = (nutrition: ReasoningNutritionResponse) => ({
     fat_g: nutrition.nutrition_facts.fats_g,
     carbs_g: nutrition.nutrition_facts.carbohydrates_g,
   },
-  source: "Jivara AI Nutrition",
+  source: "Jivara Nutrition",
 });
 
 const toUnavailableNutritionItem = (item: NutritionDTO["detectedItems"][number], error: unknown): NutritionUnavailableItem => {
@@ -788,7 +1127,7 @@ const mapScanSummary = (scan: typeof foodScans.$inferSelect) => ({
   modelVersion: scan.modelVersion,
   overallRiskScore: scan.overallRiskScore,
   overallRiskLevel: scan.overallRiskLevel,
-  overallRecommendation: getOverallRecommendationText(scan.overallRiskLevel),
+  overallRecommendation: scan.overallRecommendation || getOverallRecommendationText(scan.overallRiskLevel),
   createdAt: scan.createdAt,
 });
 
@@ -958,31 +1297,41 @@ export const checkInteraction = async (dto: InteractionCheckDTO, user?: AccessUs
   const detectedLabels = uniqueDetectedLabels(dto.detectedItems);
   const activeMedicationData = await getActivePatientMedications(dto.patientId);
   const patientMedications = activeMedicationData.names;
-  const shouldIncludeRecommendations = dto.includeRecommendations !== false;
-  const [interactionChecks, recommendationData] = await Promise.all([
-    Promise.all(detectedLabels.map((label) => checkFoodInteractionWithReasoning(label, patientMedications))),
-    shouldIncludeRecommendations
-      ? getFoodRecommendations(patientMedications, 100)
-      : Promise.resolve(getFallbackRecommendations(patientMedications)),
-  ]);
+  const interactionPairs = detectedLabels.flatMap((food) => patientMedications.map((medication) => ({ food, medication })));
+  const interactionChecks: FoodMedicationInteractionCheck[] = await Promise.all(interactionPairs.map(async (pair) => ({
+    ...pair,
+    response: await checkFoodInteractionWithReasoning(pair.food, [pair.medication]),
+  })));
+  const recommendationData = getRecommendationsFromInteractionChecks(interactionChecks, patientMedications);
   const recommendationGroups = splitRecommendationsByRisk(recommendationData);
-  const interactions = dedupeInteractionResults(interactionChecks.flatMap((check) => check.detailed_predictions
-    .map((prediction) => ({
-      food_item: check.detected_food,
-      food_display: check.detected_food.replace(/-/g, " "),
-      medication: prediction.medication,
-      severity: prediction.risk_level || mapRiskScoreToLevel(prediction.severity_score),
-      severity_label: prediction.risk_level || mapRiskScoreToLevel(prediction.severity_score),
-      interaction_description: check.llm_reasoning || prediction.mechanisms?.join("; ") || "AI reasoning mendeteksi potensi interaksi obat-makanan.",
-      recommendation: check.recommended_foods?.length
-        ? `Alternatif aman: ${check.recommended_foods.map((food) => food.food_name).join(", ")}.`
-        : "Ikuti rekomendasi tenaga kesehatan dan pantau gejala setelah makan.",
-      sources: ["Jivara AI Reasoning"],
-    }))));
-  const highestSeverity = Math.max(0, ...interactionChecks.map((check) => check.highest_severity));
-  const overallRiskLevel = mapRiskScoreToLevel(highestSeverity);
+  const interactions = dedupeInteractionResults(await Promise.all(interactionChecks.flatMap((check) => check.response.detailed_predictions
+    .map(async (prediction) => {
+      const foodItem = check.response.detected_food || check.food;
+      const medication = prediction.medication || check.medication;
+      const severity = prediction.risk_level || mapRiskScoreToLevel(prediction.severity_score);
+      const generatedReasoning = await generateFoodMedicationReasoning(foodItem, medication, prediction, check.response.recommended_foods || []);
 
-  const hasAttentionInteraction = isAttentionRiskLevel(overallRiskLevel);
+      return {
+        food_item: foodItem,
+        food_display: formatFoodName(foodItem),
+        medication,
+        severity,
+        severity_label: severity,
+        interaction_description: generatedReasoning.text,
+        recommendation: getInteractionRecommendationText(check.response.recommended_foods || []),
+        sources: ["Jivara Interaction Check", generatedReasoning.source].filter((source): source is string => Boolean(source)),
+      };
+    }))));
+  const highestSeverity = Math.max(0, ...interactionChecks.map((check) => check.response.highest_severity));
+  const overallRiskLevel = mapRiskScoreToLevel(highestSeverity);
+  const overallRecommendation = await generateOverallInteractionRecommendation(
+    interactions,
+    overallRiskLevel,
+    recommendationGroups.recommendedFoods,
+    recommendationGroups.foodsToAvoid,
+  );
+
+  const hasAttentionInteraction = interactions.some((interaction) => isAttentionRiskLevel(interaction.severity)) || isAttentionRiskLevel(overallRiskLevel);
 
   if (interactions.length > 0) {
     await db.insert(interactionResults).values(interactions.map((interaction) => ({
@@ -1001,16 +1350,13 @@ export const checkInteraction = async (dto: InteractionCheckDTO, user?: AccessUs
     .set({
       overallRiskScore: highestSeverity,
       overallRiskLevel,
-      ...(shouldIncludeRecommendations
-        ? {
-          recommendedFoods: recommendationGroups.recommendedFoods,
-          foodsToAvoid: recommendationGroups.foodsToAvoid,
-          recommendationSummary: recommendationGroups.summary,
-          matchedMedicationCategories: recommendationData.matched_categories || {},
-          recommendationPatientMedications: patientMedications,
-          analyzedMedicationCount: patientMedications.length,
-        }
-        : {}),
+      overallRecommendation,
+      recommendedFoods: recommendationGroups.recommendedFoods,
+      foodsToAvoid: recommendationGroups.foodsToAvoid,
+      recommendationSummary: recommendationGroups.summary,
+      matchedMedicationCategories: recommendationData.matched_categories || {},
+      recommendationPatientMedications: patientMedications,
+      analyzedMedicationCount: patientMedications.length,
     })
     .where(eq(foodScans.id, dto.scanId));
 
@@ -1037,7 +1383,7 @@ export const checkInteraction = async (dto: InteractionCheckDTO, user?: AccessUs
       patientId: dto.patientId,
       interactionCount: interactions.length,
       detectedItems: detectedLabels.length,
-      recommendationCount: shouldIncludeRecommendations ? recommendationGroups.recommendedFoods.length : 0,
+      recommendationCount: recommendationGroups.recommendedFoods.length,
       attentionRequired: hasAttentionInteraction,
     },
   });
@@ -1065,7 +1411,7 @@ export const checkInteraction = async (dto: InteractionCheckDTO, user?: AccessUs
     patient_medication_details: activeMedicationData.details,
     analyzed_medications_count: patientMedications.length,
     safe_items: detectedLabels
-      .filter((item) => !interactions.some((interaction) => interaction.food_item === item))
+      .filter((item) => !interactions.some((interaction) => interaction.food_item === item && isAttentionRiskLevel(interaction.severity)))
       .map((item) => ({ food_item: item, food_display: item.replace(/-/g, " "), status: "aman" })),
     recommended_foods: recommendationGroups.recommendedFoods,
     foods_to_avoid: recommendationGroups.foodsToAvoid,
@@ -1073,7 +1419,7 @@ export const checkInteraction = async (dto: InteractionCheckDTO, user?: AccessUs
     matched_medication_categories: recommendationData.matched_categories || {},
     overall_risk_score: highestSeverity,
     overall_risk_level: overallRiskLevel,
-    overall_recommendation: getOverallRecommendationText(overallRiskLevel),
+    overall_recommendation: overallRecommendation,
     disclaimer: "Ini bukan nasihat medis. Selalu konsultasikan dengan dokter atau apoteker Anda.",
     timestamp: new Date(),
   };

@@ -55,8 +55,10 @@ export default function LoginForm() {
     }
 
     const reason = searchParams.get("reason");
-    if (reason === "unauthenticated" && user) {
+    const callbackUrl = searchParams.get("callbackUrl");
+    if ((reason === "unauthenticated" || callbackUrl) && user) {
       logout();
+      window.localStorage.removeItem("jivara-auth-storage");
       return;
     }
 
@@ -64,7 +66,6 @@ export default function LoginForm() {
       return;
     }
 
-    const callbackUrl = searchParams.get("callbackUrl");
     const targetPath = getPostLoginPath(user, callbackUrl);
     replace(targetPath);
 

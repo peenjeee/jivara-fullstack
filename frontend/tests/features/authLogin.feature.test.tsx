@@ -60,6 +60,7 @@ describe("auth login feature", () => {
     vi.mocked(showLoading).mockClear();
     vi.mocked(showToast).mockClear();
     vi.mocked(showWarning).mockClear();
+    window.localStorage.clear();
     useAuthStore.setState({ user: null, isAuthenticated: false, hasHydrated: true });
   });
 
@@ -86,6 +87,19 @@ describe("auth login feature", () => {
     expect(showLoading).toHaveBeenCalledWith("Mohon Tunggu", "Sedang masuk ke akun Anda...");
     expect(showToast).toHaveBeenCalledWith("Anda berhasil masuk.", "success");
     expect(useAuthStore.getState()).toMatchObject({ isAuthenticated: true });
+  });
+
+  it("clears stale local auth state instead of looping back to a protected callback url", async () => {
+    window.history.replaceState(null, "", "/login?callbackUrl=/dashboard");
+    window.localStorage.setItem("jivara-auth-storage", JSON.stringify({ state: { user, isAuthenticated: true }, version: 2 }));
+    useAuthStore.setState({ user, isAuthenticated: true, hasHydrated: true });
+
+    render(<LoginForm />);
+
+    await waitFor(() => expect(useAuthStore.getState()).toMatchObject({ user: null, isAuthenticated: false }));
+    expect(window.localStorage.getItem("jivara-auth-storage")).toBeNull();
+    expect(replace).not.toHaveBeenCalledWith("/dashboard");
+    expect(screen.getByRole("button", { name: /masuk/i })).toBeInTheDocument();
   });
 
   it("shows login error when authentication fails", async () => {

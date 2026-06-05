@@ -224,6 +224,7 @@ export const foodScans = pgTable("food_scans", {
   modelVersion: varchar("model_version", { length: 64 }),
   overallRiskScore: real("overall_risk_score"),
   overallRiskLevel: varchar("overall_risk_level", { length: 20 }),
+  overallRecommendation: text("overall_recommendation"),
   recommendedFoods: jsonb("recommended_foods"),
   foodsToAvoid: jsonb("foods_to_avoid"),
   recommendationSummary: jsonb("recommendation_summary"),
