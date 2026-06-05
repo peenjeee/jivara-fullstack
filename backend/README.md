@@ -12,6 +12,7 @@ Backend Jivara adalah REST API untuk autentikasi, RBAC, manajemen pasien/perawat
 - JWT + refresh token
 - Web Push VAPID
 - Scalar API Reference
+- Reasoning Food AI via OpenRouter
 
 ## Prerequisites
 
@@ -19,7 +20,7 @@ Backend Jivara adalah REST API untuk autentikasi, RBAC, manajemen pasien/perawat
 - npm
 - PostgreSQL database, disarankan Supabase
 - Supabase Storage bucket untuk upload food scan production
-- Optional AI services untuk food detection/reasoning
+- Optional AI services untuk food detection, interaction check, OpenRouter reasoning, dan nutrition estimate
 
 ## Quick Start
 
@@ -39,6 +40,15 @@ API_URL=http://localhost:3001
 FRONTEND_URL=http://localhost:3000
 JWT_SECRET=replace_with_strong_secret
 DATABASE_URL=postgresql://postgres:[PASSWORD]@[HOST]:5432/postgres
+```
+
+Untuk scan makanan, isi juga konfigurasi Food AI berikut jika ingin memakai service production:
+
+```env
+FOOD_AI_INFERENCE_URL=https://food-detection.jivara.web.id/detect
+FOOD_REASONING_API_URL=https://ai.jivara.web.id
+OPENROUTER_API_KEY=your_openrouter_key
+OPENROUTER_REASONING_MODEL=moonshotai/kimi-k2.6:free
 ```
 
 Generate VAPID key jika ingin mencoba Web Push:
@@ -73,11 +83,20 @@ VAPID_SUBJECT=mailto:admin@jivara.app
 | `DASHBOARD_CACHE_TTL_MS` | Optional | Admin and nurse dashboard response cache, default `10000` |
 | `API_RATE_LIMIT_MAX` | Optional | Global production API request limit per window, default `600` |
 | `API_RATE_LIMIT_WINDOW_MS` | Optional | Global production API rate-limit window, default `900000` |
-| `FOOD_AI_INFERENCE_URL` | Optional | Endpoint YOLO food detection |
-| `FOOD_AI_TIMEOUT_MS` | Optional | Timeout inference service |
-| `FOOD_AI_ALLOW_LOCAL_FALLBACK` | Optional | `true` hanya untuk local fallback |
-| `FOOD_REASONING_API_URL` | Optional | Base URL AI reasoning service |
-| `FOOD_REASONING_TIMEOUT_MS` | Optional | Timeout reasoning service |
+| `FOOD_AI_INFERENCE_URL` | Optional | Endpoint YOLO/Jivara Food Detection, biasanya `/detect` |
+| `FOOD_AI_TIMEOUT_MS` | Optional | Timeout detection service, default `25000` |
+| `FOOD_AI_IMAGE_MAX_SIZE` | Optional | Maximum image dimension before upload to detection service, default `1280` |
+| `FOOD_AI_IMAGE_QUALITY` | Optional | JPEG quality for resized food image, default `75` |
+| `FOOD_AI_ALLOW_LOCAL_FALLBACK` | Optional | `true` hanya untuk local fallback jika detection service gagal |
+| `FOOD_REASONING_API_URL` | Optional | Base URL Jivara Interaction Check service, contoh `https://ai.jivara.web.id` |
+| `FOOD_REASONING_TIMEOUT_MS` | Optional | Timeout Jivara Interaction Check service, default `10000` |
+| `OPENROUTER_API_KEY` | Optional, recommended for Food AI | API key OpenRouter untuk reasoning per pasangan makanan-obat dan rekomendasi keseluruhan |
+| `OPENROUTER_API_URL` | Optional | Base URL OpenRouter, default `https://openrouter.ai/api/v1` |
+| `OPENROUTER_REASONING_MODEL` | Optional | Primary OpenRouter model, default `moonshotai/kimi-k2.6:free` |
+| `OPENROUTER_REASONING_FALLBACK_MODELS` | Optional | Comma-separated fallback models jika primary model limit/error |
+| `OPENROUTER_TIMEOUT_MS` | Optional | Timeout OpenRouter, default `15000` |
+| `OPENROUTER_HTTP_REFERER` | Optional | Referer header OpenRouter, biasanya frontend origin |
+| `OPENROUTER_APP_TITLE` | Optional | Title header OpenRouter, default `Jivara` |
 | `VAPID_PUBLIC_KEY` | Required for push | Public key Web Push |
 | `VAPID_PRIVATE_KEY` | Required for push | Private key Web Push |
 | `VAPID_SUBJECT` | Required for push | Mailto/contact VAPID subject |
@@ -132,6 +151,27 @@ Useful URLs:
 - OpenAPI JSON: `http://localhost:3001/openapi.json`
 - Versioned API prefix: `http://localhost:3001/api/v1`
 
+## Food AI Flow
+
+Alur analisis scan makanan saat ini dimiliki backend, sehingga frontend bisa menampilkan hasil yang sama setelah scan dan di modal detail scan.
+
+1. Upload gambar membuat record food scan dan menyimpan gambar.
+2. Deteksi makanan tetap memakai YOLO/Jivara Food Detection melalui `FOOD_AI_INFERENCE_URL`.
+3. Untuk setiap makanan terdeteksi x setiap obat aktif pasien, backend memanggil `FOOD_REASONING_API_URL/interaction-check` satu per satu:
+
+```json
+{
+  "yolo_class": "tumis-kangkung",
+  "patient_medications": ["WARFARIN"]
+}
+```
+
+4. `interaction_description` untuk setiap pasangan makanan-obat dibuat di backend via OpenRouter. Primary model memakai `OPENROUTER_REASONING_MODEL`, default `moonshotai/kimi-k2.6:free`; jika limit atau gagal, backend mencoba `OPENROUTER_REASONING_FALLBACK_MODELS`.
+5. `overall_recommendation` juga dibuat via OpenRouter dari seluruh analisis pasangan makanan-obat dan disimpan sebagai snapshot scan.
+6. Rekomendasi makanan hanya berasal dari response Jivara Interaction Check (`recommended_foods` dan `foods_to_avoid`). Flow scan saat ini tidak memanggil AI `/recommend`; route backend `/food-scans/:scanId/recommendations` hanya tersisa untuk kompatibilitas client lama dan sengaja tidak didokumentasikan di Swagger.
+7. Estimasi nutrisi tetap berjalan terpisah lewat `/nutrition-estimates`, default per 100 gram untuk setiap makanan terdeteksi jika serving tidak dikirim.
+8. Backend bisa mengembalikan `aman`, `ringan`, atau `sedang` sebagai level perhatian, tetapi label UI `High Risk` hanya untuk `tinggi`, `kritis`, `high`, `critical`, atau `high risk`.
+
 ## Scripts
 
 | Command | Description |
@@ -154,8 +194,9 @@ Useful URLs:
 Before pushing backend changes:
 
 ```bash
+npm run db:push
+npx tsc --noEmit
 npm run lint
-npm run build
 npm run test
 ```
 
@@ -198,6 +239,8 @@ Use Heroku config vars for all secrets. Do not commit production `.env`.
 - `API_URL` should be the backend origin only, for example `https://api.jivara.web.id`, not `/api/v1`.
 - Web Push needs HTTPS/secure context on frontend PWA.
 - Food scan uploads should use Supabase Storage in production, not local `uploads/`.
+- Food AI reasoning requires `OPENROUTER_API_KEY`; without it, backend returns local fallback text so scan upload does not fail completely.
+- Do not call `/food-scans/:scanId/recommendations` from new clients. Use `/food-scans/:scanId/interactions` and display recommendation arrays returned there.
 - In production, run `npm run start:reminder-worker` as a separate worker and keep `REMINDER_SCHEDULER_RUN_IN_WEB=false`.
 - Patient created by a nurse is auto-assigned to that nurse.
 

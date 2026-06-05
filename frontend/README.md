@@ -13,6 +13,7 @@ Frontend Jivara adalah aplikasi web/PWA untuk pasien, nurse, admin, dan super ad
 - SweetAlert2
 - Chart.js
 - Playwright/Vitest
+- React Doctor
 - PWA manifest + service worker
 
 ## Prerequisites
@@ -47,6 +48,16 @@ NEXT_PUBLIC_API_URL=https://api.jivara.web.id/api/v1
 
 `NEXT_PUBLIC_API_URL` harus diset di environment frontend hosting, misalnya Vercel. Jangan set variable ini di Heroku backend.
 
+## Environment Variables
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `NEXT_PUBLIC_API_URL` | Yes | Backend API base with `/api/v1`, contoh `http://localhost:3001/api/v1` |
+| `NEXT_PUBLIC_SUPABASE_URL` | Optional | Supabase project URL for Supabase client/session helper |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Optional | Supabase publishable key for browser-safe client usage |
+
+Semua variable yang dibaca browser harus memakai prefix `NEXT_PUBLIC_` dan membutuhkan rebuild/redeploy frontend setelah nilainya berubah.
+
 ## Run Locally
 
 Start backend first in another terminal:
@@ -71,6 +82,19 @@ Frontend runs on `http://localhost:3000`.
 - Next.js catches `/api/[...path]` and forwards to `NEXT_PUBLIC_API_URL`.
 - Auth login/status/refresh/logout use dedicated Next routes under `/api/auth/*` to manage HTTP-only cookies.
 - Backend production full API base is `https://api.jivara.web.id/api/v1`.
+- Browser Network bisa menampilkan request `OPTIONS` preflight untuk CORS. Preflight bukan eksekusi controller; request XHR/fetch setelahnya adalah API call yang membuat detections, interactions, atau nutrition estimates.
+
+## Food Scan Flow
+
+- Scan makanan tetap dimulai dari YOLO/Jivara Food Detection melalui backend `POST /food-scans/{scanId}/detections`.
+- Analisis interaksi diminta melalui backend `POST /food-scans/{scanId}/interactions`. Frontend tidak memanggil `POST /food-scans/{scanId}/recommendations` pada flow scan saat ini.
+- Estimasi nutrisi tetap berjalan lewat `POST /nutrition-estimates` dan ditampilkan sebagai estimasi per 100 gram secara default.
+- Durasi deteksi ditampilkan dalam detik.
+- `FoodScanAnalysisView` dipakai ulang oleh halaman hasil scan dan `FoodScanDetailModal`, sehingga keduanya menampilkan deteksi, reasoning interaksi, nutrisi, rekomendasi keseluruhan, dan card rekomendasi AI yang sama.
+- Setiap pasangan makanan-obat menampilkan reasoning dari backend berdasarkan Jivara Interaction Check plus OpenRouter. Ini juga berlaku untuk pasangan low/ringan/sedang; `sedang` tidak lagi dinaikkan menjadi UI `High Risk`.
+- UI `High Risk` hanya muncul saat overall scan atau minimal satu pasangan makanan-obat benar-benar high risk (`tinggi`, `kritis`, `high`, `critical`, atau `high risk`).
+- `Rekomendasi AI` hanya muncul untuk scan High Risk dan hanya jika response interaction berisi array rekomendasi. Saat datanya ada, UI menampilkan dua card: `Makanan Aman` dari `recommended_foods` dan `Perlu Dibatasi` dari `foods_to_avoid`.
+- Saat modal detail scan dibuka, frontend memakai snapshot scan yang tersimpan dan tidak memanggil endpoint rekomendasi AI lagi.
 
 ## Scripts
 
@@ -90,9 +114,11 @@ Frontend runs on `http://localhost:3000`.
 Before pushing frontend changes:
 
 ```bash
+npx tsc --noEmit
 npm run lint
-npm run build
+npm run doctor
 npm run test
+npm run test:e2e
 ```
 
 Production smoke checks:
