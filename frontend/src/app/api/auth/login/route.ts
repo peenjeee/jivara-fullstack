@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getBackendApiUrl, setAuthCookies } from "../cookies";
+import { getBackendApiUrl, setAuthCookies, setAuthTimingHeaders } from "../cookies";
+
+export const runtime = "edge";
+export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
+  const startedAt = Date.now();
   const body = await request.json();
   let backendResponse: Response;
 
@@ -14,16 +18,19 @@ export async function POST(request: NextRequest) {
       signal: AbortSignal.timeout(10000),
     });
   } catch {
-    return NextResponse.json(
-      { status: "gagal", message: "Layanan autentikasi sedang tidak merespons. Coba lagi beberapa saat." },
-      { status: 504 },
+    return setAuthTimingHeaders(
+      NextResponse.json(
+        { status: "gagal", message: "Layanan autentikasi sedang tidak merespons. Coba lagi beberapa saat." },
+        { status: 504 },
+      ),
+      startedAt,
     );
   }
 
   const payload = await backendResponse.json();
 
   if (!backendResponse.ok) {
-    return NextResponse.json(payload, { status: backendResponse.status });
+    return setAuthTimingHeaders(NextResponse.json(payload, { status: backendResponse.status }), startedAt);
   }
 
   const data = payload.data;
@@ -44,5 +51,5 @@ export async function POST(request: NextRequest) {
     expiresIn: data.expires_in,
   }, request);
 
-  return response;
+  return setAuthTimingHeaders(response, startedAt);
 }

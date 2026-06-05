@@ -10,14 +10,24 @@ export const ROLE_COOKIE = "jivara-role";
 export const ACCOUNT_STATUS_COOKIE = "jivara-account-status";
 export const LOGOUT_COOKIE = "jivara-logged-out";
 
+export const setAuthTimingHeaders = (response: NextResponse, startedAt: number) => {
+  const elapsedMs = Date.now() - startedAt;
+  response.headers.set("Server-Timing", `jivara-auth-proxy;dur=${elapsedMs}`);
+  response.headers.set("X-Jivara-Auth-Proxy-Ms", String(elapsedMs));
+  return response;
+};
+
 const isSecureRequest = (request?: NextRequest) => {
   if (!request) return isProduction;
   return request.nextUrl.protocol === "https:" || request.headers.get("x-forwarded-proto") === "https";
 };
 
 const getCookieDomain = (request?: NextRequest) => {
-  if (!isProduction || !request) return undefined;
-  return request.nextUrl.hostname.endsWith("jivara.web.id") ? sharedCookieDomain : undefined;
+  const configuredDomain = process.env.AUTH_COOKIE_DOMAIN?.trim();
+  if (configuredDomain) return configuredDomain;
+  const hostname = request?.nextUrl.hostname;
+  if (!hostname) return undefined;
+  return hostname === "jivara.web.id" || hostname.endsWith(".jivara.web.id") ? sharedCookieDomain : undefined;
 };
 
 const getCookieOptions = (request?: NextRequest) => ({
@@ -25,7 +35,7 @@ const getCookieOptions = (request?: NextRequest) => ({
   secure: isSecureRequest(request),
   sameSite: "strict" as const,
   path: "/",
-  domain: getCookieDomain(request),
+  ...(getCookieDomain(request) ? { domain: getCookieDomain(request) } : {}),
 });
 
 export const setAuthCookies = (response: NextResponse, data: { accessToken: string; refreshToken?: string; role?: string | null; accountStatus?: string | null; expiresIn?: number }, request?: NextRequest) => {
@@ -59,10 +69,20 @@ export const setAuthCookies = (response: NextResponse, data: { accessToken: stri
 
 export const clearAuthCookies = (response: NextResponse, request?: NextRequest) => {
   const commonCookieOptions = getCookieOptions(request);
+  const hostOnlyCookieOptions = {
+    httpOnly: commonCookieOptions.httpOnly,
+    secure: commonCookieOptions.secure,
+    sameSite: commonCookieOptions.sameSite,
+    path: commonCookieOptions.path,
+  };
 
   for (const name of [ACCESS_COOKIE, REFRESH_COOKIE, ROLE_COOKIE, ACCOUNT_STATUS_COOKIE]) {
     response.cookies.set(name, "", {
       ...commonCookieOptions,
+      maxAge: 0,
+    });
+    response.cookies.set(name, "", {
+      ...hostOnlyCookieOptions,
       maxAge: 0,
     });
   }

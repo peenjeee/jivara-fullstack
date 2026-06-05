@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { clearAuthCookies, getBackendApiUrl, REFRESH_COOKIE, setLogoutCookie } from '../cookies';
+import { clearAuthCookies, getBackendApiUrl, REFRESH_COOKIE, setAuthTimingHeaders, setLogoutCookie } from '../cookies';
 
 const LOGOUT_CLEAR_SITE_DATA = '"cache"';
 
+export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
-  const cookieStore = await cookies();
-  const refreshToken = cookieStore.get(REFRESH_COOKIE)?.value;
+  const startedAt = Date.now();
+  const refreshToken = request.cookies.get(REFRESH_COOKIE)?.value;
 
   const response = NextResponse.json({ message: 'Logged out' }, { status: 200 });
   clearAuthCookies(response, request);
@@ -24,5 +26,5 @@ export async function POST(request: NextRequest) {
     }).catch(() => {});
   }
 
-  return response;
+  return setAuthTimingHeaders(response, startedAt);
 }

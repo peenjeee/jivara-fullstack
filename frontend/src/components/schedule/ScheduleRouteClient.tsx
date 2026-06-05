@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import DashboardRouteFallback from "@/components/dashboard/DashboardRouteFallback";
 import { useDashboardInitialUser } from "@/components/dashboard/DashboardInitialUserContext";
 import { getDashboardRole, isOperationalAdminRole } from "@/components/dashboard/navigation";
@@ -18,11 +18,14 @@ interface ScheduleRouteClientProps {
 
 export default function ScheduleRouteClient({ initialPatientId, initialPatientName }: ScheduleRouteClientProps) {
   const { replace } = useRouter();
+  const searchParams = useSearchParams();
   const user = useAuthStore((state) => state.user);
   const hasAuthHydrated = useAuthStore((state) => state.hasHydrated);
   const initialUser = useDashboardInitialUser();
   const isAuthReady = hasAuthHydrated || Boolean(initialUser);
   const dashboardRole = getDashboardRole(user?.role ?? initialUser?.role);
+  const patientId = initialPatientId ?? searchParams.get("patientId") ?? undefined;
+  const patientName = initialPatientName ?? searchParams.get("patientName") ?? undefined;
 
   useEffect(() => {
     if (!isAuthReady || dashboardRole !== "super_admin") return;
@@ -32,6 +35,6 @@ export default function ScheduleRouteClient({ initialPatientId, initialPatientNa
   if (!isAuthReady) return <DashboardRouteFallback title="Jadwal Obat" />;
   if (dashboardRole === "super_admin") return <DashboardRouteFallback title="Jadwal Obat" />;
 
-  if (isOperationalAdminRole(dashboardRole)) return <SchedulePage initialPatientId={initialPatientId} initialPatientName={initialPatientName} />;
-  return dashboardRole === "nurse" ? <SchedulePage initialPatientId={initialPatientId} initialPatientName={initialPatientName} /> : <PatientSchedulePage />;
+  if (isOperationalAdminRole(dashboardRole)) return <SchedulePage initialPatientId={patientId} initialPatientName={patientName} />;
+  return dashboardRole === "nurse" ? <SchedulePage initialPatientId={patientId} initialPatientName={patientName} /> : <PatientSchedulePage />;
 }
