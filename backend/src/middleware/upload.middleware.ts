@@ -1,10 +1,11 @@
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
+import os from "os";
 import { Request, Response, NextFunction } from "express";
 import multer from "multer";
 
-const foodScanUploadDir = path.resolve(process.cwd(), "uploads", "food-scans");
+const foodScanUploadDir = path.resolve(os.tmpdir(), "jivara-food-scans");
 
 fs.mkdirSync(foodScanUploadDir, { recursive: true });
 

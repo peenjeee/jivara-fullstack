@@ -24,6 +24,7 @@ import activityEventRoutes from './routes/activity-event.routes';
 import adminDashboardRoutes from './routes/admin-dashboard.routes';
 import { authenticateToken } from './middleware/auth.middleware';
 import { authorizeFoodScanUpload } from './middleware/upload-access.middleware';
+import { processDueMedicationReminders } from './services/medication-reminder-scheduler.service';
 
 const app = express();
 const publicDir = path.resolve(process.cwd(), 'public');
@@ -172,6 +173,17 @@ mountApiRoutes('/api/v1');
 // Pengecekan API
 app.get('/health', (req: Request, res: Response) => {
   res.json({ status: 'Berjalan', message: 'Backend Jivara berjalan dengan baik' });
+});
+
+// Vercel Cron Endpoint
+app.get('/api/cron/reminders', async (req: Request, res: Response) => {
+  try {
+    const result = await processDueMedicationReminders();
+    res.json({ status: 'sukses', data: result });
+  } catch (error) {
+    console.error('Error in cron job:', error);
+    res.status(500).json({ status: 'gagal', message: 'Gagal menjalankan reminder scheduler' });
+  }
 });
 
 // Rute Utama
